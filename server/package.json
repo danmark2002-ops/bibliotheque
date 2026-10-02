@@ -1,0 +1,9 @@
+{
+  "name": "bibliotheque",
+  "version": "1.0.0",
+  "description": "Bibliothèque personnelle partagée : étagère, lecture, audio et suivi des lecteurs",
+  "main": "server.js",
+  "private": true,
+  "engines": { "node": ">=22.5" },
+  "scripts": { "start": "node --no-warnings server.js" }
+}
