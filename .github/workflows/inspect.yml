@@ -1,0 +1,38 @@
+name: Inspecter ML Kit
+on:
+  push:
+    paths: ['.github/workflows/inspect.yml']
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Télécharger et décrire
+        run: |
+          set -x
+          curl -s https://dl.google.com/android/maven2/com/google/mlkit/genai-prompt/maven-metadata.xml > meta.txt
+          V=$(grep -o '<release>[^<]*' meta.txt | sed 's/<release>//')
+          echo "version=$V" > api.txt
+          cat meta.txt >> api.txt
+          curl -sfL -o p.aar https://dl.google.com/android/maven2/com/google/mlkit/genai-prompt/$V/genai-prompt-$V.aar
+          curl -sfL https://dl.google.com/android/maven2/com/google/mlkit/genai-prompt/$V/genai-prompt-$V.pom >> api.txt
+          mkdir a && cd a && unzip -q ../p.aar && unzip -q classes.jar -d cls && cd ..
+          for c in $(cd a/cls && find . -name '*.class' | grep -v '\$' | sed 's#^\./##; s#\.class$##' | grep -iE 'genai/prompt|common' | sort); do
+            echo "==== $c" >> api.txt; javap -cp a/cls "$c" >> api.txt 2>&1; done
+          # dépendance commune
+          for dep in genai-common; do
+            M=$(curl -s https://dl.google.com/android/maven2/com/google/mlkit/$dep/maven-metadata.xml); DV=$(echo "$M" | grep -o '<release>[^<]*' | sed 's/<release>//')
+            echo "#### $dep $DV" >> api.txt
+            curl -sfL -o d.aar https://dl.google.com/android/maven2/com/google/mlkit/$dep/$DV/$dep-$DV.aar && mkdir -p d && cd d && unzip -qo ../d.aar && unzip -qo classes.jar -d cls && cd .. && \
+            for c in $(cd d/cls && find . -name '*.class' | grep -v '\$' | sed 's#^\./##; s#\.class$##' | sort); do echo "==== $c" >> api.txt; javap -cp d/cls "$c" >> api.txt 2>&1; done
+          done
+          wc -l api.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: inspect-mlkit
+          name: inspection ML Kit (temporaire)
+          files: api.txt
+          prerelease: true
