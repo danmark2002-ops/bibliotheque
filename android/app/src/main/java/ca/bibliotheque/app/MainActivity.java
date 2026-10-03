@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
-        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.3");
+        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.4");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
                 Uri u = request.getUrl();
                 if (!HOST.equals(u.getHost())) return null; // polices Google, etc. : réseau normal
                 String path = u.getPath();
-                if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("id"));
+                if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("lib"), u.getQueryParameter("id"));
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
                 try {
                     InputStream in = getAssets().open(path.substring(1));
@@ -178,13 +178,36 @@ public class MainActivity extends Activity {
     // ---------- Dossier source : choisi une fois, rescanné sur demande ----------
     private SharedPreferences prefs() { return getSharedPreferences("dossier", MODE_PRIVATE); }
 
-    private Uri folderTree() {
-        String t = prefs().getString("tree", null);
-        if (t == null) return null;
+    private String pickingFor = null;
+
+    /** Dossiers par bibliothèque : {"main": "content://...", "lib2": "..."} (l'ancien réglage unique devient « main »). */
+    private JSONObject folders() {
+        SharedPreferences p = prefs();
+        JSONObject o;
+        try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+        String old = p.getString("tree", null);
+        if (old != null) {
+            try { if (!o.has("main")) o.put("main", old); } catch (Exception ignored) { }
+            p.edit().putString("folders", o.toString()).remove("tree").apply();
+        }
+        return o;
+    }
+
+    private void saveFolders(JSONObject o) { prefs().edit().putString("folders", o.toString()).apply(); }
+
+    private Uri folderTree(String lib) {
+        String t = folders().optString(lib == null ? "main" : lib, null);
+        if (t == null || t.isEmpty()) return null;
         Uri tree = Uri.parse(t);
         for (UriPermission p : getContentResolver().getPersistedUriPermissions())
             if (p.getUri().equals(tree) && p.isReadPermission()) return tree;
         return null; // l'autorisation a été retirée : il faut choisir le dossier à nouveau
+    }
+
+    private void releaseIfUnused(String tree) {
+        JSONObject o = folders();
+        for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) if (tree.equals(o.optString(it.next()))) return;
+        try { getContentResolver().releasePersistableUriPermission(Uri.parse(tree), Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { }
     }
 
     private String folderName(Uri tree) {
@@ -222,8 +245,8 @@ public class MainActivity extends Activity {
         for (String[] d : dirs) walk(cr, tree, d[0], rel.isEmpty() ? d[1] : rel + "/" + d[1], depth + 1, out);
     }
 
-    private WebResourceResponse folderFile(String docId) {
-        Uri tree = folderTree();
+    private WebResourceResponse folderFile(String lib, String docId) {
+        Uri tree = folderTree(lib);
         if (tree == null || docId == null) return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
         try {
             InputStream in = getContentResolver().openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, docId));
@@ -238,15 +261,26 @@ public class MainActivity extends Activity {
     }
 
     class FolderBridge {
+        /** Liste des dossiers : [{"id":"main","name":"Livres","ok":true}, ...] */
         @JavascriptInterface
-        public String info() {
-            Uri tree = folderTree();
-            if (tree == null) return "";
-            try { JSONObject o = new JSONObject(); o.put("name", folderName(tree)); return o.toString(); } catch (Exception e) { return ""; }
+        public String list() {
+            JSONArray out = new JSONArray();
+            JSONObject o = folders();
+            for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) {
+                String id = it.next();
+                try {
+                    Uri tree = folderTree(id);
+                    JSONObject f = new JSONObject();
+                    f.put("id", id); f.put("ok", tree != null); f.put("name", tree != null ? folderName(tree) : "Dossier inaccessible");
+                    out.put(f);
+                } catch (Exception ignored) { }
+            }
+            return out.toString();
         }
 
         @JavascriptInterface
-        public void pick() {
+        public void pick(String lib) {
+            pickingFor = lib == null || lib.isEmpty() ? "main" : lib;
             runOnUiThread(() -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -255,20 +289,20 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void forget() {
-            String t = prefs().getString("tree", null);
-            if (t != null) {
-                try { getContentResolver().releasePersistableUriPermission(Uri.parse(t), Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { }
-            }
-            prefs().edit().remove("tree").apply();
+        public void forget(String lib) {
+            JSONObject o = folders();
+            String t = o.optString(lib, null);
+            o.remove(lib); saveFolders(o);
+            if (t != null && !t.isEmpty()) releaseIfUnused(t);
         }
 
         @JavascriptInterface
-        public void scan() {
+        public void scan(String lib) {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
                 try {
-                    Uri tree = folderTree();
+                    res.put("lib", lib);
+                    Uri tree = folderTree(lib);
                     if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
                     else {
                         JSONArray files = new JSONArray();
@@ -287,16 +321,16 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FOLDER_REQUEST) {
             String out = "";
+            String lib = pickingFor == null ? "main" : pickingFor;
             if (resultCode == RESULT_OK && data != null && data.getData() != null) {
                 Uri tree = data.getData();
                 try {
                     getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    String old = prefs().getString("tree", null);
-                    if (old != null && !old.equals(tree.toString())) {
-                        try { getContentResolver().releasePersistableUriPermission(Uri.parse(old), Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { }
-                    }
-                    prefs().edit().putString("tree", tree.toString()).apply();
-                    out = new JSONObject().put("name", folderName(tree)).toString();
+                    JSONObject o = folders();
+                    String old = o.optString(lib, null);
+                    o.put(lib, tree.toString()); saveFolders(o);
+                    if (old != null && !old.isEmpty() && !old.equals(tree.toString())) releaseIfUnused(old);
+                    out = new JSONObject().put("id", lib).put("name", folderName(tree)).toString();
                 } catch (Exception e) { out = ""; }
             }
             js("__folderPicked", out);

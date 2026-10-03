@@ -67,6 +67,50 @@
   color-scheme: light;
 }
 
+
+/* Décors supplémentaires : chaque bibliothèque peut avoir le sien */
+:root[data-decor="acajou"] {
+  --room: #170c0a; --room-2: #22110d; --lamp: rgba(255, 150, 110, .15);
+  --ink: #f5e6dc; --ink-2: #c9a798; --ink-3: #93766a;
+  --brass: #e0a07a; --brass-2: #c27b55; --brass-ink: #2a120a;
+  --glass: rgba(46, 22, 17, .62); --panel: #221310; --panel-2: #2d1914;
+  --case-back: #2a120d; --case-back-2: #1e0c08;
+  --plank-top: #8e3b28; --plank-mid: #70291b; --plank-front: #4f1b11; --plank-edge: #b25a40; --side: #44190f;
+}
+:root[data-decor="ebene"] {
+  --room: #0d0d10; --room-2: #15151a; --lamp: rgba(190, 200, 255, .1);
+  --ink: #ecebf2; --ink-2: #aeadbb; --ink-3: #7b7a88;
+  --brass: #c9c3b0; --brass-2: #a39d8a; --brass-ink: #141418;
+  --glass: rgba(28, 28, 34, .66); --glass-line: rgba(220, 220, 255, .08); --panel: #17171c; --panel-2: #1f1f26; --line: rgba(220, 220, 255, .09);
+  --case-back: #18181d; --case-back-2: #101014;
+  --plank-top: #3b3b44; --plank-mid: #2a2a31; --plank-front: #1b1b20; --plank-edge: #5a5a66; --side: #222228;
+}
+:root[data-decor="ardoise"] {
+  --room: #0e1419; --room-2: #141d24; --lamp: rgba(150, 200, 240, .13);
+  --ink: #e6eef3; --ink-2: #a2b4c0; --ink-3: #718491;
+  --brass: #8fc1d9; --brass-2: #6aa1bb; --brass-ink: #0c1a22;
+  --glass: rgba(22, 34, 43, .64); --glass-line: rgba(190, 225, 255, .09); --panel: #15202a; --panel-2: #1b2934; --line: rgba(190, 225, 255, .1);
+  --case-back: #172530; --case-back-2: #101b23;
+  --plank-top: #4f6a7c; --plank-mid: #3b5262; --plank-front: #283b48; --plank-edge: #6f8ea2; --side: #24343f;
+}
+:root[data-decor="olivier"] {
+  --room: #11120b; --room-2: #191a10; --lamp: rgba(220, 230, 140, .13);
+  --ink: #eef0dc; --ink-2: #b7ba98; --ink-3: #868a68;
+  --brass: #c8c46a; --brass-2: #a8a44c; --brass-ink: #1c1c08;
+  --glass: rgba(32, 34, 20, .62); --panel: #1b1d11; --panel-2: #242617; --line: rgba(240, 240, 190, .1);
+  --case-back: #1f2213; --case-back-2: #16180d;
+  --plank-top: #767a3e; --plank-mid: #5d6130; --plank-front: #414420; --plank-edge: #979b58; --side: #33361a;
+}
+:root[data-decor="bouleau"] {
+  --room: #eeeee9; --room-2: #e4e3dc; --lamp: rgba(255, 255, 255, .75);
+  --ink: #22242a; --ink-2: #5d6068; --ink-3: #8e9098;
+  --brass: #4f6f86; --brass-2: #3f5a6e; --brass-ink: #f6f8fa;
+  --glass: rgba(255, 255, 252, .74); --glass-line: rgba(30, 40, 50, .1); --panel: #fbfbf8; --panel-2: #f0efe9; --line: rgba(30, 40, 50, .12);
+  --case-back: #d8d4c8; --case-back-2: #cac5b6;
+  --plank-top: #ece7da; --plank-mid: #d9d2c0; --plank-front: #bdb5a1; --plank-edge: #f7f4ec; --side: #c6bfac;
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; min-height: 100%; }
 body {
@@ -541,6 +585,32 @@ input, select { font: inherit; color: inherit; }
 .dsec { padding: 16px 12px 6px; font: 600 11px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .dline { height: 1px; background: var(--line); margin: 10px 4px; }
 
+/* Bibliothèques */
+html, body, .room { transition: background-color .5s ease; }
+.libswitch { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: inherit; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.libswitch h1 { margin: 0; overflow-wrap: anywhere; }
+.libswitch > svg { width: 22px; height: 22px; color: var(--ink-3); flex: none; margin-top: 6px; }
+.libs { display: grid; gap: 6px; }
+.librow { display: flex; align-items: center; gap: 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); }
+.librow.sel { border-color: var(--brass); }
+.libpick { flex: 1; min-width: 0; display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px; padding: 12px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.libtxt { min-width: 0; display: grid; gap: 2px; }
+.libtxt b { font: 600 16px/1.2 var(--font-display); overflow-wrap: anywhere; }
+.libtxt small { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libpick em { font-style: normal; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.libsw { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(180deg, transparent 62%, var(--sw) 62%, var(--sw) 78%, transparent 78%), color-mix(in srgb, var(--sw) 35%, #111); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); flex: none; }
+.libsw.all { background: conic-gradient(#6d4427 0 25%, #3e5566 0 50%, #7a2f22 0 75%, #cfa977 0); }
+.decors { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.decor { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); font: 500 13px var(--font-ui); cursor: pointer; }
+.decor .libsw { width: 22px; height: 22px; border-radius: 6px; }
+.decor.sel { border-color: var(--brass); color: var(--ink); }
+button.dhead { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: none; color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
+.dlib { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dlib b { font: italic 600 19px/1.15 var(--font-display); overflow-wrap: anywhere; }
+.dlib small { font-size: 12px; color: var(--ink-3); }
+button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: rotate(-90deg); }
+.field select { height: 42px; }
+
 </style>
 </head>
 <body>
@@ -736,7 +806,7 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
-      fav: !!m.fav, state: m.state || '', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   async function upload(file, onp, extra = {}) {
@@ -810,6 +880,7 @@ window.LocalAPI = (() => {
       if (m === 'PATCH') {
         Object.assign(meta, { title: String(body.title ?? meta.title).slice(0, 200), author: String(body.author ?? meta.author).slice(0, 120), color: String(body.color ?? meta.color) });
         if (body.fav !== undefined) meta.fav = !!body.fav;
+        if (body.lib) meta.lib = String(body.lib);
         if (body.state !== undefined) meta.state = ['alire', 'lu'].includes(body.state) ? body.state : '';
         if (Array.isArray(body.cols)) meta.cols = [...new Set(body.cols.map(String))];
         if (body.trashed !== undefined) meta.trashed = body.trashed ? now() : 0;
@@ -874,9 +945,10 @@ window.LocalAPI = (() => {
   }
   // Ce qui est déjà sur l'étagère, pour ne pas importer deux fois le même livre depuis le dossier
   const clean = (n) => String(n || '').replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim().toLowerCase();
-  async function known() {
+  async function known(lib = 'main') {
     const src = new Set(), nameSize = new Set(), names = new Set();
     for (const m of await all('meta')) {
+      if ((m.lib || 'main') !== lib) continue; // chaque bibliothèque a ses propres livres
       if (m.src) src.add(m.src);
       let fname = m.fname, fsize = m.fsize;
       if (!fname && m.kind === 'pdf') { const rec = await get('blob', m.id); if (rec?.file) { fname = rec.file.name; fsize = rec.file.size; } }
@@ -932,6 +1004,7 @@ const ICONS = {
   shelf: '<rect x="4" y="4" width="4" height="11" rx=".8"/><rect x="10" y="6" width="4" height="9" rx=".8"/><rect x="16" y="3" width="4" height="12" rx=".8"/><path d="M2 19h20"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
+  chev: '<path d="M7 10l5 5 5-5"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
   starFill: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor"/>',
@@ -1102,7 +1175,7 @@ const NAV = {
   alire: ['À lire', 'clock'], lu: ['Déjà lu', 'checks'], authors: ['Auteurs', 'person'], trash: ['Poubelle', 'trash'],
 };
 const FMT = { pdf: 'PDF', docx: 'Word', txt: 'Texte' };
-const SORTS = { recent: 'Ajout récent', title: 'Titre', author: 'Auteur', last: 'Dernière lecture' };
+const SORTS = { recent: 'Ajout récent', last: 'Dernière lecture', title: 'Titre', author: 'Auteur' };
 S.nav = store.get('nav', { k: 'all' }); S.sort = store.get('sort', 'recent'); S.cols = [];
 const authorOf = (b) => (b.author || '').trim() || 'Auteur inconnu';
 const sameNav = (a, b) => a.k === b.k && (a.v || '') === (b.v || '');
@@ -1113,6 +1186,7 @@ function navTitle(nav = S.nav) {
   return (NAV[nav.k] || NAV.all)[0];
 }
 function inNav(b, nav = S.nav) {
+  if (!inLib(b)) return false;
   if (nav.k === 'trash') return !!b.trashed;
   if (b.trashed) return false;
   switch (nav.k) {
@@ -1207,16 +1281,17 @@ function openDrawer() {
   const count = (nav) => S.books.filter((b) => inNav(b, nav)).length;
   const close = () => scrim.remove();
   const item = (nav, label, ic, extra) => h('div', { class: 'ditem-row' },
-    h('button', { class: 'ditem' + (sameNav(nav, S.nav) ? ' sel' : ''), onclick: () => { close(); go(nav); } }, icon(ic), h('span', {}, label), h('em', {}, nav.k === 'authors' ? new Set(S.books.filter((b) => !b.trashed).map(authorOf)).size : count(nav))),
+    h('button', { class: 'ditem' + (sameNav(nav, S.nav) ? ' sel' : ''), onclick: () => { close(); go(nav); } }, icon(ic), h('span', {}, label), h('em', {}, nav.k === 'authors' ? new Set(S.books.filter((b) => !b.trashed && inLib(b)).map(authorOf)).size : count(nav))),
     extra || null);
   const fmts = Object.keys(FMT).filter((k) => count({ k: 'fmt', v: k }));
   const panel = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': 'Menu' },
-    h('div', { class: 'dhead' }, h('div', { class: 'dmark' }, '❦'), h('b', {}, S.me.library || 'Bibliothèque')),
-    ['reading', 'all', 'fav', 'alire', 'lu', 'authors'].map((k) => item({ k }, NAV[k][0], NAV[k][1])),
+    h('button', { class: 'dhead', onclick: () => { close(); openLibraries(); } }, h('div', { class: 'dmark' }, '❦'), h('span', { class: 'dlib' }, h('b', {}, libName()), h('small', {}, 'Changer de bibliothèque')), icon('chev')),
+    ['reading', 'all', 'fav', 'alire', 'lu'].map((k) => item({ k }, NAV[k][0], NAV[k][1])),
     h('div', { class: 'dsec' }, 'Collections'),
     S.cols.map((c) => item({ k: 'col', v: c.id }, c.name, 'collection', h('button', { class: 'dedit', 'aria-label': 'Modifier ' + c.name, onclick: () => { close(); editCollection(c); } }, icon('pencil')))),
     h('button', { class: 'ditem add', onclick: () => { close(); newCollection(); } }, icon('plus'), h('span', {}, 'Créer une collection')),
-    fmts.length ? h('div', { class: 'dsec' }, 'Formats') : null,
+    h('div', { class: 'dsec' }, 'Classer'),
+    item({ k: 'authors' }, NAV.authors[0], NAV.authors[1]),
     fmts.map((k) => item({ k: 'fmt', v: k }, FMT[k], 'layers')),
     h('div', { class: 'dline' }),
     item({ k: 'trash' }, 'Poubelle', 'trash'));
@@ -1225,7 +1300,7 @@ function openDrawer() {
 }
 
 function authorsEl(q) {
-  const groups = groupByAuthor(S.books.filter((b) => !b.trashed)).filter(([a]) => !q || a.toLowerCase().includes(q)).sort((x, y) => authorCmp(x[0], y[0]));
+  const groups = groupByAuthor(S.books.filter((b) => !b.trashed && inLib(b))).filter(([a]) => !q || a.toLowerCase().includes(q)).sort((x, y) => authorCmp(x[0], y[0]));
   if (!groups.length) return h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Aucun auteur.');
   return h('div', { class: 'authors' }, groups.map(([a, bs]) => h('button', { class: 'author', onclick: () => go({ k: 'author', v: a }) },
     h('span', { class: 'ini' }, a === 'Auteur inconnu' ? '?' : a.trim()[0].toUpperCase()),
@@ -1261,7 +1336,7 @@ function renderLibrary() {
   const q = S.filter.toLowerCase();
   const books = sortBooks(S.books.filter((b) => inNav(b) && (!q || (b.title + ' ' + b.author).toLowerCase().includes(q))));
   const asList = S.view === 'list';
-  const live = S.books.filter((b) => !b.trashed);
+  const live = S.books.filter((b) => !b.trashed && inLib(b));
   let body;
   if (S.nav.k === 'authors') body = authorsEl(q);
   else {
@@ -1273,7 +1348,7 @@ function renderLibrary() {
         h('p', {}, owner ? 'Ajoute un PDF ou un fichier texte. Tu peux aussi glisser des fichiers ici.' : 'Reviens bientôt, de nouveaux livres arrivent.'),
         owner ? h('div', { class: 'actions', style: { justifyContent: 'center' } },
           h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), 'Ajouter un livre'),
-          local ? h('button', { class: 'btn', onclick: openFolder }, icon('folder'), 'Choisir un dossier') : null) : null);
+          local ? h('button', { class: 'btn', onclick: () => openFolder() }, icon('folder'), 'Choisir un dossier') : null) : null);
       asList ? body.prepend(msg) : (body.querySelector('.shelf') || body).prepend(msg);
     } else if (!books.length) {
       const msg = h('div', { class: 'empty' }, h('p', {}, q ? 'Aucun livre ne correspond à ta recherche.' : (EMPTY[S.nav.k] || 'Aucun livre ici.')));
@@ -1284,8 +1359,8 @@ function renderLibrary() {
   const current = ['all', 'reading'].includes(S.nav.k) && !q ? ready.filter((b) => b.progress && b.progress.page < b.pages && b.state !== 'lu').sort((a, b) => b.progress.last - a.progress.last)[0] : null;
   const actions = h('div', { class: 'actions' },
     owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter un livre')) : null,
-    owner && local ? h('button', { class: 'btn', title: 'Dossier source', onclick: openFolder }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
-    owner && local && folderInfo() ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: 'Actualiser le dossier', 'aria-label': 'Actualiser le dossier', onclick: () => scanFolder() }, icon('refresh')) : null,
+    owner && local && S.lib !== 'all' ? h('button', { class: 'btn', title: 'Dossier source', onclick: () => openFolder() }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
+    owner && local && (folderInfo() || (S.lib === 'all' && libsWithFolder().length)) ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: S.lib === 'all' ? 'Actualiser tous les dossiers' : 'Actualiser le dossier', 'aria-label': 'Actualiser', onclick: () => refreshFolders() }, icon('refresh')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     h('button', { class: 'btn icon', title: 'Réglages', onclick: openSettings }, icon('gear')),
@@ -1306,7 +1381,7 @@ function renderLibrary() {
       h('div', { class: 'brand' },
         h('div', { class: 'brand-row' },
           local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null,
-          h('h1', {}, S.me.library || 'Bibliothèque')),
+          local ? h('button', { class: 'libswitch', title: 'Changer de bibliothèque', onclick: openLibraries }, h('h1', {}, libName()), icon('chev')) : h('h1', {}, S.me.library || 'Bibliothèque')),
         h('p', { class: 'navline' },
           navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null,
           h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`,
@@ -1348,7 +1423,7 @@ async function uploadFiles(files) {
     const box = h('div', { class: 'up' }, h('b', {}, f.name), h('span', { class: 'muted' }, 'Envoi…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
     $('#uploads')?.append(box);
     try {
-      if (window.LocalAPI) await LocalAPI.upload(f, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; });
+      if (window.LocalAPI) await LocalAPI.upload(f, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: S.lib === 'all' ? 'main' : curLib().id });
       else await new Promise((res, rej) => {
         const x = new XMLHttpRequest(); x.open('POST', '/api/books');
         x.setRequestHeader('X-Filename', encodeURIComponent(f.name));
@@ -1362,14 +1437,41 @@ async function uploadFiles(files) {
   }
   await loadBooks(); renderLibrary();
 }
-// ================= Dossier source =================
-// Un dossier choisi une fois ; le bouton « Actualiser » le rescanne et ajoute seulement les nouveaux livres.
+// ================= Bibliothèques et dossiers sources =================
+// Chaque bibliothèque a son nom, son décor et (si on veut) son dossier source. « Toutes » les montre ensemble.
+const DECORS = [['noyer', 'Noyer'], ['chene', 'Chêne clair'], ['acajou', 'Acajou'], ['ebene', 'Ébène'], ['ardoise', 'Ardoise'], ['olivier', 'Olivier'], ['bouleau', 'Bouleau']];
+const DECOR_SWATCH = { noyer: '#6d4427', chene: '#cfa977', acajou: '#7a2f22', ebene: '#2a2a30', ardoise: '#3e5566', olivier: '#5d6233', bouleau: '#d9d4c7' };
 const FOLDER = { busy: false };
 const hasNativeFolder = () => !!window.AndroidFolder;
-function folderInfo() {
-  if (hasNativeFolder()) { try { const j = AndroidFolder.info(); return j ? JSON.parse(j) : null; } catch { return null; } }
-  return store.get('folder', null); // navigateur : on garde seulement le nom, il faudra rechoisir le dossier
+function libs() {
+  let l = store.get('libs', null);
+  if (!l || !l.length) {
+    let name = 'Ma Bibliothèque'; try { name = localStorage.getItem('bib.libname') || name; } catch {}
+    l = [{ id: 'main', name, decor: store.get('decor', 'noyer') }]; store.set('libs', l);
+  }
+  return l;
 }
+const saveLibs = (l) => store.set('libs', l);
+S.lib = store.get('lib', 'main');
+const curLib = () => (S.lib === 'all' ? null : libs().find((x) => x.id === S.lib) || libs()[0]);
+const libName = () => (curLib() ? curLib().name : 'Toutes les bibliothèques');
+const inLib = (b) => S.lib === 'all' || (b.lib || 'main') === curLib().id;
+function applyDecor() { document.documentElement.dataset.decor = curLib() ? curLib().decor : store.get('decorAll', 'ebene'); }
+applyDecor();
+function switchLib(id) { S.lib = id; store.set('lib', id); applyDecor(); S.nav = { k: 'all' }; store.set('nav', S.nav); S.filter = ''; renderLibrary(); scrollTo(0, 0); }
+
+// Dossiers : Android garde l'autorisation ; dans un navigateur on retient seulement le nom
+function folderMap() {
+  if (hasNativeFolder()) {
+    try { const m = {}; for (const f of JSON.parse(AndroidFolder.list() || '[]')) m[f.id] = f; return m; } catch { return {}; }
+  }
+  const m = store.get('folders', null) || {};
+  const old = store.get('folder', null); if (old && !m.main) { m.main = old; store.set('folders', m); store.set('folder', null); }
+  return m;
+}
+const folderOf = (id) => folderMap()[id] || null;
+function folderInfo() { return S.lib === 'all' ? null : folderOf(curLib().id); }
+const libsWithFolder = () => { const m = folderMap(); return libs().filter((l) => m[l.id]); };
 function nativeCall(cb, start) {
   return new Promise((res) => { window[cb] = (j) => { window[cb] = null; try { res(j ? JSON.parse(j) : null); } catch { res(null); } }; start(); });
 }
@@ -1382,77 +1484,153 @@ function pickWebFolder() {
   });
 }
 const BOOK_EXT = /\.(pdf|docx|txt|md)$/i;
-async function chooseFolder() {
+async function chooseFolder(libId) {
   if (hasNativeFolder()) {
-    const r = await nativeCall('__folderPicked', () => AndroidFolder.pick());
-    if (!r) return;
-    store.set('folderLast', 0); renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
-    return scanFolder();
+    const r = await nativeCall('__folderPicked', () => AndroidFolder.pick(libId));
+    if (!r) return false;
+    renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
+    await scanFolder(libId); return true;
   }
-  const files = await pickWebFolder(); if (!files.length) return;
+  const files = await pickWebFolder(); if (!files.length) return false;
   const name = (files[0].webkitRelativePath || '').split('/')[0] || 'Dossier';
-  store.set('folder', { name }); renderLibrary();
-  return scanFolder(files);
+  const m = folderMap(); m[libId] = { name }; store.set('folders', m); renderLibrary();
+  await scanFolder(libId, files); return true;
 }
-async function scanFolder(webFiles) {
-  if (FOLDER.busy) return toast('Recherche déjà en cours…');
+// Actualiser : la bibliothèque affichée, ou toutes celles qui ont un dossier
+async function refreshFolders() {
+  if (S.lib !== 'all') return scanFolder(curLib().id);
+  const list = libsWithFolder(); if (!list.length) return toast('Aucune bibliothèque n\'a de dossier source');
+  if (!hasNativeFolder()) return toast('Dans un navigateur, actualise chaque bibliothèque séparément');
+  let total = 0;
+  for (const l of list) total += (await scanFolder(l.id, null, { quiet: true })) || 0;
+  toast(total ? `${total} nouveau${total > 1 ? 'x' : ''} livre${total > 1 ? 's' : ''} ajouté${total > 1 ? 's' : ''}` : 'Aucun nouveau livre dans les dossiers');
+}
+// Les recherches passent une à la fois (une seule réponse d'Android à la fois)
+FOLDER.queue = Promise.resolve();
+function scanFolder(libId, webFiles, opts) {
+  const run = FOLDER.queue.then(() => scanOne(libId, webFiles, opts || {}));
+  FOLDER.queue = run.catch(() => 0);
+  return run;
+}
+async function scanOne(libId, webFiles, { quiet } = {}) {
+  const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
   let entries;
-  if (hasNativeFolder()) {
-    FOLDER.busy = true; renderLibrary();
-    const box = h('div', { class: 'up' }, h('b', {}, folderInfo()?.name || 'Dossier'), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
-    $('#uploads')?.append(box);
-    const r = await nativeCall('__folderScanned', () => AndroidFolder.scan());
-    box.remove();
-    if (!r || r.error) { FOLDER.busy = false; renderLibrary(); return toast(r?.error || 'Lecture du dossier impossible'); }
-    entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, mtime: f.mtime, get: async () => {
-      const resp = await fetch('/__dossier?id=' + encodeURIComponent(f.id));
-      if (!resp.ok) throw new Error('Fichier illisible');
-      return new File([await resp.blob()], f.name, { lastModified: f.mtime || Date.now() });
-    } }));
-  } else {
-    if (!webFiles) { webFiles = await pickWebFolder(); if (!webFiles.length) return; }
-    entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }));
-    FOLDER.busy = true; renderLibrary();
-  }
+  FOLDER.busy = true; renderLibrary();
   try {
-    const k = await LocalAPI.known();
+    if (hasNativeFolder()) {
+      const box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+      $('#uploads')?.append(box);
+      const r = await nativeCall('__folderScanned', () => AndroidFolder.scan(libId));
+      box.remove();
+      if (!r || r.error) { toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
+      entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, get: async () => {
+        const resp = await fetch('/__dossier?lib=' + encodeURIComponent(libId) + '&id=' + encodeURIComponent(f.id));
+        if (!resp.ok) throw new Error('Fichier illisible');
+        return new File([await resp.blob()], f.name, { lastModified: f.mtime || Date.now() });
+      } }));
+    } else {
+      if (!webFiles) { webFiles = await pickWebFolder(); if (!webFiles.length) return 0; }
+      entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }));
+    }
+    const k = await LocalAPI.known(libId);
     const fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
-    store.set('folderLast', Date.now());
-    if (!fresh.length) return toast(entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier');
+    const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
+    if (!fresh.length) { if (!quiet) toast(entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
     for (let i = 0; i < fresh.length; i++) {
       const e = fresh[i];
-      const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, `Dossier : livre ${i + 1} sur ${fresh.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+      const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, `${lib.name} : livre ${i + 1} sur ${fresh.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
       $('#uploads')?.append(box);
       try {
         const file = await e.get();
-        await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src });
+        await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src, lib: libId });
         box.remove(); ok++;
         if (ok % 5 === 0) { await loadBooks(); renderLibrary(); } // l'étagère se remplit pendant l'import
       } catch (err) { fail++; $('span', box).textContent = err.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
     }
-    toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
+    if (!quiet) toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
+    return ok;
   } finally {
     FOLDER.busy = false; await loadBooks(); renderLibrary();
   }
 }
-function openFolder() {
-  const f = folderInfo(); const last = store.get('folderLast', 0);
+function openFolder(libId = curLib()?.id) {
+  if (!libId) return openLibraries();
+  const lib = libs().find((l) => l.id === libId);
+  const f = folderOf(libId); const last = (store.get('folderLast', {}) || {})[libId] || 0;
   let ignored = []; try { ignored = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); } catch {}
   const close = sheet('Dossier source', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Bibliothèque : ' + lib.name),
     h('p', { class: 'muted' }, f
-      ? `Les livres PDF, Word et texte de ce dossier (et de ses sous-dossiers) sont ajoutés à l'étagère. Touche « Actualiser » pour aller chercher les nouveaux : ceux déjà présents ne sont pas ajoutés deux fois.`
-      : `Choisis un dossier de ton téléphone. Tous ses livres PDF, Word et texte seront ajoutés à l'étagère, puis le bouton « Actualiser » ira chercher les nouveaux quand tu voudras.`),
+      ? `Les livres PDF, Word et texte de ce dossier (et de ses sous-dossiers) vont dans cette bibliothèque. « Actualiser » va chercher les nouveaux, sans doublon.`
+      : `Choisis un dossier de ton téléphone. Ses livres PDF, Word et texte seront ajoutés à cette bibliothèque, puis « Actualiser » ira chercher les nouveaux quand tu voudras.`),
     f ? h('div', { class: 'field' }, 'Dossier', h('p', { style: { margin: '4px 0 0', fontSize: '17px' } }, f.name)) : null,
     f ? h('p', { class: 'muted' }, 'Dernière recherche : ' + (last ? lastRead(last) : 'jamais')) : null,
     !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
-    ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} du dossier retiré${ignored.length > 1 ? 's' : ''} de l'étagère ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
+    ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
-      f ? h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent sur l\'étagère.')) return; if (hasNativeFolder()) AndroidFolder.forget(); store.set('folder', null); close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier') : h('span'),
+      f ? h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier') : h('span'),
       h('div', { class: 'actions' },
-        h('button', { class: f ? 'btn' : 'btn primary', onclick: () => { close(); chooseFolder(); } }, icon('folder'), f ? 'Changer' : 'Choisir un dossier'),
-        f ? h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(); } }, icon('refresh'), 'Actualiser') : null))));
+        h('button', { class: f ? 'btn' : 'btn primary', onclick: () => { close(); chooseFolder(libId); } }, icon('folder'), f ? 'Changer' : 'Choisir un dossier'),
+        f ? h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(libId); } }, icon('refresh'), 'Actualiser') : null))));
+}
+
+// Changer de bibliothèque
+function openLibraries() {
+  const m = folderMap();
+  const live = S.books.filter((b) => !b.trashed);
+  const count = (id) => live.filter((b) => (b.lib || 'main') === id).length;
+  const n = (k) => `${k} livre${k > 1 ? 's' : ''}`;
+  const row = (id, name, decor, sub, k) => h('div', { class: 'librow' + (S.lib === id ? ' sel' : '') },
+    h('button', { class: 'libpick', onclick: () => { close(); switchLib(id); } },
+      h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }),
+      h('span', { class: 'libtxt' }, h('b', {}, name), h('small', {}, sub)), h('em', {}, n(k))),
+    id !== 'all' ? h('button', { class: 'dedit', 'aria-label': 'Modifier ' + name, onclick: () => { close(); editLib(id); } }, icon('pencil')) : null);
+  const close = sheet('Bibliothèques', h('div', {},
+    h('div', { class: 'libs' },
+      libs().map((l) => row(l.id, l.name, l.decor, m[l.id] ? '📁 ' + m[l.id].name : 'Sans dossier source', count(l.id))),
+      libs().length > 1 ? row('all', 'Toutes ensemble', store.get('decorAll', 'ebene'), 'Toutes les bibliothèques réunies', live.length) : null),
+    h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
+      h('button', { class: 'btn primary', onclick: () => { close(); newLib(); } }, icon('plus'), 'Nouvelle bibliothèque'))));
+}
+async function newLib() {
+  const name = prompt('Nom de la nouvelle bibliothèque'); if (!name || !name.trim()) return;
+  const l = libs(); const used = new Set(l.map((x) => x.decor));
+  const order = ['acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer']; // un autre bois, de préférence sombre
+  const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
+  const lib = { id: 'lib' + Date.now().toString(36), name: name.trim().slice(0, 60), decor };
+  l.push(lib); saveLibs(l); switchLib(lib.id);
+  toast('Bibliothèque créée. Choisis son dossier source.');
+  if (window.LocalAPI) await chooseFolder(lib.id);
+}
+function editLib(id) {
+  const l = libs(); const lib = l.find((x) => x.id === id); if (!lib) return;
+  const name = h('input', { value: lib.name, maxlength: 60 });
+  let decor = lib.decor;
+  const seg = decorPicker(decor, (k) => { decor = k; if (S.lib === id) document.documentElement.dataset.decor = k; });
+  const f = folderOf(id);
+  const close = sheet('Bibliothèque', h('div', {},
+    h('label', { class: 'field' }, 'Nom', name),
+    h('div', { class: 'field' }, 'Décor', seg),
+    h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'))),
+    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+      id !== 'main' ? h('button', { class: 'btn danger', onclick: async () => {
+        const main = l.find((x) => x.id === 'main');
+        if (!confirm(`Supprimer la bibliothèque « ${lib.name} » ? Ses livres iront dans « ${main.name} ».`)) return;
+        for (const b of S.books.filter((x) => x.lib === id)) await post('/api/books/' + b.id, { lib: 'main' }, 'PATCH');
+        if (hasNativeFolder()) AndroidFolder.forget(id); else { const m = folderMap(); delete m[id]; store.set('folders', m); }
+        saveLibs(l.filter((x) => x.id !== id)); close(); await loadBooks(); switchLib('main'); toast('Bibliothèque supprimée');
+      } }, 'Supprimer') : h('span'),
+      h('button', { class: 'btn primary', onclick: () => { save(); close(); applyDecor(); renderLibrary(); } }, 'Enregistrer'))));
+  function save() { lib.name = name.value.trim().slice(0, 60) || lib.name; lib.decor = decor; saveLibs(l); if (id === 'main') { try { localStorage.setItem('bib.libname', lib.name); } catch {} } }
+  // annuler sans enregistrer remet le décor en place
+  const scrim = $$('.scrim').pop(); new MutationObserver((_, o) => { if (!scrim.isConnected) { applyDecor(); o.disconnect(); } }).observe(document.body, { childList: true });
+}
+function decorPicker(sel, onPick) {
+  const wrap = h('div', { class: 'decors' }, DECORS.map(([k, l]) => h('button', { class: 'decor' + (k === sel ? ' sel' : ''), onclick: (e) => { $$('.decor', wrap).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); onPick(k); } },
+    h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[k] } }), l)));
+  return wrap;
 }
 let dragDepth = 0;
 window.addEventListener('dragenter', (e) => { if (S.me?.role !== 'owner' || !e.dataTransfer?.types?.includes('Files')) return; dragDepth++; $('#dz')?.classList.add('show'); });
@@ -1478,6 +1656,7 @@ function editBook(b) {
   let color = b.color;
   const sw = h('div', { class: 'swatches' }, PALETTE.map((c) => h('button', { class: c === color ? 'sel' : '', style: { background: c }, 'aria-label': c, onclick: (e) => { color = c; $$('button', sw).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); } })));
   const local = !!window.LocalAPI;
+  const libSel = h('select', {}, libs().map((l) => h('option', { value: l.id, selected: l.id === (b.lib || 'main') }, l.name)));
   const cols = S.cols.filter((c) => (b.cols || []).includes(c.id)).map((c) => c.name);
   const qb = local ? quickBar(b, { labels: true }) : null;
   if (qb) $$('button', qb).forEach((x) => x.addEventListener('click', () => close(), { capture: true })); // ferme la fenêtre avant l'action
@@ -1487,6 +1666,7 @@ function editBook(b) {
     b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
     b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author),
     !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null,
+    !b.trashed && local && libs().length > 1 ? h('label', { class: 'field' }, 'Bibliothèque', libSel) : null,
     h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages${b.size ? ' · ' + (b.size > 1e6 ? (b.size / 1e6).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(b.size / 1e3)) + ' ko') : ''}`),
     h('p', { class: 'muted' }, b.progress ? `Page ${b.progress.page} sur ${b.pages} · dernière lecture : ${lastRead(b.progress.last)} · ouvert ${b.progress.opens} fois` : 'Pas encore ouvert'),
     b.trashed ? null : h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
@@ -1494,26 +1674,38 @@ function editBook(b) {
         if (local) { close(); return trashBook(b); }
         if (!confirm(`Retirer « ${b.title} » de la bibliothèque ?`)) return; await api('/api/books/' + b.id, { method: 'DELETE' }); close(); await loadBooks(); renderLibrary(); toast('Livre retiré');
       } }, local ? 'Mettre à la poubelle' : 'Supprimer'),
-      h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
+      h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color, ...(local ? { lib: libSel.value } : {}) }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
 }
 function openSettings() {
   const owner = S.me.role === 'owner';
-  const decor = store.get('decor', 'noyer');
-  const libName = h('input', { value: S.me.library, maxlength: 80 });
+  const local = !!window.LocalAPI;
+  const lib = local ? curLib() : null;
+  const nameIn = h('input', { value: local ? (lib ? lib.name : '') : S.me.library, maxlength: 80 });
   const pw = h('input', { type: 'password', placeholder: 'Laisser vide pour ne pas changer', autocomplete: 'new-password' });
-  const seg = h('div', { class: 'seg' }, [['noyer', 'Noyer'], ['chene', 'Chêne clair']].map(([k, l]) => h('button', { class: k === decor ? 'sel' : '', onclick: () => { store.set('decor', k); document.documentElement.dataset.decor = k; $$('button', seg).forEach((x) => x.classList.toggle('sel', x.textContent === l)); } }, l)));
+  let decor = local ? (lib ? lib.decor : store.get('decorAll', 'ebene')) : store.get('decor', 'noyer');
+  const picker = decorPicker(decor, (k) => { decor = k; document.documentElement.dataset.decor = k; });
   const close = sheet('Réglages', h('div', {},
-    h('div', { class: 'field' }, 'Décor', seg),
-    owner ? h('label', { class: 'field' }, 'Nom de la bibliothèque', libName) : null,
-    owner && !window.LocalAPI ? h('label', { class: 'field' }, 'Nouveau mot de passe', pw) : null,
-    window.LocalAPI ? h('p', { class: 'muted' }, 'Mode local : tes livres sont gardés dans ce navigateur, sur cet appareil seulement. Le partage et le suivi des lecteurs demandent un serveur.') : null,
+    local ? h('p', { class: 'muted', style: { marginTop: '-6px' } }, lib ? 'Bibliothèque : ' + lib.name : 'Toutes les bibliothèques ensemble') : null,
+    h('div', { class: 'field' }, local && !lib ? 'Décor de la vue « Toutes ensemble »' : 'Décor', picker),
+    owner && (!local || lib) ? h('label', { class: 'field' }, 'Nom de la bibliothèque', nameIn) : null,
+    owner && !local ? h('label', { class: 'field' }, 'Nouveau mot de passe', pw) : null,
+    local ? h('p', { class: 'muted' }, 'Mode local : tes livres sont gardés sur cet appareil seulement. Le partage et le suivi des lecteurs demandent un serveur.') : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
-        window.LocalAPI ? null : h('button', { class: 'btn', onclick: async () => { await post('/api/logout', {}); close(); boot(); } }, icon('logout'), 'Déconnexion'),
+        local ? h('button', { class: 'btn', onclick: () => { close(); openLibraries(); } }, icon('collection'), 'Bibliothèques') : h('button', { class: 'btn', onclick: async () => { await post('/api/logout', {}); close(); boot(); } }, icon('logout'), 'Déconnexion'),
         isNative() ? h('button', { class: 'btn', onclick: () => AndroidApp.changeServer() }, 'Adresse du serveur') : null),
       owner ? h('button', { class: 'btn primary', onclick: async () => {
-        try { await post('/api/settings', { library: libName.value, password: pw.value || undefined }, 'PATCH'); S.me.library = libName.value; close(); renderLibrary(); toast('Réglages enregistrés'); } catch (e) { toast(e.message); }
+        try {
+          if (local) {
+            const l = libs();
+            if (lib) { const x = l.find((y) => y.id === lib.id); x.decor = decor; x.name = nameIn.value.trim().slice(0, 60) || x.name; saveLibs(l); if (x.id === 'main') { try { localStorage.setItem('bib.libname', x.name); } catch {} } }
+            else store.set('decorAll', decor);
+          } else { await post('/api/settings', { library: nameIn.value, password: pw.value || undefined }, 'PATCH'); S.me.library = nameIn.value; store.set('decor', decor); }
+          close(); renderLibrary(); toast('Réglages enregistrés');
+        } catch (e) { toast(e.message); }
       } }, 'Enregistrer') : null)));
+  // fermer sans enregistrer remet le décor d'avant
+  const scrim = $$('.scrim').pop(); new MutationObserver((_, o) => { if (!scrim.isConnected) { local ? applyDecor() : (document.documentElement.dataset.decor = store.get('decor', 'noyer')); o.disconnect(); } }).observe(document.body, { childList: true });
 }
 
 // ================= Partage =================

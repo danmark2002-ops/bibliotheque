@@ -55,6 +55,50 @@
   color-scheme: light;
 }
 
+
+/* Décors supplémentaires : chaque bibliothèque peut avoir le sien */
+:root[data-decor="acajou"] {
+  --room: #170c0a; --room-2: #22110d; --lamp: rgba(255, 150, 110, .15);
+  --ink: #f5e6dc; --ink-2: #c9a798; --ink-3: #93766a;
+  --brass: #e0a07a; --brass-2: #c27b55; --brass-ink: #2a120a;
+  --glass: rgba(46, 22, 17, .62); --panel: #221310; --panel-2: #2d1914;
+  --case-back: #2a120d; --case-back-2: #1e0c08;
+  --plank-top: #8e3b28; --plank-mid: #70291b; --plank-front: #4f1b11; --plank-edge: #b25a40; --side: #44190f;
+}
+:root[data-decor="ebene"] {
+  --room: #0d0d10; --room-2: #15151a; --lamp: rgba(190, 200, 255, .1);
+  --ink: #ecebf2; --ink-2: #aeadbb; --ink-3: #7b7a88;
+  --brass: #c9c3b0; --brass-2: #a39d8a; --brass-ink: #141418;
+  --glass: rgba(28, 28, 34, .66); --glass-line: rgba(220, 220, 255, .08); --panel: #17171c; --panel-2: #1f1f26; --line: rgba(220, 220, 255, .09);
+  --case-back: #18181d; --case-back-2: #101014;
+  --plank-top: #3b3b44; --plank-mid: #2a2a31; --plank-front: #1b1b20; --plank-edge: #5a5a66; --side: #222228;
+}
+:root[data-decor="ardoise"] {
+  --room: #0e1419; --room-2: #141d24; --lamp: rgba(150, 200, 240, .13);
+  --ink: #e6eef3; --ink-2: #a2b4c0; --ink-3: #718491;
+  --brass: #8fc1d9; --brass-2: #6aa1bb; --brass-ink: #0c1a22;
+  --glass: rgba(22, 34, 43, .64); --glass-line: rgba(190, 225, 255, .09); --panel: #15202a; --panel-2: #1b2934; --line: rgba(190, 225, 255, .1);
+  --case-back: #172530; --case-back-2: #101b23;
+  --plank-top: #4f6a7c; --plank-mid: #3b5262; --plank-front: #283b48; --plank-edge: #6f8ea2; --side: #24343f;
+}
+:root[data-decor="olivier"] {
+  --room: #11120b; --room-2: #191a10; --lamp: rgba(220, 230, 140, .13);
+  --ink: #eef0dc; --ink-2: #b7ba98; --ink-3: #868a68;
+  --brass: #c8c46a; --brass-2: #a8a44c; --brass-ink: #1c1c08;
+  --glass: rgba(32, 34, 20, .62); --panel: #1b1d11; --panel-2: #242617; --line: rgba(240, 240, 190, .1);
+  --case-back: #1f2213; --case-back-2: #16180d;
+  --plank-top: #767a3e; --plank-mid: #5d6130; --plank-front: #414420; --plank-edge: #979b58; --side: #33361a;
+}
+:root[data-decor="bouleau"] {
+  --room: #eeeee9; --room-2: #e4e3dc; --lamp: rgba(255, 255, 255, .75);
+  --ink: #22242a; --ink-2: #5d6068; --ink-3: #8e9098;
+  --brass: #4f6f86; --brass-2: #3f5a6e; --brass-ink: #f6f8fa;
+  --glass: rgba(255, 255, 252, .74); --glass-line: rgba(30, 40, 50, .1); --panel: #fbfbf8; --panel-2: #f0efe9; --line: rgba(30, 40, 50, .12);
+  --case-back: #d8d4c8; --case-back-2: #cac5b6;
+  --plank-top: #ece7da; --plank-mid: #d9d2c0; --plank-front: #bdb5a1; --plank-edge: #f7f4ec; --side: #c6bfac;
+  color-scheme: light;
+}
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; min-height: 100%; }
 body {
@@ -528,3 +572,29 @@ input, select { font: inherit; color: inherit; }
 .dedit svg { width: 16px; height: 16px; }
 .dsec { padding: 16px 12px 6px; font: 600 11px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .dline { height: 1px; background: var(--line); margin: 10px 4px; }
+
+/* Bibliothèques */
+html, body, .room { transition: background-color .5s ease; }
+.libswitch { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: inherit; padding: 0; cursor: pointer; text-align: left; min-width: 0; }
+.libswitch h1 { margin: 0; overflow-wrap: anywhere; }
+.libswitch > svg { width: 22px; height: 22px; color: var(--ink-3); flex: none; margin-top: 6px; }
+.libs { display: grid; gap: 6px; }
+.librow { display: flex; align-items: center; gap: 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); }
+.librow.sel { border-color: var(--brass); }
+.libpick { flex: 1; min-width: 0; display: grid; grid-template-columns: 36px 1fr auto; align-items: center; gap: 12px; padding: 12px; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+.libtxt { min-width: 0; display: grid; gap: 2px; }
+.libtxt b { font: 600 16px/1.2 var(--font-display); overflow-wrap: anywhere; }
+.libtxt small { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libpick em { font-style: normal; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.libsw { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(180deg, transparent 62%, var(--sw) 62%, var(--sw) 78%, transparent 78%), color-mix(in srgb, var(--sw) 35%, #111); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); flex: none; }
+.libsw.all { background: conic-gradient(#6d4427 0 25%, #3e5566 0 50%, #7a2f22 0 75%, #cfa977 0); }
+.decors { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.decor { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); font: 500 13px var(--font-ui); cursor: pointer; }
+.decor .libsw { width: 22px; height: 22px; border-radius: 6px; }
+.decor.sel { border-color: var(--brass); color: var(--ink); }
+button.dhead { width: 100%; border-left: 0; border-right: 0; border-top: 0; background: none; color: var(--ink); cursor: pointer; text-align: left; font: inherit; }
+.dlib { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dlib b { font: italic 600 19px/1.15 var(--font-display); overflow-wrap: anywhere; }
+.dlib small { font-size: 12px; color: var(--ink-3); }
+button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: rotate(-90deg); }
+.field select { height: 42px; }

@@ -185,7 +185,7 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
-      fav: !!m.fav, state: m.state || '', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   async function upload(file, onp, extra = {}) {
@@ -259,6 +259,7 @@ window.LocalAPI = (() => {
       if (m === 'PATCH') {
         Object.assign(meta, { title: String(body.title ?? meta.title).slice(0, 200), author: String(body.author ?? meta.author).slice(0, 120), color: String(body.color ?? meta.color) });
         if (body.fav !== undefined) meta.fav = !!body.fav;
+        if (body.lib) meta.lib = String(body.lib);
         if (body.state !== undefined) meta.state = ['alire', 'lu'].includes(body.state) ? body.state : '';
         if (Array.isArray(body.cols)) meta.cols = [...new Set(body.cols.map(String))];
         if (body.trashed !== undefined) meta.trashed = body.trashed ? now() : 0;
@@ -323,9 +324,10 @@ window.LocalAPI = (() => {
   }
   // Ce qui est déjà sur l'étagère, pour ne pas importer deux fois le même livre depuis le dossier
   const clean = (n) => String(n || '').replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim().toLowerCase();
-  async function known() {
+  async function known(lib = 'main') {
     const src = new Set(), nameSize = new Set(), names = new Set();
     for (const m of await all('meta')) {
+      if ((m.lib || 'main') !== lib) continue; // chaque bibliothèque a ses propres livres
       if (m.src) src.add(m.src);
       let fname = m.fname, fsize = m.fsize;
       if (!fname && m.kind === 'pdf') { const rec = await get('blob', m.id); if (rec?.file) { fname = rec.file.name; fsize = rec.file.size; } }
