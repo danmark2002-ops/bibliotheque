@@ -598,3 +598,14 @@ button.dhead { width: 100%; border-left: 0; border-right: 0; border-top: 0; back
 .dlib small { font-size: 12px; color: var(--ink-3); }
 button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: rotate(-90deg); }
 .field select { height: 42px; }
+
+/* Petites icônes sous les livres de l'étagère */
+.shelf { padding-top: 40px; }
+.case { padding-bottom: 32px !important; }
+.tiny { position: absolute; left: 0; right: 0; top: calc(100% + 24px); z-index: 3; display: flex; justify-content: center; gap: 1px; }
+.ti { width: 22px; height: 20px; display: grid; place-items: center; border-radius: 6px; color: var(--ink-3); opacity: .55; cursor: pointer; transition: opacity .15s, color .15s; }
+.ti svg { width: 13px; height: 13px; stroke-width: 2; }
+.ti:hover, .ti:focus-visible { opacity: 1; color: var(--ink); outline: none; }
+.ti.on { opacity: 1; color: var(--brass); }
+.ti:first-child.on { color: #f2c14e; }
+@media (max-width: 560px) { .shelf { padding-top: 36px; } .tiny { top: calc(100% + 19px); } .ti { width: 20px; } .ti svg { width: 12px; height: 12px; } }

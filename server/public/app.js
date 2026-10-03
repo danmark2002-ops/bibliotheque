@@ -87,6 +87,7 @@ async function api(path, opts = {}) {
 const post = (p, body, method = 'POST') => api(p, { method, body: JSON.stringify(body) });
 const isNative = () => !!window.AndroidApp;
 
+if (!store.get('etagere15', false)) { store.set('view', 'shelf'); store.set('etagere15', true); } // retour à l'étagère après la mise à jour
 const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf') };
 document.documentElement.dataset.decor = store.get('decor', 'noyer');
 
@@ -169,7 +170,8 @@ function bookEl(b) {
   if (b.status === 'error') cv.append(h('span', { class: 'status-pill' }, 'Fichier illisible'));
   el.append(h('span', { class: 'under' }, h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()),
     b.state === 'lu' ? h('span', { class: 'tag st' }, 'Lu') : b.state === 'alire' ? h('span', { class: 'tag st' }, 'À lire') : pct ? h('span', { class: 'tag pct' }, pct >= 99 ? 'Terminé' : pct + ' %') : null));
-  el.addEventListener('click', () => { if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
+  if (S.me.role === 'owner' && window.LocalAPI && !b.trashed) $('.under', el).after(tinyIcons(b));
+  el.addEventListener('click', (e) => { if (e.target.closest('.tiny')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
   ownerGestures(el, b);
   return el;
 }
@@ -265,7 +267,17 @@ async function deleteForever(b) {
   await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Supprimé définitivement');
 }
 
-// Boutons rapides, comme sous chaque livre dans ReadEra
+// Toutes petites icônes sous chaque livre de l'étagère
+function tinyIcons(b) {
+  const ic = (name, label, on, fn) => h('span', { class: 'ti' + (on ? ' on' : ''), role: 'button', tabindex: '0', title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false',
+    onclick: (e) => { e.stopPropagation(); e.preventDefault(); fn(); }, ontouchstart: (e) => e.stopPropagation() }, icon(name));
+  return h('span', { class: 'tiny' },
+    ic(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
+    ic('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
+    ic('checks', 'Déjà lu', b.state === 'lu', () => toggleState(b, 'lu')),
+    ic('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)));
+}
+// Boutons rapides de la vue liste
 function quickBar(b, { labels } = {}) {
   const btn = (ic, label, on, fn) => h('button', { class: 'qb' + (on ? ' on' : ''), title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false', onclick: (e) => { e.stopPropagation(); fn(); } }, icon(ic), labels ? h('span', {}, label) : null);
   if (b.trashed) return h('div', { class: 'qbar' + (labels ? ' big' : '') },
@@ -425,7 +437,7 @@ function renderLibrary() {
     current ? heroEl(current) : null,
     toolbar,
     body,
-    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : 'Appui long sur un livre : favori, à lire, collections…') : null,
+    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.') : null,
   ));
   $('#app').replaceChildren(room);
   // hors de #app : les messages d'envoi survivent au rafraîchissement de l'étagère
