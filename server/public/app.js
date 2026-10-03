@@ -995,7 +995,19 @@ function summaryChoices(b) {
 // Le cours est enregistré dans files/auto/prof/<id>.json : le lecteur audio (téléphone et Android Auto) le joue
 // avec une voix plus vivante. On peut l'interrompre pour lui poser une question.
 const Prof = {
-  on: () => !!(window.AndroidAI && window.AndroidAuto && window.LocalAPI && AndroidAuto.profPlay),
+  on: () => !!(window.AndroidAI && window.AndroidAuto && window.LocalAPI && AndroidAuto.profPlay && AndroidAI.generateOnline),
+  // Gemini Nano si le téléphone le permet, sinon l'IA gratuite en ligne
+  engine: null,
+  async pickEngine(say) {
+    if (this.engine) return this.engine;
+    let nano = false; try { nano = await this.ensureNano(say); } catch {}
+    return (this.engine = nano ? 'nano' : 'online');
+  },
+  async ai(prompt, say) {
+    const eng = await this.pickEngine(say);
+    if (eng === 'nano') return nanoAskRetry(`${this.persona}\n${prompt}`, say);
+    return onlineAsk(this.persona, prompt);
+  },
   file: (id) => `prof/${id}.json`,
   info(id) { try { const s = AndroidAuto.readText(this.file(id)); if (!s) return null; const j = JSON.parse(s); return { done: !!j.done, n: j.n || 0, made: (j.parts || []).length, parts: j.parts || [] }; } catch { return null; } },
   who: (b) => `« ${b.title} »${b.author ? ' de ' + b.author : ''}`,
@@ -1018,13 +1030,12 @@ const Prof = {
   },
   prompt(b, chunk, i, n, prev) {
     const where = n > 1 ? `la partie ${i + 1} sur ${n} du livre ${this.who(b)}` : `le livre ${this.who(b)}`;
-    return `${this.persona}
-Explique ${where}, à partir de l'extrait ci-dessous.
+    return `Explique ${where}, à partir de l'extrait ci-dessous.
 - Explique les idées et les concepts avec tes propres mots, simplement et avec enthousiasme : exemples concrets, images frappantes, exclamations, questions que tu poses à l'auditeur.
 - Ne lis pas l'extrait et ne le recopie pas.
 - Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
 - Écris seulement ce qui sera dit à voix haute, en paragraphes : pas de titres, pas de listes, pas de symboles.
-- Environ 150 à 200 mots.
+- Environ 180 à 250 mots.
 ${i === 0 ? '- Commence en te présentant en une phrase, avec entrain, et annonce le livre.' : `- Tu viens de dire : « ${prev} ». Enchaîne naturellement, sans saluer de nouveau.`}
 ${i === n - 1 ? '- Termine par une courte conclusion enthousiaste sur l\'ensemble du livre.' : ''}
 
@@ -1048,16 +1059,16 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     const say = (t) => { $('span', box).textContent = t; };
     const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
     try {
-      if (!(await this.ensureNano(say))) throw new Error('Le Professeur a besoin de l\'IA intégrée au téléphone (Gemini Nano). Elle n\'est pas disponible sur ce téléphone.');
+      const eng = await this.pickEngine(say);
       const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
       if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
       const chunks = chunkText(t.text);
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
       for (let i = work.parts.length; i < chunks.length; i++) {
-        say(`Le Professeur prépare la partie ${i + 1} sur ${chunks.length}…`); bar(i / chunks.length);
+        say(`Le Professeur prépare la partie ${i + 1} sur ${chunks.length}…${eng === 'online' ? ' (IA gratuite en ligne)' : ''}`); bar(i / chunks.length);
         const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
-        const r = this.clean(await nanoAskRetry(this.prompt(b, chunks[i], i, chunks.length, prev), say));
+        const r = this.clean(await this.ai(this.prompt(b, chunks[i], i, chunks.length, prev), say));
         work.parts.push(r);
         this.write(b, work, i === chunks.length - 1);
         if (i === 0) toast('Le cours peut déjà s\'écouter : la suite se prépare pendant ce temps.');
@@ -1082,8 +1093,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     out.textContent = 'Le Professeur réfléchit…';
     try {
       const ctx = [info.parts[p - 1], info.parts[p]].filter(Boolean).join('\n\n');
-      const r = this.clean(await nanoAskRetry(`${this.persona}
-L'auditeur t'interrompt pendant ton explication du livre ${this.who(b)} pour te poser une question.
+      const r = this.clean(await this.ai(`L'auditeur t'interrompt pendant ton explication du livre ${this.who(b)} pour te poser une question.
 Voici ce que tu étais en train d'expliquer :
 ${ctx}
 ${b.summary?.text ? '\nRésumé du livre entier :\n' + b.summary.text.slice(0, 2500) + '\n' : ''}
@@ -1103,13 +1113,14 @@ Question : ${q}`, (m) => { out.textContent = m; }));
     const send = () => { const v = q.value.trim(); if (!v) return toast('Écris ou dicte ta question'); out.style.display = ''; this.ask(b, v, out); q.value = ''; };
     const mic = window.AndroidAuto.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => { window.__heard = (t) => { window.__heard = null; if (t) { q.value = t; send(); } }; AndroidAuto.listen(); } }, icon('mic')) : null;
     const ready = info && info.made;
+    if (ready && !store.get('profMic', 0)) { store.set('profMic', 1); try { AndroidAI.askMic?.(); } catch {} }
     const close = sheet('Le Professeur bizarroïde', h('div', {},
       h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
       h('div', { class: 'aiopt' },
         h('h4', {}, ready ? (info.done ? 'Le cours est prêt' : `Cours en préparation : ${info.made} parties sur ${info.n}`) : 'Un cours au lieu d\'une lecture'),
         h('p', {}, ready
-          ? 'Le Professeur t\'explique le livre avec enthousiasme, partie par partie. Dans Android Auto, il apparaît avec 🎓 devant le titre du livre.'
-          : 'Au lieu de lire phrase par phrase, le Professeur t\'explique les idées du livre avec ses mots, comme un cours passionné. L\'IA du téléphone le prépare une fois, gratuitement et sans Internet. Garde l\'application ouverte pendant la préparation : un livre moyen prend de 10 à 40 minutes. Tu peux commencer à écouter dès la première partie.'),
+          ? 'Le Professeur t\'explique le livre avec enthousiasme, partie par partie. Dans Android Auto, il apparaît avec 🎓 devant le titre du livre ; le bouton « Question » de l\'auto te laisse l\'interroger à voix haute.'
+          : 'Au lieu de lire phrase par phrase, le Professeur t\'explique les idées du livre avec ses mots, comme un cours passionné. Il le prépare une fois, gratuitement : avec l\'IA intégrée au téléphone si elle est disponible, sinon avec une IA gratuite en ligne (Internet requis). Garde l\'application ouverte pendant la préparation : environ une partie toutes les 20 secondes. Tu peux commencer à écouter dès la première partie.'),
         h('div', { class: 'prof-row' },
           ready ? h('button', { class: 'btn primary', onclick: () => { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓'); } }, icon('play'), 'Écouter') : null,
           ready ? h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause') : null,
@@ -1207,6 +1218,13 @@ function nanoAsk(prompt) {
   const wait = (window.__aiWait ||= {});
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
   return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
+}
+// IA gratuite en ligne, sans clé (Pollinations) : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
+function onlineAsk(system, prompt) {
+  const id = 'o' + (++nanoSeq);
+  const wait = (window.__aiWait ||= {});
+  window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
+  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generateOnline(id, system || '', prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {

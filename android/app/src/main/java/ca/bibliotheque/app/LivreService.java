@@ -82,6 +82,9 @@ public class LivreService extends MediaBrowserService {
     private final List<String> inter = new ArrayList<>();   // réponse à une question, dite avant de reprendre le cours
     private int interIdx;
     private android.speech.tts.Voice defaultVoice, profVoice;
+    private android.speech.SpeechRecognizer ears;
+    private boolean asking;
+    private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.";
 
     // Lecture lancée sur le téléphone : l'auto l'affiche et ses boutons la commandent
     private static volatile String phoneJson = "";
@@ -153,6 +156,7 @@ public class LivreService extends MediaBrowserService {
         save();
         instance = null;
         if (tts != null) { tts.stop(); tts.shutdown(); }
+        if (ears != null) { try { ears.destroy(); } catch (Exception ignored) { } }
         session.release();
         super.onDestroy();
     }
@@ -299,6 +303,7 @@ public class LivreService extends MediaBrowserService {
         @Override public void onRewind() { move(-30); }
         @Override public void onSeekTo(long ms) { if (!remote) seekChars((long) (ms / 1000f * CPS * rate)); }
         @Override public void onCustomAction(String action, Bundle extras) {
+            if ("ask".equals(action)) { askQuestion(); return; }
             if ("m180".equals(action)) move(-180); else if ("p180".equals(action)) move(180); else if ("p600".equals(action)) move(600); else if ("m600".equals(action)) move(-600);
         }
         @Override public void onPlayFromSearch(String query, Bundle extras) {
@@ -431,6 +436,7 @@ public class LivreService extends MediaBrowserService {
 
     private void play() {
         if (bookId == null) return;
+        if (asking) { asking = false; if (ears != null) try { ears.cancel(); } catch (Exception ignored) { } }
         if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { error("Le son est occupé par une autre application."); return; }
         playing = true;
         session.setActive(true);
@@ -483,6 +489,8 @@ public class LivreService extends MediaBrowserService {
     }
 
     private void spoken(String uttId) {
+        if ("listen".equals(uttId)) { if (asking) listen(); return; }
+        if ("wait".equals(uttId)) return;
         if (!playing || uttId == null || !uttId.startsWith(token + ":")) return;
         if (uttId.startsWith(token + ":q")) {
             interIdx++;
@@ -497,6 +505,86 @@ public class LivreService extends MediaBrowserService {
         if (!prof) { speak(); return; }
         // le Professeur respire : petite pause entre les phrases, plus longue entre les paragraphes et les parties
         main.postDelayed(gap(++token), pauseKind == 2 ? 1100 : pauseKind == 1 ? 500 : 140);
+    }
+
+    // ---------------------------------------------------------------- questions au Professeur, depuis l'auto
+    private void askQuestion() {
+        if (!prof || bookId == null || asking) return;
+        if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
+        inter.clear(); interIdx = 0;
+        asking = true;
+        updateState();
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            asking = false;
+            setInter("Pour me poser des questions dans l'auto, autorise d'abord le micro : ouvre le Professeur dans la Bibliothèque, sur ton téléphone. Je reprends le cours !");
+            play();
+            return;
+        }
+        try { if (Build.VERSION.SDK_INT >= 30) startForeground(7, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE); } catch (Exception ignored) { }
+        say("Oui ? Je t'écoute !", "listen");
+    }
+
+    private void say(String text, String id) {
+        if (!ttsReady) { if ("listen".equals(id)) listen(); return; }
+        try { if (profVoice != null) tts.setVoice(profVoice); } catch (Exception ignored) { }
+        expressive(text, 0);
+        tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id);
+    }
+
+    private void listen() {
+        if (!android.speech.SpeechRecognizer.isRecognitionAvailable(this)) { heard(null); return; }
+        if (ears == null) {
+            ears = android.speech.SpeechRecognizer.createSpeechRecognizer(this);
+            ears.setRecognitionListener(new android.speech.RecognitionListener() {
+                @Override public void onResults(Bundle r) {
+                    java.util.ArrayList<String> l = r.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION);
+                    heard(l == null || l.isEmpty() ? null : l.get(0));
+                }
+                @Override public void onError(int error) { heard(null); }
+                @Override public void onReadyForSpeech(Bundle p) { }
+                @Override public void onBeginningOfSpeech() { }
+                @Override public void onRmsChanged(float v) { }
+                @Override public void onBufferReceived(byte[] b) { }
+                @Override public void onEndOfSpeech() { }
+                @Override public void onPartialResults(Bundle p) { }
+                @Override public void onEvent(int t, Bundle p) { }
+            });
+        }
+        Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "fr-CA");
+        try { ears.startListening(i); } catch (Exception e) { heard(null); }
+    }
+
+    private void heard(String q) {
+        if (!asking) return;
+        if (q == null || q.trim().isEmpty()) {
+            asking = false;
+            setInter("Hmm, je ne t'ai pas bien entendu. Tu pourras réessayer avec le bouton Question. Je reprends le cours !");
+            play();
+            return;
+        }
+        say("Ah ! Bonne question… Laisse-moi réfléchir un instant.", "wait");
+        final String id = bookId.substring(5), title = this.title.replace("🎓 ", "");
+        final int part = idx < marks.size() ? marks.get(idx) : 0;
+        new Thread(() -> {
+            String answer;
+            try {
+                JSONArray parts = new JSONObject(read(new File(dir(), "prof/" + id + ".json"))).optJSONArray("parts");
+                StringBuilder ctx = new StringBuilder();
+                if (parts != null) for (int k = Math.max(0, part - 1); k <= Math.min(part, parts.length() - 1); k++) ctx.append(parts.optString(k)).append("\n\n");
+                answer = IaGratuite.ask(PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
+                    + "Voici ce que tu étais en train d'expliquer :\n" + ctx
+                    + "\nRéponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n"
+                    + "Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.\n"
+                    + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q);
+                answer = answer.replaceAll("(?m)^\\s*#+.*$", "").replaceAll("(?m)^\\s*[-*•]\\s+", "").replaceAll("\\*\\*?|__|`", "");
+            } catch (Exception e) {
+                answer = "Oh là là, je n'arrive pas à joindre mon cerveau en ligne pour l'instant. Vérifie la connexion Internet du téléphone. Je reprends le cours !";
+            }
+            final String a = answer;
+            main.post(() -> { if (!asking) return; asking = false; setInter(a); play(); });
+        }).start();
     }
 
     private Runnable gap(int t) { return () -> { if (playing && t == token) speak(); }; }
@@ -565,6 +653,7 @@ public class LivreService extends MediaBrowserService {
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO
                 | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH | PlaybackState.ACTION_FAST_FORWARD | PlaybackState.ACTION_REWIND)
             .setState(bookId == null ? PlaybackState.STATE_NONE : playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, posMs(), playing ? rate : 0f);
+        if (bookId != null && prof) b.addCustomAction(new PlaybackState.CustomAction.Builder("ask", "Poser une question", R.drawable.ic_question).build());
         if (bookId != null) {
             b.addCustomAction(new PlaybackState.CustomAction.Builder("m180", "Reculer de 3 minutes", R.drawable.ic_moins3).build());
             b.addCustomAction(new PlaybackState.CustomAction.Builder("p180", "Avancer de 3 minutes", R.drawable.ic_plus3).build());

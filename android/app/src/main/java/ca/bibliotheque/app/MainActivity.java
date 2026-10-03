@@ -549,6 +549,26 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Une demande à l'IA gratuite en ligne (sans clé). Réponse : window.__aiResult({id, text} ou {id, error}) */
+        @JavascriptInterface
+        public void generateOnline(String id, String system, String prompt) {
+            new Thread(() -> {
+                JSONObject res = new JSONObject();
+                try { res.put("id", id); res.put("text", IaGratuite.ask(system, prompt)); }
+                catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
+                js("__aiResult", res.toString());
+            }).start();
+        }
+
+        /** Le micro, pour poser des questions au Professeur dans l'auto (demandé une seule fois). */
+        @JavascriptInterface
+        public void askMic() {
+            runOnUiThread(() -> {
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 77);
+            });
+        }
+
         /** Une demande à l'IA. Réponse : window.__aiResult({id, text} ou {id, error}) */
         @JavascriptInterface
         public void generate(String id, String prompt) {
