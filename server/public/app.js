@@ -33,6 +33,8 @@ const ICONS = {
   next: '<path d="M6 6l8 6-8 6V6z" fill="currentColor" stroke="none"/><path d="M17 6v12"/>',
   type: '<path d="M4 18L9 6l5 12M5.8 14h6.4"/><path d="M15 18l3-7 3 7M15.8 16h4.4"/>',
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
+  prof: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1" fill="currentColor"/><circle cx="3.5" cy="12" r="1" fill="currentColor"/><circle cx="3.5" cy="18" r="1" fill="currentColor"/>',
@@ -746,7 +748,8 @@ function editBook(b) {
   const actRow = local && !b.trashed ? h('div', { class: 'bookacts' },
     h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon('book'), h('span', {}, 'Lire')),
     h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
-    h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA'))) : null;
+    h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')),
+    Prof.on() ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null) : null;
   const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {},
     actRow,
     qb,
@@ -823,6 +826,7 @@ const AutoSync = {
       const ids = new Set(live.map((b) => b.id));
       for (const f of JSON.parse(AndroidAuto.list('books') || '[]')) { const id = f.replace(/\.json$/, ''); if (!ids.has(id)) { AndroidAuto.remove('books/' + f); delete done[id]; } }
       for (const f of JSON.parse(AndroidAuto.list('covers') || '[]')) { const id = f.replace(/\.(jpg|png)$/, ''); if (!ids.has(id)) AndroidAuto.remove('covers/' + f); }
+      for (const f of JSON.parse(AndroidAuto.list('prof') || '[]')) { const id = f.replace(/\.json$/, ''); if (!ids.has(id)) AndroidAuto.remove('prof/' + f); }
       store.set('autoDone', done);
     } catch (e) { /* Android Auto ne doit jamais gêner l'application */ }
     finally { this.running = false; if (this.again) { this.again = false; this.schedule(500); } }
@@ -830,10 +834,11 @@ const AutoSync = {
   writeCatalog() {
     const done = store.get('autoDone', {});
     const L = libs(); const name = (id) => (L.find((l) => l.id === id) || L[0]).name;
+    const prof = new Set(JSON.parse(AndroidAuto.list('prof') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
     const books = S.books.filter((b) => !b.trashed && b.status === 'ready').map((b) => ({
       id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
       cover: done[b.id]?.c ? `covers/${b.id}.${b.kind === 'pdf' && b.coverUrl ? 'jpg' : 'png'}` : '',
-      last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1 }));
+      last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1, prof: prof.has(b.id) }));
     AndroidAuto.writeText('catalog.json', JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1), updated: Date.now() }));
   },
   async pullProgress() {
@@ -985,6 +990,140 @@ function summaryChoices(b) {
         h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude')))));
 }
 
+// ---------- Le Professeur bizarroïde ----------
+// L'IA du téléphone (Gemini Nano) réécrit chaque partie du livre en une explication enjouée, à dire à voix haute.
+// Le cours est enregistré dans files/auto/prof/<id>.json : le lecteur audio (téléphone et Android Auto) le joue
+// avec une voix plus vivante. On peut l'interrompre pour lui poser une question.
+const Prof = {
+  on: () => !!(window.AndroidAI && window.AndroidAuto && window.LocalAPI && AndroidAuto.profPlay),
+  file: (id) => `prof/${id}.json`,
+  info(id) { try { const s = AndroidAuto.readText(this.file(id)); if (!s) return null; const j = JSON.parse(s); return { done: !!j.done, n: j.n || 0, made: (j.parts || []).length, parts: j.parts || [] }; } catch { return null; } },
+  who: (b) => `« ${b.title} »${b.author ? ' de ' + b.author : ''}`,
+  persona: 'Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.',
+  clean(t) {
+    return t.replace(/\r/g, '').replace(/^\s*#+.*$/gm, '').replace(/^\s*\*\*[^*\n]{1,80}\*\*\s*$/gm, '').replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*\d+[.)]\s+/gm, '')
+      .replace(/\*\*?|__|`/g, '').replace(/\[page \d+\]/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  },
+  units(parts) {
+    const u = [];
+    parts.forEach((p, i) => {
+      const paras = p.split(/\n{2,}/).map((x) => x.replace(/\n/g, ' ').trim()).filter(Boolean);
+      paras.forEach((para, k) => { const s = sentences(para); s.forEach((x, j) => u.push([x, i, j === s.length - 1 ? (k === paras.length - 1 ? 2 : 1) : 0])); });
+    });
+    return u;
+  },
+  write(b, work, done) {
+    AndroidAuto.writeText(this.file(b.id), JSON.stringify({ v: 1, kind: 'prof', id: b.id, title: b.title, n: work.n, done, parts: work.parts, u: this.units(work.parts) }));
+    AutoSync.writeCatalog();
+  },
+  prompt(b, chunk, i, n, prev) {
+    const where = n > 1 ? `la partie ${i + 1} sur ${n} du livre ${this.who(b)}` : `le livre ${this.who(b)}`;
+    return `${this.persona}
+Explique ${where}, à partir de l'extrait ci-dessous.
+- Explique les idées et les concepts avec tes propres mots, simplement et avec enthousiasme : exemples concrets, images frappantes, exclamations, questions que tu poses à l'auditeur.
+- Ne lis pas l'extrait et ne le recopie pas.
+- Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
+- Écris seulement ce qui sera dit à voix haute, en paragraphes : pas de titres, pas de listes, pas de symboles.
+- Environ 150 à 200 mots.
+${i === 0 ? '- Commence en te présentant en une phrase, avec entrain, et annonce le livre.' : `- Tu viens de dire : « ${prev} ». Enchaîne naturellement, sans saluer de nouveau.`}
+${i === n - 1 ? '- Termine par une courte conclusion enthousiaste sur l\'ensemble du livre.' : ''}
+
+Extrait :
+${chunk.replace(/\[page \d+\]/g, '')}`;
+  },
+  async ensureNano(say) {
+    let st = await nanoStatus();
+    if (st === 'downloadable' || st === 'downloading') {
+      say('Préparation de l\'IA du téléphone (téléchargement unique par Android)…');
+      try { await nanoDownload((bytes) => say(`Téléchargement de l'IA du téléphone… ${Math.round(bytes / 1e6)} Mo`)); st = 'available'; } catch { st = 'unavailable'; }
+    }
+    return st === 'available';
+  },
+  busy: {},
+  async prepare(b, restart) {
+    if (this.busy[b.id]) return toast('Le cours est déjà en préparation');
+    this.busy[b.id] = true;
+    const box = h('div', { class: 'up' }, h('b', {}, 'Professeur : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+    $('#uploads')?.append(box);
+    const say = (t) => { $('span', box).textContent = t; };
+    const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    try {
+      if (!(await this.ensureNano(say))) throw new Error('Le Professeur a besoin de l\'IA intégrée au téléphone (Gemini Nano). Elle n\'est pas disponible sur ce téléphone.');
+      const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
+      if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
+      const chunks = chunkText(t.text);
+      const old = restart ? null : this.info(b.id);
+      const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
+      for (let i = work.parts.length; i < chunks.length; i++) {
+        say(`Le Professeur prépare la partie ${i + 1} sur ${chunks.length}…`); bar(i / chunks.length);
+        const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
+        const r = this.clean(await nanoAskRetry(this.prompt(b, chunks[i], i, chunks.length, prev), say));
+        work.parts.push(r);
+        this.write(b, work, i === chunks.length - 1);
+        if (i === 0) toast('Le cours peut déjà s\'écouter : la suite se prépare pendant ce temps.');
+      }
+      box.remove(); toast('Le cours du Professeur est prêt 🎓');
+      if (!$('.reader')) renderLibrary();
+    } catch (e) {
+      say(e.message);
+      $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 15000);
+    } finally { delete this.busy[b.id]; }
+  },
+  // Questions : l'IA répond à partir de ce que le Professeur était en train d'expliquer
+  where(id, info) {
+    let i = 0; try { i = JSON.parse(AndroidAuto.readText('progress.json') || '{}')['prof:' + id]?.i || 0; } catch {}
+    let part = 0; try { part = JSON.parse(AndroidAuto.readText(this.file(id))).u[i]?.[1] || 0; } catch {}
+    return Math.min(part, Math.max(0, info.parts.length - 1));
+  },
+  async ask(b, q, out) {
+    const info = this.info(b.id); if (!info || !info.made) return;
+    const p = this.where(b.id, info);
+    AndroidAuto.profPause();
+    out.textContent = 'Le Professeur réfléchit…';
+    try {
+      const ctx = [info.parts[p - 1], info.parts[p]].filter(Boolean).join('\n\n');
+      const r = this.clean(await nanoAskRetry(`${this.persona}
+L'auditeur t'interrompt pendant ton explication du livre ${this.who(b)} pour te poser une question.
+Voici ce que tu étais en train d'expliquer :
+${ctx}
+${b.summary?.text ? '\nRésumé du livre entier :\n' + b.summary.text.slice(0, 2500) + '\n' : ''}
+Réponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.
+Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.
+Termine en annonçant, en quelques mots, que tu reprends le cours.
+
+Question : ${q}`, (m) => { out.textContent = m; }));
+      out.textContent = r;
+      AndroidAuto.profAnswer(b.id, r);
+    } catch (e) { out.textContent = e.message; }
+  },
+  open(b) {
+    const info = this.info(b.id);
+    const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
+    const out = h('div', { class: 'prof-answer', style: { display: 'none' } });
+    const send = () => { const v = q.value.trim(); if (!v) return toast('Écris ou dicte ta question'); out.style.display = ''; this.ask(b, v, out); q.value = ''; };
+    const mic = window.AndroidAuto.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => { window.__heard = (t) => { window.__heard = null; if (t) { q.value = t; send(); } }; AndroidAuto.listen(); } }, icon('mic')) : null;
+    const ready = info && info.made;
+    const close = sheet('Le Professeur bizarroïde', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
+      h('div', { class: 'aiopt' },
+        h('h4', {}, ready ? (info.done ? 'Le cours est prêt' : `Cours en préparation : ${info.made} parties sur ${info.n}`) : 'Un cours au lieu d\'une lecture'),
+        h('p', {}, ready
+          ? 'Le Professeur t\'explique le livre avec enthousiasme, partie par partie. Dans Android Auto, il apparaît avec 🎓 devant le titre du livre.'
+          : 'Au lieu de lire phrase par phrase, le Professeur t\'explique les idées du livre avec ses mots, comme un cours passionné. L\'IA du téléphone le prépare une fois, gratuitement et sans Internet. Garde l\'application ouverte pendant la préparation : un livre moyen prend de 10 à 40 minutes. Tu peux commencer à écouter dès la première partie.'),
+        h('div', { class: 'prof-row' },
+          ready ? h('button', { class: 'btn primary', onclick: () => { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓'); } }, icon('play'), 'Écouter') : null,
+          ready ? h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause') : null,
+          !ready || !info.done ? h('button', { class: ready ? 'btn' : 'btn primary', onclick: () => { close(); this.prepare(b); } }, icon('prof'), ready ? 'Continuer la préparation' : 'Préparer le cours') : null)),
+      ready ? h('div', { class: 'aiopt' },
+        h('h4', {}, 'Poser une question'),
+        h('p', {}, 'Le cours se met en pause, le Professeur te répond à voix haute, puis il reprend où il était.'),
+        h('div', { class: 'prof-ask' }, q, mic, h('button', { class: 'btn primary', onclick: send }, 'Demander')),
+        out) : null,
+      ready && info.done ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
+        h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null), { wide: true });
+  },
+};
+
 // ---------- Résumé automatique (sans IA, fonctionne partout) ----------
 const STOP = new Set(('a à au aux avec ce ces cet cette c ça d dans de des du elle elles en et eux il ils je j la le les leur leurs l lui ma mais me même mes moi mon ne n nos notre nous on ou où par pas pour qu que qui sa se ses son sur ta te tes toi ton tu un une vos votre vous y été être est sont était étaient a ai as avons avez ont avait avaient sera seront fait faire plus moins très tout tous toute toutes aussi ainsi alors comme donc car si sans sous entre vers chez dont cela celui celle ceux celles leur peut peuvent bien encore autre autres deux trois un une non oui là ici cet chaque quand comment pourquoi lorsque puis après avant depuis pendant tandis selon contre the of and to in is that for it as with be on are this by was'.split(' ')));
 const words = (t) => (t.toLowerCase().match(/[a-zà-ÿœæ][a-zà-ÿœæ'-]{2,}/g) || []).map((w) => w.replace(/^[a-z]'/, '')).filter((w) => w.length > 3 && !STOP.has(w));
@@ -1064,13 +1203,16 @@ function nanoDownload(onp) {
 let nanoSeq = 0;
 function nanoAsk(prompt) {
   const id = 'q' + (++nanoSeq);
-  return new Promise((res, rej) => { window.__aiResult = (j) => { const r = JSON.parse(j); if (r.id !== id) return; window.__aiResult = null; r.error ? rej(new Error(r.error)) : res((r.text || '').trim()); }; AndroidAI.generate(id, prompt); });
+  // plusieurs demandes peuvent attendre en même temps (ex. une question pendant la préparation du cours)
+  const wait = (window.__aiWait ||= {});
+  window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
+  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {
     try { const r = await nanoAsk(prompt); if (r) return r; throw new Error('réponse vide'); }
     catch (e) {
-      if (t >= 3) throw new Error('L\'IA du téléphone n\'a pas pu répondre (' + e.message + '). Garde l\'application ouverte pendant le résumé, puis réessaie : il reprendra où il en était.');
+      if (t >= 3) throw new Error('L\'IA du téléphone n\'a pas pu répondre (' + e.message + '). Garde l\'application ouverte pendant la préparation, puis réessaie : elle reprendra où elle en était.');
       say(`L'IA du téléphone est occupée, nouvel essai dans ${10 * (t + 1)} s…`); await new Promise((r) => setTimeout(r, 10000 * (t + 1)));
     }
   }

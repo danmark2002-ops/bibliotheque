@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
     private static final String START = "https://" + HOST + "/index.html";
     private static final int FILE_REQUEST = 4242;
     private static final int FOLDER_REQUEST = 4243;
+    private static final int LISTEN_REQUEST = 4244;
     private static final String FOLDER_PATH = "/__dossier";
 
     private WebView web;
@@ -462,6 +463,36 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean remove(String name) { File x = f(name); return x != null && x.delete(); }
 
+        // ----- Le Professeur bizarroïde : joué par le même lecteur que l'auto -----
+        private void prof(String cmd, String id, String text) {
+            Intent i = new Intent(MainActivity.this, LivreService.class).putExtra("cmd", cmd);
+            if (id != null) i.putExtra("id", id);
+            if (text != null) i.putExtra("text", text);
+            runOnUiThread(() -> { try { startService(i); } catch (Exception ignored) { } });
+        }
+
+        @JavascriptInterface
+        public void profPlay(String id) { prof("prof", id, null); }
+
+        @JavascriptInterface
+        public void profPause() { prof("pause", null, null); }
+
+        /** Réponse à une question : dite à voix haute, puis le cours reprend. */
+        @JavascriptInterface
+        public void profAnswer(String id, String text) { prof("answer", id, text); }
+
+        /** Dictée de la question (reconnaissance vocale d'Android). Réponse : window.__heard(texte ou "") */
+        @JavascriptInterface
+        public void listen() {
+            runOnUiThread(() -> {
+                Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "fr-CA")
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Ta question au Professeur");
+                try { startActivityForResult(i, LISTEN_REQUEST); } catch (Exception e) { js("__heard", ""); }
+            });
+        }
+
         @JavascriptInterface
         public String list(String sub) {
             File d = f(sub); JSONArray a = new JSONArray();
@@ -554,6 +585,15 @@ public class MainActivity extends Activity {
                 } catch (Exception e) { out = ""; }
             }
             js("__folderPicked", out);
+            return;
+        }
+        if (requestCode == LISTEN_REQUEST) {
+            String heard = "";
+            if (resultCode == RESULT_OK && data != null) {
+                java.util.ArrayList<String> r = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if (r != null && !r.isEmpty() && r.get(0) != null) heard = r.get(0);
+            }
+            js("__heard", heard);
             return;
         }
         if (requestCode == FILE_REQUEST) {

@@ -633,7 +633,7 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .more summary { cursor: pointer; padding: 4px 0; }
 
 /* Actions du livre, résumé IA */
-.bookacts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; }
+.bookacts { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; margin: 0 0 12px; }
 .bact { display: grid; justify-items: center; gap: 6px; padding: 12px 4px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font: 600 13px var(--font-ui); cursor: pointer; }
 .bact svg { width: 22px; height: 22px; color: var(--brass); }
 .bact.on { border-color: var(--brass); }
@@ -641,6 +641,10 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .aiopt h4 { margin: 0 0 6px; font: 600 16px var(--font-display); }
 .aiopt p { margin: 0 0 12px; font-size: 14px; color: var(--ink-2); line-height: 1.45; }
 .aiopt .field { margin-bottom: 10px; }
+.prof-ask { display: flex; gap: 8px; align-items: flex-end; }
+.prof-ask textarea { flex: 1; min-height: 64px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: 15px/1.4 var(--font-ui); }
+.prof-answer { margin: 12px 0 0; padding: 12px 14px; border-left: 3px solid var(--brass); background: var(--panel); border-radius: 0 12px 12px 0; font-size: 15px; line-height: 1.5; white-space: pre-wrap; }
+.prof-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .sumtext { font: 16px/1.6 var(--font-read); max-height: 62vh; overflow-y: auto; padding-right: 4px; }
 .sumtext h4 { font: 600 17px/1.3 var(--font-display); margin: 18px 0 6px; color: var(--brass); }
 .sumtext h4:first-child { margin-top: 4px; }

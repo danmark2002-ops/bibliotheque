@@ -76,6 +76,13 @@ public class LivreService extends MediaBrowserService {
     private Bitmap art;
     private int sinceSave;
 
+    // Le Professeur bizarroïde : un cours parlé (prof/<id>.json) joué avec une voix plus vivante
+    private boolean prof;
+    private final List<Integer> pauses = new ArrayList<>(); // 0 : fin de phrase, 1 : fin de paragraphe, 2 : fin de partie
+    private final List<String> inter = new ArrayList<>();   // réponse à une question, dite avant de reprendre le cours
+    private int interIdx;
+    private android.speech.tts.Voice defaultVoice, profVoice;
+
     // Lecture lancée sur le téléphone : l'auto l'affiche et ses boutons la commandent
     private static volatile String phoneJson = "";
     private boolean remote, remotePlaying;
@@ -112,6 +119,7 @@ public class LivreService extends MediaBrowserService {
             int r = tts.setLanguage(Locale.CANADA_FRENCH);
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
             tts.setAudioAttributes(attrs);
+            try { defaultVoice = tts.getVoice(); profVoice = bestVoice(); } catch (Exception ignored) { }
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
                 @Override public void onDone(String id) { main.post(() -> spoken(id)); }
@@ -124,6 +132,22 @@ public class LivreService extends MediaBrowserService {
         nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
     }
 
+    /** La voix française de meilleure qualité installée sur le téléphone (sans Internet, pour l'auto). */
+    private android.speech.tts.Voice bestVoice() {
+        android.speech.tts.Voice best = null; int bestScore = Integer.MIN_VALUE;
+        java.util.Set<android.speech.tts.Voice> vs = tts.getVoices();
+        if (vs == null) return null;
+        for (android.speech.tts.Voice v : vs) {
+            if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
+            if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+            int score = v.getQuality() - v.getLatency() / 4;
+            if (v.isNetworkConnectionRequired()) score -= 1000;
+            if ("CA".equals(v.getLocale().getCountry())) score += 60;
+            if (score > bestScore) { bestScore = score; best = v; }
+        }
+        return best;
+    }
+
     @Override
     public void onDestroy() {
         save();
@@ -134,7 +158,28 @@ public class LivreService extends MediaBrowserService {
     }
 
     @Override
-    public int onStartCommand(Intent intent, int flags, int startId) { return START_NOT_STICKY; }
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        String cmd = intent == null ? null : intent.getStringExtra("cmd");
+        String id = intent == null ? null : intent.getStringExtra("id");
+        if ("prof".equals(cmd) && id != null) {
+            if (("prof:" + id).equals(bookId)) { inter.clear(); if (!playing) play(); }
+            else start("prof:" + id);
+        } else if ("pause".equals(cmd)) {
+            if (playing) pause();
+        } else if ("answer".equals(cmd) && id != null) {
+            String text = intent.getStringExtra("text");
+            if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
+            setInter(text);
+            if (("prof:" + id).equals(bookId)) play(); else start("prof:" + id);
+        }
+        return START_NOT_STICKY;
+    }
+
+    private void setInter(String text) {
+        inter.clear(); interIdx = 0;
+        if (text == null) return;
+        for (String x : text.split("(?<=[.!?…])\\s+|\\n+")) if (!x.trim().isEmpty()) inter.add(x.trim());
+    }
 
     // ---------------------------------------------------------------- navigation (ce qu'Android Auto affiche)
     @Override
@@ -179,10 +224,13 @@ public class LivreService extends MediaBrowserService {
             List<JSONObject> list = new ArrayList<>();
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optLong("last") > 0) list.add(b); }
             list.sort((a, b) -> Long.compare(b.optLong("last"), a.optLong("last")));
+            JSONObject prog = autoProgress();
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && prog.has("prof:" + b.optString("id"))) out.add(profItem(b)); }
             for (int i = 0; i < Math.min(30, list.size()); i++) out.add(book(list.get(i)));
             if (out.isEmpty()) out.add(info("Aucune lecture en cours. Choisis un livre dans une bibliothèque."));
         } else if (parentId.startsWith("lib:")) {
             String lib = parentId.substring(4);
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && lib.equals(b.optString("lib"))) out.add(profItem(b)); }
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && lib.equals(b.optString("lib"))) out.add(book(b)); }
             if (out.isEmpty()) out.add(info("Cette bibliothèque est vide."));
         }
@@ -210,6 +258,14 @@ public class LivreService extends MediaBrowserService {
         ex.putInt(STYLE_PLAYABLE, STYLE_GRID);
         MediaDescription d = new MediaDescription.Builder().setMediaId(id).setTitle(name).setExtras(ex).build();
         return new MediaItem(d, MediaItem.FLAG_BROWSABLE);
+    }
+
+    private MediaItem profItem(JSONObject b) {
+        String id = b.optString("id");
+        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:prof:" + id).setTitle("🎓 " + b.optString("title")).setSubtitle("Le Professeur bizarroïde");
+        String cover = b.optString("cover", "");
+        if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
+        return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
     }
 
     private MediaItem info(String text) {
@@ -320,22 +376,25 @@ public class LivreService extends MediaBrowserService {
     private void start(String id) {
         if (remote) { MainActivity.autoCmd("pause", "0"); remote = false; remotePlaying = false; remoteId = null; } // l'auto prend le relais
         save();
+        boolean isProf = id.startsWith("prof:");
+        String realId = isProf ? id.substring(5) : id;
         JSONObject meta = null;
         JSONArray books = catalog().optJSONArray("books");
-        if (books != null) for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && id.equals(b.optString("id"))) meta = b; }
-        String txt = read(new File(dir(), "books/" + id + ".json"));
-        if (meta == null || txt == null) { error("Ce livre n'est pas encore prêt. Ouvre la Bibliothèque sur ton téléphone quelques instants."); return; }
+        if (books != null) for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && realId.equals(b.optString("id"))) meta = b; }
+        String txt = read(new File(dir(), (isProf ? "prof/" : "books/") + realId + ".json"));
+        if (meta == null || txt == null) { inter.clear(); error(isProf ? "Le cours du Professeur n'est pas encore prêt. Prépare-le sur ton téléphone." : "Ce livre n'est pas encore prêt. Ouvre la Bibliothèque sur ton téléphone quelques instants."); return; }
         try {
             JSONObject data = new JSONObject(txt);
             JSONArray u = data.getJSONArray("u");
-            units.clear(); marks.clear();
-            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); }
+            units.clear(); marks.clear(); pauses.clear();
+            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); }
+            prof = isProf;
             if (units.isEmpty()) { error("Ce livre ne contient pas de texte lisible."); return; }
             isPdf = "pdf".equals(data.optString("kind"));
             startChars = new long[units.size() + 1];
             for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
             totalChars = startChars[units.size()];
-            bookId = id; title = meta.optString("title"); author = meta.optString("author"); libName = meta.optString("libName");
+            bookId = id; title = (isProf ? "🎓 " : "") + meta.optString("title"); author = isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
             rate = (float) catalog().optDouble("rate", 1.0);
             idx = startIndex(meta);
             art = null;
@@ -353,6 +412,7 @@ public class LivreService extends MediaBrowserService {
     private int startIndex(JSONObject meta) {
         JSONObject prog = autoProgress().optJSONObject(bookId);
         long phoneLast = meta.optLong("last");
+        if (prof) return prog == null ? 0 : clamp(prog.optInt("i"));
         if (prog != null && prog.optLong("t") >= phoneLast) return clamp(prog.optInt("i"));
         if (phoneLast == 0) return 0;
         if (isPdf) {
@@ -393,18 +453,53 @@ public class LivreService extends MediaBrowserService {
     private void speak() {
         if (!playing || !ttsReady || units.isEmpty()) return;
         int t = ++token;
-        tts.setSpeechRate(rate);
-        tts.speak(units.get(idx), TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
+        try {
+            android.speech.tts.Voice v = prof && profVoice != null ? profVoice : defaultVoice;
+            if (v != null && !v.equals(tts.getVoice())) tts.setVoice(v);
+        } catch (Exception ignored) { }
+        if (interIdx < inter.size()) {
+            String x = inter.get(interIdx);
+            expressive(x, interIdx);
+            tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":q" + interIdx);
+            updateState();
+            return;
+        }
+        String x = units.get(idx);
+        if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
+        tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
         updateState();
+    }
+
+    /** Une voix moins monotone : l'intonation et le débit suivent le sens de chaque phrase. */
+    private void expressive(String x, int n) {
+        String s = x.trim();
+        float pitch = 1.07f + (((n * 37) % 7) - 3) * 0.012f, r = rate;
+        if (s.endsWith("!") || s.endsWith("! »")) { pitch = 1.18f; r = rate * 1.07f; }
+        else if (s.endsWith("?") || s.endsWith("? »")) { pitch = 1.14f; r = rate * 0.98f; }
+        if (s.matches("(?i)^(ah|oh|eh|ha|hé|voilà|imaginez|imagine|attention|tenez|tiens|écoutez|écoute|alors|et voilà|incroyable|fascinant)(?=[\\s,!.…]).*")) pitch += 0.05f;
+        if (s.length() > 180 || s.contains(":")) r *= 0.94f;
+        tts.setPitch(Math.max(0.9f, Math.min(1.3f, pitch)));
+        tts.setSpeechRate(Math.max(0.5f, Math.min(2.5f, r)));
     }
 
     private void spoken(String uttId) {
         if (!playing || uttId == null || !uttId.startsWith(token + ":")) return;
-        if (idx + 1 >= units.size()) { idx = units.size() - 1; pause(); error("Fin du livre."); return; }
+        if (uttId.startsWith(token + ":q")) {
+            interIdx++;
+            if (interIdx >= inter.size()) { inter.clear(); interIdx = 0; main.postDelayed(gap(++token), 700); return; }
+            speak();
+            return;
+        }
+        if (idx + 1 >= units.size()) { idx = units.size() - 1; pause(); error(prof ? "Fin du cours." : "Fin du livre."); return; }
+        int pauseKind = prof && idx < pauses.size() ? pauses.get(idx) : 0;
         idx++;
         if (++sinceSave >= 8) save();
-        speak();
+        if (!prof) { speak(); return; }
+        // le Professeur respire : petite pause entre les phrases, plus longue entre les paragraphes et les parties
+        main.postDelayed(gap(++token), pauseKind == 2 ? 1100 : pauseKind == 1 ? 500 : 140);
     }
+
+    private Runnable gap(int t) { return () -> { if (playing && t == token) speak(); }; }
 
     private void jump(int sec) {
         if (units.isEmpty()) return;
@@ -414,6 +509,7 @@ public class LivreService extends MediaBrowserService {
 
     private void seekChars(long target) {
         if (units.isEmpty()) return;
+        inter.clear(); interIdx = 0;
         target = Math.max(0, Math.min(totalChars - 1, target));
         int lo = 0, hi = units.size() - 1;
         while (lo < hi) { int mid = (lo + hi + 1) / 2; if (startChars[mid] <= target) lo = mid; else hi = mid - 1; }
