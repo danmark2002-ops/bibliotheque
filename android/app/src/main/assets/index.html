@@ -2562,6 +2562,7 @@ class Reader {
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
+        Prof.on() ? h('button', { class: 'rbtn', title: 'Le Professeur bizarroïde', onclick: () => { if (this.player) this.closePlayer(); Prof.open(b); } }, icon('prof')) : null,
         TTS.supported() ? this.audioBtn : null,
         h('button', { class: 'rbtn', title: 'Apparence', onclick: () => this.appearance() }, icon('type'))),
       this.stage,
