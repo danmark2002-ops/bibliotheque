@@ -609,3 +609,25 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .ti.on { opacity: 1; color: var(--brass); }
 .ti:first-child.on { color: #f2c14e; }
 @media (max-width: 560px) { .shelf { padding-top: 36px; } .tiny { top: calc(100% + 19px); } .ti { width: 20px; } .ti svg { width: 12px; height: 12px; } }
+
+/* Onglets des bibliothèques */
+.libtabs { display: flex; gap: 8px; overflow-x: auto; margin: -10px -16px 18px; padding: 2px 16px 6px; scrollbar-width: none; }
+.libtabs::-webkit-scrollbar { display: none; }
+.libtab { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px 0 8px; border-radius: 19px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink-2); font: 500 14px var(--font-ui); cursor: pointer; white-space: nowrap; max-width: 220px; }
+.libtab span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.libtab .libsw { width: 22px; height: 22px; border-radius: 50%; }
+.libtab.sel { border-color: var(--brass); color: var(--ink); background: var(--panel-2); box-shadow: 0 0 0 1px var(--brass) inset; }
+.libtab.add { padding: 0 14px 0 10px; color: var(--brass); border-style: dashed; }
+.libtab.add svg { width: 16px; height: 16px; }
+/* Feuille des dossiers */
+.srcbox { display: grid; gap: 12px; padding: 14px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); }
+.srcname { display: flex; gap: 12px; align-items: flex-start; }
+.srcname > svg { width: 26px; height: 26px; color: var(--brass); flex: none; margin-top: 2px; }
+.srcname span { display: grid; gap: 3px; min-width: 0; }
+.srcname b { font-size: 17px; overflow-wrap: anywhere; }
+.srcname small { font-size: 12px; color: var(--ink-3); }
+.srcbox .btn { justify-self: start; }
+.addsrc { margin-top: 16px; padding: 14px; border-radius: 14px; border: 1px dashed var(--brass); }
+.addsrc p { margin: 0 0 12px; color: var(--ink-2); font-size: 14px; }
+.more { margin-top: 16px; color: var(--ink-3); font-size: 13px; }
+.more summary { cursor: pointer; padding: 4px 0; }

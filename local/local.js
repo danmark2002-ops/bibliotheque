@@ -185,7 +185,7 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
-      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   async function upload(file, onp, extra = {}) {

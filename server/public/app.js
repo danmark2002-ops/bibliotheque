@@ -378,6 +378,10 @@ function caseFor(groups, owner) {
 function renderLibrary() {
   const owner = S.me.role === 'owner';
   const local = !!window.LocalAPI;
+  if (local && !store.get('libnames16', false)) { // une fois : la bibliothèque prend le nom de son dossier
+    const m = folderMap(); for (const l of libs()) if (m[l.id]?.ok !== false && m[l.id]?.name) nameLibAfter(l.id, m[l.id].name);
+    store.set('libnames16', true);
+  }
   if (!local) S.nav = { k: 'all' };
   if (S.nav.k === 'col' && !S.cols.some((c) => c.id === S.nav.v)) S.nav = { k: 'all' };
   const q = S.filter.toLowerCase();
@@ -434,6 +438,7 @@ function renderLibrary() {
           h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`,
           S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)),
       actions),
+    local && owner ? libTabs() : null,
     current ? heroEl(current) : null,
     toolbar,
     body,
@@ -531,17 +536,35 @@ function pickWebFolder() {
   });
 }
 const BOOK_EXT = /\.(pdf|docx|txt|md)$/i;
-async function chooseFolder(libId) {
+function nameLibAfter(libId, folderName, force) {
+  const l = libs(); const lib = l.find((x) => x.id === libId); if (!lib || !folderName) return;
+  if (force || lib.name === 'Ma Bibliothèque' || lib.name === 'Nouvelle bibliothèque') { lib.name = folderName.slice(0, 60); saveLibs(l); if (lib.id === 'main') { try { localStorage.setItem('bib.libname', lib.name); } catch {} } }
+}
+async function chooseFolder(libId, { adopt, rename } = {}) {
+  const old = folderOf(libId)?.name; // si la bibliothèque portait le nom de l'ancien dossier, elle prend celui du nouveau
+  if (old && libs().find((x) => x.id === libId)?.name === old) rename = true;
   if (hasNativeFolder()) {
     const r = await nativeCall('__folderPicked', () => AndroidFolder.pick(libId));
     if (!r) return false;
-    renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
-    await scanFolder(libId); return true;
+    nameLibAfter(libId, r.name, rename); renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
+    await scanFolder(libId, null, { adopt }); return true;
   }
   const files = await pickWebFolder(); if (!files.length) return false;
   const name = (files[0].webkitRelativePath || '').split('/')[0] || 'Dossier';
-  const m = folderMap(); m[libId] = { name }; store.set('folders', m); renderLibrary();
-  await scanFolder(libId, files); return true;
+  const m = folderMap(); m[libId] = { name }; store.set('folders', m); nameLibAfter(libId, name, rename); renderLibrary();
+  await scanFolder(libId, files, { adopt }); return true;
+}
+// Ajouter un autre dossier = une nouvelle bibliothèque, à son nom ; les autres bibliothèques ne bougent pas
+async function addFolderLib() {
+  const l = libs(); const used = new Set(l.map((x) => x.decor));
+  const order = ['acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer'];
+  const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
+  const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor };
+  l.push(lib); saveLibs(l);
+  const prev = S.lib;
+  const ok = await chooseFolder(lib.id, { adopt: true, rename: true }).catch(() => false);
+  if (!ok) { saveLibs(libs().filter((x) => x.id !== lib.id)); switchLib(prev); return; }
+  switchLib(lib.id);
 }
 // Actualiser : la bibliothèque affichée, ou toutes celles qui ont un dossier
 async function refreshFolders() {
@@ -559,7 +582,7 @@ function scanFolder(libId, webFiles, opts) {
   FOLDER.queue = run.catch(() => 0);
   return run;
 }
-async function scanOne(libId, webFiles, { quiet } = {}) {
+async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
   let entries;
   FOLDER.busy = true; renderLibrary();
@@ -579,10 +602,16 @@ async function scanOne(libId, webFiles, { quiet } = {}) {
       if (!webFiles) { webFiles = await pickWebFolder(); if (!webFiles.length) return 0; }
       entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }));
     }
+    let moved = 0;
+    if (adopt) {
+      const bySrc = new Map(S.books.filter((b) => b.src && b.lib !== libId).map((b) => [b.src, b]));
+      for (const e of entries) { const b = bySrc.get(e.src); if (b) { await post('/api/books/' + b.id, { lib: libId }, 'PATCH'); moved++; } }
+      if (moved) await loadBooks();
+    }
     const k = await LocalAPI.known(libId);
     const fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
     const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
-    if (!fresh.length) { if (!quiet) toast(entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
+    if (!fresh.length) { if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
     for (let i = 0; i < fresh.length; i++) {
       const e = fresh[i];
@@ -606,21 +635,34 @@ function openFolder(libId = curLib()?.id) {
   const lib = libs().find((l) => l.id === libId);
   const f = folderOf(libId); const last = (store.get('folderLast', {}) || {})[libId] || 0;
   let ignored = []; try { ignored = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); } catch {}
-  const close = sheet('Dossier source', h('div', {},
-    h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Bibliothèque : ' + lib.name),
-    h('p', { class: 'muted' }, f
-      ? `Les livres PDF, Word et texte de ce dossier (et de ses sous-dossiers) vont dans cette bibliothèque. « Actualiser » va chercher les nouveaux, sans doublon.`
-      : `Choisis un dossier de ton téléphone. Ses livres PDF, Word et texte seront ajoutés à cette bibliothèque, puis « Actualiser » ira chercher les nouveaux quand tu voudras.`),
-    f ? h('div', { class: 'field' }, 'Dossier', h('p', { style: { margin: '4px 0 0', fontSize: '17px' } }, f.name)) : null,
-    f ? h('p', { class: 'muted' }, 'Dernière recherche : ' + (last ? lastRead(last) : 'jamais')) : null,
-    !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
+  const close = sheet('Dossiers sources', h('div', {},
+    f ? h('div', { class: 'srcbox' },
+      h('div', { class: 'srcname' }, icon('folder'), h('span', {}, h('b', {}, f.name), h('small', {}, `Bibliothèque « ${lib.name} » · dernière recherche : ${last ? lastRead(last) : 'jamais'}`))),
+      h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(libId); } }, icon('refresh'), 'Actualiser'))
+      : h('p', { class: 'muted' }, `La bibliothèque « ${lib.name} » n'a pas encore de dossier. Choisis-en un : ses livres PDF, Word et texte y seront ajoutés, et « Actualiser » ira chercher les nouveaux.`),
+    !f ? h('div', { class: 'actions', style: { marginBottom: '6px' } }, h('button', { class: 'btn primary', onclick: () => { close(); chooseFolder(libId); } }, icon('folder'), 'Choisir un dossier')) : null,
+    f ? h('div', { class: 'addsrc' },
+      h('p', {}, 'Un autre dossier devient une autre bibliothèque. Celle-ci reste telle quelle et tu passes de l\'une à l\'autre avec les onglets en haut.'),
+      h('button', { class: 'btn primary', onclick: () => { close(); addFolderLib(); } }, icon('plus'), 'Ajouter un autre dossier')) : null,
     ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
-    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
-      f ? h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier') : h('span'),
-      h('div', { class: 'actions' },
-        h('button', { class: f ? 'btn' : 'btn primary', onclick: () => { close(); chooseFolder(libId); } }, icon('folder'), f ? 'Changer' : 'Choisir un dossier'),
-        f ? h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(libId); } }, icon('refresh'), 'Actualiser') : null))));
+    !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
+    f ? h('details', { class: 'more' }, h('summary', {}, 'Autres options pour ce dossier'),
+      h('div', { class: 'actions', style: { marginTop: '10px' } },
+        h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer le dossier'),
+        h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier'))) : null));
+}
+
+// Onglets des bibliothèques, sous le titre : on passe de l'une à l'autre d'un geste
+function libTabs() {
+  const l = libs(); const m = folderMap();
+  if (l.length < 2 && !m[l[0].id]) return null;
+  const tab = (id, name, decor) => h('button', { class: 'libtab' + (S.lib === id ? ' sel' : ''), onclick: () => { if (S.lib !== id) switchLib(id); } },
+    h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }), h('span', {}, name));
+  return h('nav', { class: 'libtabs', 'aria-label': 'Bibliothèques' },
+    l.map((x) => tab(x.id, x.name, x.decor)),
+    l.length > 1 ? tab('all', 'Toutes', store.get('decorAll', 'ebene')) : null,
+    h('button', { class: 'libtab add', onclick: addFolderLib, title: 'Ajouter un dossier (nouvelle bibliothèque)' }, icon('plus'), h('span', {}, 'Ajouter un dossier')));
 }
 
 // Changer de bibliothèque
@@ -639,17 +681,7 @@ function openLibraries() {
       libs().map((l) => row(l.id, l.name, l.decor, m[l.id] ? '📁 ' + m[l.id].name : 'Sans dossier source', count(l.id))),
       libs().length > 1 ? row('all', 'Toutes ensemble', store.get('decorAll', 'ebene'), 'Toutes les bibliothèques réunies', live.length) : null),
     h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
-      h('button', { class: 'btn primary', onclick: () => { close(); newLib(); } }, icon('plus'), 'Nouvelle bibliothèque'))));
-}
-async function newLib() {
-  const name = prompt('Nom de la nouvelle bibliothèque'); if (!name || !name.trim()) return;
-  const l = libs(); const used = new Set(l.map((x) => x.decor));
-  const order = ['acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer']; // un autre bois, de préférence sombre
-  const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
-  const lib = { id: 'lib' + Date.now().toString(36), name: name.trim().slice(0, 60), decor };
-  l.push(lib); saveLibs(l); switchLib(lib.id);
-  toast('Bibliothèque créée. Choisis son dossier source.');
-  if (window.LocalAPI) await chooseFolder(lib.id);
+      h('button', { class: 'btn primary', onclick: () => { close(); addFolderLib(); } }, icon('plus'), 'Ajouter un dossier'))));
 }
 function editLib(id) {
   const l = libs(); const lib = l.find((x) => x.id === id); if (!lib) return;
