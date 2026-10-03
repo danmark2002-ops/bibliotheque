@@ -84,6 +84,7 @@ public class LivreService extends MediaBrowserService {
     private android.speech.tts.Voice defaultVoice, profVoice;
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
+    private boolean profDone = true, waitingMore; // cours encore en préparation : on attend la partie suivante
     private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.";
 
     // Lecture lancée sur le téléphone : l'auto l'affiche et ses boutons la commandent
@@ -394,6 +395,8 @@ public class LivreService extends MediaBrowserService {
             units.clear(); marks.clear(); pauses.clear();
             for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); }
             prof = isProf;
+            profDone = !isProf || data.optBoolean("done", true);
+            waitingMore = false;
             if (units.isEmpty()) { error("Ce livre ne contient pas de texte lisible."); return; }
             isPdf = "pdf".equals(data.optString("kind"));
             startChars = new long[units.size() + 1];
@@ -498,7 +501,14 @@ public class LivreService extends MediaBrowserService {
             speak();
             return;
         }
-        if (idx + 1 >= units.size()) { idx = units.size() - 1; pause(); error(prof ? "Fin du cours." : "Fin du livre."); return; }
+        if (idx + 1 >= units.size()) {
+            if (prof && !profDone) {
+                // la partie suivante se prépare sur le téléphone : on l'attend, elle partira toute seule
+                if (!waitingMore) { waitingMore = true; say("Un petit instant… je prépare la suite !", "wait"); }
+                return;
+            }
+            idx = units.size() - 1; pause(); error(prof ? "Fin du cours." : "Fin du livre."); return;
+        }
         int pauseKind = prof && idx < pauses.size() ? pauses.get(idx) : 0;
         idx++;
         if (++sinceSave >= 8) save();
@@ -587,6 +597,37 @@ public class LivreService extends MediaBrowserService {
         }).start();
     }
 
+    /** Le téléphone vient d'écrire une nouvelle partie du cours : on l'ajoute, et on enchaîne si on l'attendait. */
+    static void profChanged(String id) {
+        LivreService s = instance; if (s == null) return;
+        s.main.post(() -> s.reloadProf(id));
+    }
+
+    private void reloadProf(String id) {
+        if (bookId == null || !bookId.equals("prof:" + id)) return;
+        String txt = read(new File(dir(), "prof/" + id + ".json"));
+        if (txt == null) return;
+        try {
+            JSONObject data = new JSONObject(txt);
+            JSONArray u = data.getJSONArray("u");
+            if (u.length() == 0) return;
+            boolean restarted = u.length() < units.size();
+            units.clear(); marks.clear(); pauses.clear();
+            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); }
+            startChars = new long[units.size() + 1];
+            for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
+            totalChars = startChars[units.size()];
+            profDone = data.optBoolean("done", true);
+            if (restarted) idx = 0;
+            idx = clamp(idx);
+            updateMeta();
+            if (waitingMore && playing && idx + 1 < units.size()) {
+                waitingMore = false; idx++;
+                main.postDelayed(gap(++token), 600);
+            } else updateState();
+        } catch (Exception ignored) { }
+    }
+
     private Runnable gap(int t) { return () -> { if (playing && t == token) speak(); }; }
 
     private void jump(int sec) {
@@ -597,7 +638,7 @@ public class LivreService extends MediaBrowserService {
 
     private void seekChars(long target) {
         if (units.isEmpty()) return;
-        inter.clear(); interIdx = 0;
+        inter.clear(); interIdx = 0; waitingMore = false;
         target = Math.max(0, Math.min(totalChars - 1, target));
         int lo = 0, hi = units.size() - 1;
         while (lo < hi) { int mid = (lo + hi + 1) / 2; if (startChars[mid] <= target) lo = mid; else hi = mid - 1; }

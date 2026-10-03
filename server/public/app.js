@@ -1051,7 +1051,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     return st === 'available';
   },
   busy: {},
-  async prepare(b, restart) {
+  async prepare(b, restart, autoplay = true) {
     if (this.busy[b.id]) return toast('Le cours est déjà en préparation');
     this.busy[b.id] = true;
     const box = h('div', { class: 'up' }, h('b', {}, 'Professeur : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
@@ -1063,7 +1063,8 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     const listenBtn = () => {
       if (actions) return;
       actions = h('div', { class: 'prof-row', style: { marginTop: '10px' } },
-        h('button', { class: 'btn primary', onclick: () => { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓'); } }, icon('play'), 'Écouter le cours'));
+        h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause'),
+        h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'));
       box.append(actions);
     };
     try {
@@ -1074,19 +1075,18 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
       for (let i = work.parts.length; i < chunks.length; i++) {
-        const ready = i ? ` · ${i === 1 ? 'la partie 1 est prête' : `les parties 1 à ${i} sont prêtes`} à écouter` : ' · tu pourras écouter dès qu\'elle sera prête';
-        say(`Préparation de la partie ${i + 1} sur ${chunks.length}${ready}${eng === 'online' ? ' (IA gratuite en ligne, environ 20 s par partie)' : ''}`); bar(i / chunks.length);
+        say(i ? `Le Professeur parle · il prépare la partie ${i + 1} sur ${chunks.length}, qui suivra toute seule` : `Le Professeur se prépare… il commencera tout seul dans environ 30 secondes${eng === 'online' ? ' (IA gratuite en ligne)' : ''}`); bar(i / chunks.length);
         if (i) listenBtn();
         const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
         const r = this.clean(await this.ai(this.prompt(b, chunks[i], i, chunks.length, prev), say));
         work.parts.push(r);
         this.write(b, work, i === chunks.length - 1);
-        if (i === 0 && chunks.length > 1) toast('La partie 1 est prête : touche « Écouter le cours » pour commencer.');
+        if (i === 0 && autoplay) { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓 La suite se prépare pendant qu\'il parle.'); }
       }
       bar(1); listenBtn();
-      say(`✔ Cours prêt : ${chunks.length} partie${chunks.length > 1 ? 's' : ''}. Il ne démarre pas tout seul : touche « Écouter le cours ». Dans Android Auto, il est dans la bibliothèque du livre, avec 🎓 devant le titre.`);
+      say(`✔ Cours complet : ${chunks.length} partie${chunks.length > 1 ? 's' : ''}. Dans Android Auto, il est dans la bibliothèque du livre, avec 🎓 devant le titre.`);
+      setTimeout(() => box.remove(), 20000);
       $('b', box).textContent = '🎓 Professeur : ' + b.title;
-      actions.append(h('button', { class: 'btn', onclick: () => box.remove() }, 'Fermer'));
       toast('Le cours du Professeur est prêt 🎓');
       if (!$('.reader')) renderLibrary();
     } catch (e) {
@@ -1101,7 +1101,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     return Math.min(part, Math.max(0, info.parts.length - 1));
   },
   async ask(b, q, out) {
-    const info = this.info(b.id); if (!info || !info.made) return;
+    const info = this.info(b.id); if (!info || !info.made) { out.textContent = 'Le Professeur se prépare encore : pose ta question dès qu\'il aura commencé.'; return; }
     const p = this.where(b.id, info);
     AndroidAuto.profPause();
     out.textContent = 'Le Professeur réfléchit…';
@@ -1120,32 +1120,39 @@ Question : ${q}`, (m) => { out.textContent = m; }));
       AndroidAuto.profAnswer(b.id, r);
     } catch (e) { out.textContent = e.message; }
   },
+  // Touche « Professeur » : le cours démarre (ou se prépare puis démarre tout seul), et la préparation continue s'il en manque
+  go(b) {
+    const info = this.info(b.id);
+    if (info?.made) AndroidAuto.profPlay(b.id);
+    if (!info?.done && !this.busy[b.id]) this.prepare(b, false, !info?.made);
+  },
   open(b) {
+    this.go(b);
     const info = this.info(b.id);
     const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
     const out = h('div', { class: 'prof-answer', style: { display: 'none' } });
     const send = () => { const v = q.value.trim(); if (!v) return toast('Écris ou dicte ta question'); out.style.display = ''; this.ask(b, v, out); q.value = ''; };
     const mic = window.AndroidAuto.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => { window.__heard = (t) => { window.__heard = null; if (t) { q.value = t; send(); } }; AndroidAuto.listen(); } }, icon('mic')) : null;
     const ready = info && info.made;
-    if (ready && !store.get('profMic', 0)) { store.set('profMic', 1); try { AndroidAI.askMic?.(); } catch {} }
+    if (!store.get('profMic', 0)) { store.set('profMic', 1); try { AndroidAI.askMic?.(); } catch {} }
     const close = sheet('Le Professeur bizarroïde', h('div', {},
       h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
       h('div', { class: 'aiopt' },
-        h('h4', {}, ready ? (info.done ? 'Le cours est prêt' : `Cours en préparation : ${info.made} parties sur ${info.n}`) : 'Un cours au lieu d\'une lecture'),
+        h('h4', {}, ready ? 'Le Professeur parle 🎓' : 'Le Professeur se prépare…'),
         h('p', {}, ready
-          ? 'Le Professeur t\'explique le livre avec enthousiasme, partie par partie. Dans Android Auto, il apparaît avec 🎓 devant le titre du livre ; le bouton « Question » de l\'auto te laisse l\'interroger à voix haute.'
-          : 'Au lieu de lire phrase par phrase, le Professeur t\'explique les idées du livre avec ses mots, comme un cours passionné. Il le prépare une fois, gratuitement : avec l\'IA intégrée au téléphone si elle est disponible, sinon avec une IA gratuite en ligne (Internet requis). Garde l\'application ouverte pendant la préparation : environ une partie toutes les 20 secondes. Tu peux commencer à écouter dès la première partie.'),
+          ? (info.done ? 'Le cours est complet. ' : 'Les parties suivantes se préparent pendant qu\'il parle et s\'enchaînent toutes seules : garde l\'application ouverte jusqu\'à la fin de la préparation. ')
+            + 'Dans Android Auto, le cours est dans la bibliothèque du livre, avec 🎓 devant le titre.'
+          : 'Il commence tout seul dans environ 30 secondes, puis enchaîne les parties suivantes au fur et à mesure. Garde l\'application ouverte pendant la préparation (Internet requis sans l\'IA intégrée au téléphone).'),
         h('div', { class: 'prof-row' },
-          ready ? h('button', { class: 'btn primary', onclick: () => { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓'); } }, icon('play'), 'Écouter') : null,
-          ready ? h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause') : null,
-          !ready || !info.done ? h('button', { class: ready ? 'btn' : 'btn primary', onclick: () => { close(); this.prepare(b); } }, icon('prof'), ready ? 'Continuer la préparation' : 'Préparer le cours') : null)),
-      ready ? h('div', { class: 'aiopt' },
+          h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause'),
+          h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'))),
+      h('div', { class: 'aiopt' },
         h('h4', {}, 'Poser une question'),
         h('p', {}, 'Le cours se met en pause, le Professeur te répond à voix haute, puis il reprend où il était.'),
         h('div', { class: 'prof-ask' }, q, mic, h('button', { class: 'btn primary', onclick: send }, 'Demander')),
-        out) : null,
+        out),
       ready && info.done ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
-        h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null), { wide: true });
+        h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); AndroidAuto.profPause(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null), { wide: true });
   },
 };
 

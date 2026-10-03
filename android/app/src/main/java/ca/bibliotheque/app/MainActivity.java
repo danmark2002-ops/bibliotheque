@@ -444,6 +444,7 @@ public class MainActivity extends Activity {
             catch (Exception e) { return false; }
             boolean ok = tmp.renameTo(x);
             if (ok && "catalog.json".equals(name)) LivreService.catalogChanged();
+            if (ok && name.startsWith("prof/")) LivreService.profChanged(name.substring(5).replace(".json", ""));
             return ok;
         }
 
