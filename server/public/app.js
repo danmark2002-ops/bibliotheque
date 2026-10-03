@@ -1058,6 +1058,14 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     $('#uploads')?.append(box);
     const say = (t) => { $('span', box).textContent = t; };
     const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    // dès que la première partie est prête : un bouton pour écouter tout de suite
+    let actions = null;
+    const listenBtn = () => {
+      if (actions) return;
+      actions = h('div', { class: 'prof-row', style: { marginTop: '10px' } },
+        h('button', { class: 'btn primary', onclick: () => { AndroidAuto.profPlay(b.id); toast('Le Professeur commence 🎓'); } }, icon('play'), 'Écouter le cours'));
+      box.append(actions);
+    };
     try {
       const eng = await this.pickEngine(say);
       const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
@@ -1066,14 +1074,20 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
       for (let i = work.parts.length; i < chunks.length; i++) {
-        say(`Le Professeur prépare la partie ${i + 1} sur ${chunks.length}…${eng === 'online' ? ' (IA gratuite en ligne)' : ''}`); bar(i / chunks.length);
+        const ready = i ? ` · ${i === 1 ? 'la partie 1 est prête' : `les parties 1 à ${i} sont prêtes`} à écouter` : ' · tu pourras écouter dès qu\'elle sera prête';
+        say(`Préparation de la partie ${i + 1} sur ${chunks.length}${ready}${eng === 'online' ? ' (IA gratuite en ligne, environ 20 s par partie)' : ''}`); bar(i / chunks.length);
+        if (i) listenBtn();
         const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
         const r = this.clean(await this.ai(this.prompt(b, chunks[i], i, chunks.length, prev), say));
         work.parts.push(r);
         this.write(b, work, i === chunks.length - 1);
-        if (i === 0) toast('Le cours peut déjà s\'écouter : la suite se prépare pendant ce temps.');
+        if (i === 0 && chunks.length > 1) toast('La partie 1 est prête : touche « Écouter le cours » pour commencer.');
       }
-      box.remove(); toast('Le cours du Professeur est prêt 🎓');
+      bar(1); listenBtn();
+      say(`✔ Cours prêt : ${chunks.length} partie${chunks.length > 1 ? 's' : ''}. Il ne démarre pas tout seul : touche « Écouter le cours ». Dans Android Auto, il est dans la bibliothèque du livre, avec 🎓 devant le titre.`);
+      $('b', box).textContent = '🎓 Professeur : ' + b.title;
+      actions.append(h('button', { class: 'btn', onclick: () => box.remove() }, 'Fermer'));
+      toast('Le cours du Professeur est prêt 🎓');
       if (!$('.reader')) renderLibrary();
     } catch (e) {
       say(e.message);
