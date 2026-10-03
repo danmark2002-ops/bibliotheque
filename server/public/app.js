@@ -1341,6 +1341,7 @@ class Reader {
       h('div', { class: 'r-bottom' }, h('div', { class: 'slider' }, this.lbl, this.slider, this.left)));
     document.body.append(this.el);
     document.body.style.overflow = 'hidden';
+    window.__reader = this;
     this.el.addEventListener('contextmenu', (e) => e.preventDefault());
     this.el.addEventListener('dragstart', (e) => e.preventDefault());
     this.stage.addEventListener('click', (e) => { if (e.detail === 1) this.clickT = setTimeout(() => this.el.classList.toggle('immersive'), 250); });
@@ -1614,6 +1615,7 @@ class Reader {
     if (this.sIdx >= this.sents.length) this.sIdx = 0;
     if (!this.playing) post('/api/track', { book: this.b.id, type: 'audio', page: this.page }).catch(() => {});
     this.playing = true; this.setPlayUi(); this.speakCurrent();
+    AutoRemote.state(this);
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({ title: this.b.title, artist: this.b.author || S.me.library });
       navigator.mediaSession.setActionHandler('play', () => this.play()); navigator.mediaSession.setActionHandler('pause', () => this.pause());
@@ -1680,11 +1682,12 @@ class Reader {
   }
   skip(d) { this.sIdx = Math.max(0, Math.min(this.sents.length - 1, this.sIdx + d)); if (this.playing) { this.stopSpeech(); this.speakCurrent(); } else this.highlight(); }
   stopSpeech() { this.tok = (this.tok || 0) + 1; TTS.stop(); }
-  pause() { this.playing = false; this.stopSpeech(); this.setPlayUi(); }
+  pause() { const was = this.playing; this.playing = false; this.stopSpeech(); this.setPlayUi(); if (was) AutoRemote.state(this); }
   setPlayUi() { if (!this.player) return; this.player.classList.toggle('paused', !this.playing); this.playBtn.replaceChildren(icon(this.playing ? 'pause' : 'play')); }
   close(fromPop) {
     if (this.closed) return; this.closed = true;
     this.pause();
+    if (window.__reader === this) { window.__reader = null; AutoRemote.state(null); }
     removeEventListener('keydown', this.onKey); removeEventListener('resize', this.onResize); removeEventListener('popstate', this.onPop);
     document.fonts?.removeEventListener?.('loadingdone', this.onFonts);
     window.__readerBack = null;
@@ -1696,6 +1699,21 @@ class Reader {
   }
 }
 Reader.cache = new Map();
+// Android Auto : quand la lecture vient du téléphone, l'auto affiche ce livre et ses boutons commandent ce lecteur-ci
+const AutoRemote = {
+  on: () => !!(window.AndroidAuto && window.AndroidAuto.nowPlaying),
+  state(r) {
+    if (!this.on()) return;
+    try { AndroidAuto.nowPlaying(r ? JSON.stringify({ id: r.b.id, title: r.b.title, author: r.b.author || '', playing: !!r.playing }) : ''); } catch {}
+  },
+};
+window.__autoCmd = (cmd, arg) => {
+  const r = window.__reader; if (!r || r.closed) return false;
+  if (cmd === 'play') { if (!r.player) r.toggleAudio(true); else if (!r.playing) r.play(); }
+  else if (cmd === 'pause') { if (r.playing) r.pause(); }
+  else if (cmd === 'jump') { if (!r.player) r.toggleAudio(false); r.jump(Number(arg) || 0); }
+  return true;
+};
 // Bouton retour Android
 window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); const s = $('.scrim'); if (s) { s.remove(); return true; } return false; };
 

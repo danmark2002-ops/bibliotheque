@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
+    static volatile MainActivity instance;
     private TextToSpeech tts;
     private boolean ttsReady = false;
     private final List<String[]> pending = new ArrayList<>();
@@ -57,6 +58,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        instance = this;
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#140f0b"));
         FrameLayout root = new FrameLayout(this);
@@ -411,8 +413,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Android Auto commande la lecture en cours sur le téléphone (lecture, pause, avancer, reculer). */
+    static boolean autoCmd(String cmd, String arg) {
+        MainActivity a = instance;
+        if (a == null || a.web == null) return false;
+        String js = "window.__autoCmd && window.__autoCmd('" + cmd.replaceAll("[^a-z]", "") + "', " + JSONObject.quote(arg == null ? "" : arg) + ")";
+        a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, null); });
+        return true;
+    }
+
     // ---------- Android Auto : l'application prépare les livres dans files/auto ----------
     class AutoBridge {
+        /** Le lecteur du téléphone annonce ce qu'il lit (ou "" quand il se ferme) : l'auto l'affiche et le commande. */
+        @JavascriptInterface
+        public void nowPlaying(String json) { LivreService.phoneState(json); }
+
         private File f(String name) {
             if (name == null || name.contains("..") || name.startsWith("/")) return null;
             File x = new File(new File(getFilesDir(), "auto"), name);
@@ -574,6 +589,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (instance == this) { instance = null; LivreService.phoneState(""); }
         if (tts != null) { tts.stop(); tts.shutdown(); }
         if (web != null) { web.removeAllViews(); web.destroy(); }
         super.onDestroy();

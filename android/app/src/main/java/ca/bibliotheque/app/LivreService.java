@@ -75,6 +75,11 @@ public class LivreService extends MediaBrowserService {
     private Bitmap art;
     private int sinceSave;
 
+    // Lecture lancée sur le téléphone : l'auto l'affiche et ses boutons la commandent
+    private static volatile String phoneJson = "";
+    private boolean remote, remotePlaying;
+    private String remoteId;
+
     private File dir() { return new File(getFilesDir(), "auto"); }
 
     private static String read(File f) {
@@ -97,7 +102,8 @@ public class LivreService extends MediaBrowserService {
         Intent open = new Intent(this, MainActivity.class);
         session.setSessionActivity(PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE));
         setSessionToken(session.getSessionToken());
-        updateState();
+        session.setActive(true); // les boutons de l'auto et du volant arrivent ici dès la connexion
+        applyPhone();
         AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
         focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
         tts = new TextToSpeech(this, st -> {
@@ -192,16 +198,21 @@ public class LivreService extends MediaBrowserService {
     // ---------------------------------------------------------------- lecture
     private class Callback extends MediaSession.Callback {
         @Override public void onPlayFromMediaId(String mediaId, Bundle extras) { if (mediaId != null && mediaId.startsWith("book:")) start(mediaId.substring(5)); }
-        @Override public void onPlay() { if (bookId == null) { String last = lastBookId(); if (last != null) start(last); } else play(); }
-        @Override public void onPause() { pause(); }
-        @Override public void onStop() { pause(); stopForeground(STOP_FOREGROUND_DETACH); }
-        @Override public void onSkipToNext() { jump(30); }
-        @Override public void onSkipToPrevious() { jump(-30); }
-        @Override public void onFastForward() { jump(30); }
-        @Override public void onRewind() { jump(-30); }
-        @Override public void onSeekTo(long ms) { seekChars((long) (ms / 1000f * CPS * rate)); }
+        @Override public void onPlay() {
+            if (toPhone("play", 0)) return;
+            if (bookId != null) { play(); return; }
+            String last = lastBookId();
+            if (last != null) start(last); else error("Choisis un livre dans une bibliothèque.");
+        }
+        @Override public void onPause() { if (!toPhone("pause", 0)) pause(); }
+        @Override public void onStop() { if (toPhone("pause", 0)) return; pause(); stopForeground(STOP_FOREGROUND_DETACH); }
+        @Override public void onSkipToNext() { move(30); }
+        @Override public void onSkipToPrevious() { move(-30); }
+        @Override public void onFastForward() { move(30); }
+        @Override public void onRewind() { move(-30); }
+        @Override public void onSeekTo(long ms) { if (!remote) seekChars((long) (ms / 1000f * CPS * rate)); }
         @Override public void onCustomAction(String action, Bundle extras) {
-            if ("m180".equals(action)) jump(-180); else if ("p180".equals(action)) jump(180); else if ("p600".equals(action)) jump(600); else if ("m600".equals(action)) jump(-600);
+            if ("m180".equals(action)) move(-180); else if ("p180".equals(action)) move(180); else if ("p600".equals(action)) move(600); else if ("m600".equals(action)) move(-600);
         }
         @Override public void onPlayFromSearch(String query, Bundle extras) {
             JSONArray books = catalog().optJSONArray("books");
@@ -215,6 +226,59 @@ public class LivreService extends MediaBrowserService {
         }
     }
 
+    /** Avancer / reculer : dans le lecteur du téléphone s'il lit, sinon ici. */
+    private void move(int sec) { if (!toPhone("jump", sec)) jump(sec); }
+
+    /** Si la lecture en cours est celle du téléphone, la commande lui est transmise. */
+    private boolean toPhone(String cmd, int sec) {
+        if (!remote || playing) return false;
+        if (!MainActivity.autoCmd(cmd, String.valueOf(sec))) { remote = false; updateState(); return false; }
+        if ("play".equals(cmd)) { remotePlaying = true; updateState(); }
+        else if ("pause".equals(cmd)) { remotePlaying = false; updateState(); }
+        return true;
+    }
+
+    /** Appelé par le téléphone : ce qu'il lit, ou "" quand son lecteur se ferme. */
+    static void phoneState(String json) {
+        phoneJson = json == null ? "" : json;
+        LivreService s = instance; if (s != null) s.main.post(s::applyPhone);
+    }
+
+    private void applyPhone() {
+        JSONObject p = null;
+        try { if (!phoneJson.isEmpty()) p = new JSONObject(phoneJson); } catch (Exception ignored) { }
+        if (p == null) {
+            if (remote) { remote = false; remotePlaying = false; if (bookId != null) updateMeta(); else session.setMetadata(null); }
+            updateState();
+            return;
+        }
+        if (playing && !p.optBoolean("playing")) { updateState(); return; } // l'auto lit déjà son propre livre
+        remote = true;
+        remotePlaying = p.optBoolean("playing");
+        if (!p.optString("id").equals(remoteId)) {
+            remoteId = p.optString("id");
+            MediaMetadata.Builder m = new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "book:" + remoteId)
+                .putString(MediaMetadata.METADATA_KEY_TITLE, p.optString("title"))
+                .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, p.optString("title"))
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, p.optString("author"))
+                .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, p.optString("author"));
+            Bitmap cover = coverOf(remoteId);
+            if (cover != null) { m.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cover); m.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, cover); }
+            session.setMetadata(m.build());
+        }
+        updateState();
+    }
+
+    private Bitmap coverOf(String id) {
+        JSONArray books = catalog().optJSONArray("books"); if (books == null) return null;
+        for (int i = 0; i < books.length(); i++) {
+            JSONObject b = books.optJSONObject(i);
+            if (b != null && id.equals(b.optString("id")) && !b.optString("cover", "").isEmpty()) return BitmapFactory.decodeFile(new File(dir(), b.optString("cover")).getPath());
+        }
+        return null;
+    }
+
     private String lastBookId() {
         JSONArray books = catalog().optJSONArray("books"); if (books == null) return null;
         String best = null; long t = 0;
@@ -223,6 +287,7 @@ public class LivreService extends MediaBrowserService {
     }
 
     private void start(String id) {
+        if (remote) { MainActivity.autoCmd("pause", "0"); remote = false; remotePlaying = false; remoteId = null; } // l'auto prend le relais
         save();
         JSONObject meta = null;
         JSONArray books = catalog().optJSONArray("books");
@@ -275,7 +340,7 @@ public class LivreService extends MediaBrowserService {
 
     private void play() {
         if (bookId == null) return;
-        if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return;
+        if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { error("Le son est occupé par une autre application."); return; }
         playing = true;
         session.setActive(true);
         goForeground();
@@ -356,6 +421,18 @@ public class LivreService extends MediaBrowserService {
     private long posMs() { return units.isEmpty() ? 0 : (long) (startChars[idx] / (CPS * rate) * 1000); }
 
     private void updateState() {
+        if (remote && !playing) {
+            PlaybackState.Builder r = new PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP
+                    | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                    | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH | PlaybackState.ACTION_FAST_FORWARD | PlaybackState.ACTION_REWIND)
+                .setState(remotePlaying ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, remotePlaying ? 1f : 0f);
+            r.addCustomAction(new PlaybackState.CustomAction.Builder("m180", "Reculer de 3 minutes", R.drawable.ic_moins3).build());
+            r.addCustomAction(new PlaybackState.CustomAction.Builder("p180", "Avancer de 3 minutes", R.drawable.ic_plus3).build());
+            r.addCustomAction(new PlaybackState.CustomAction.Builder("p600", "Avancer de 10 minutes", R.drawable.ic_plus10).build());
+            session.setPlaybackState(r.build());
+            return;
+        }
         PlaybackState.Builder b = new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO
@@ -384,7 +461,7 @@ public class LivreService extends MediaBrowserService {
 
     private void error(String msg) {
         session.setPlaybackState(new PlaybackState.Builder()
-            .setActions(PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
+            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
             .setState(PlaybackState.STATE_ERROR, 0, 0f).setErrorMessage(msg).build());
         main.postDelayed(this::updateState, 4000);
     }
