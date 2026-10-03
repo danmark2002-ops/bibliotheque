@@ -827,21 +827,22 @@ Structure :
 2. Le déroulement : les grandes parties ou chapitres, dans l'ordre, avec leurs idées clés.
 3. Les concepts et arguments importants, expliqués simplement.
 4. Ce qu'il faut retenir : 5 à 8 points.
+5. Phrases clés : 5 à 7 phrases ultra concises (12 mots au plus chacune) qui, ensemble, disent tout le livre.
 Reste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Environ 800 à 1200 mots, titres courts, sans préambule.`;
 const CLAUDE_MODEL = 'claude-sonnet-5-5';
 const claudeKey = () => store.get('claudeKey', '');
 function mdToHtml(md) {
   const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inl = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
-  let out = '', list = null;
+  let out = '', list = null, keySec = false;
   const flush = () => { if (list) { out += `</${list}>`; list = null; } };
   for (const raw of md.replace(/\r/g, '').split('\n')) {
     const line = raw.trim();
     let m;
     if (!line) { flush(); continue; }
-    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flush(); const tag = m[1].length >= 3 ? 'h5' : 'h4'; out += `<${tag}>${inl(m[2])}</${tag}>`; continue; }
-    if ((m = line.match(/^[-•*]\s+(.*)$/))) { if (list !== 'ul') { flush(); out += '<ul>'; list = 'ul'; } out += `<li>${inl(m[1])}</li>`; continue; }
-    if ((m = line.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); out += '<ol>'; list = 'ol'; } out += `<li>${inl(m[1])}</li>`; continue; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flush(); keySec = /phrases? clés?/i.test(m[2]); const tag = m[1].length >= 3 ? 'h5' : 'h4'; out += `<${tag}${keySec ? ' class="keyh"' : ''}>${inl(m[2])}</${tag}>`; continue; }
+    if ((m = line.match(/^[-•*]\s+(.*)$/))) { if (list !== 'ul') { flush(); out += keySec ? '<ul class="keys">' : '<ul>'; list = 'ul'; } out += `<li>${inl(m[1])}</li>`; continue; }
+    if ((m = line.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); out += keySec ? '<ol class="keys">' : '<ol>'; list = 'ol'; } out += `<li>${inl(m[1])}</li>`; continue; }
     flush(); out += `<p>${inl(line)}</p>`;
   }
   flush(); return out;
@@ -922,10 +923,10 @@ function autoSummary(text, title) {
   const used = []; // tout ce qui est déjà dans le résumé : pas de redite
   const wset = (x) => new Set(words(x));
   const similar = (a, b) => { let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)); };
-  const pick = (sents, n) => {
+  const pick = (sents, n, pool = used) => {
     const r = rankSentences(sents, freq).map((o) => ({ ...o, sc: o.sc / (seen.get(norm(o.x)) || 1), w: wset(o.x) })).sort((a, b) => b.sc - a.sc);
     const out = [];
-    for (const o of r) { if (out.length >= n) break; if (used.some((u) => similar(o.w, u) > .6)) continue; out.push(o); used.push(o.w); }
+    for (const o of r) { if (out.length >= n) break; if (pool.some((u) => similar(o.w, u) > .6)) continue; out.push(o); pool.push(o.w); }
     return out.sort((a, b) => a.i - b.i).map((o) => o.x);
   };
   const parts = bookParts(text, title).map((p) => ({ ...p, sents: splitSentences(p.text) })).filter((p) => p.sents.length);
@@ -936,6 +937,10 @@ function autoSummary(text, title) {
   const top = [...freq.entries()].filter(([w]) => !title.toLowerCase().includes(w)).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([w]) => w);
   let md = `## L'essentiel\n${ess.map((x) => '- ' + x).join('\n')}\n\n## Par parties\n`;
   for (const part of parts) { const got = pick(part.sents, part.sents.length > 40 ? 3 : 2); if (got.length) md += `### ${part.name}\n${got.map((x) => '- ' + x).join('\n')}\n`; }
+  // Phrases clés : les phrases courtes les plus fortes, réparties dans le livre
+  const short = all.filter((x) => { const n = x.split(/\s+/).length; return n >= 5 && n <= 16; });
+  const keys = pick(short.length >= 4 ? short : all, 6, []);
+  if (keys.length) md += `\n## Phrases clés\n${keys.map((x) => '- ' + x).join('\n')}\n`;
   md += `\n## Mots-clés\n${top.join(' · ')}`;
   return md;
 }
@@ -1004,8 +1009,14 @@ async function nanoSummary(b, text, say) {
   }
   say('IA du téléphone : rédaction du résumé final…');
   const fin = await nanoAskRetry(`Voici les résumés, dans l'ordre, des parties du livre ${who}.\nÉcris en français un résumé structuré du livre entier, avec exactement ces titres :\n## L'essentiel\n(3 ou 4 phrases sur l'idée centrale)\n## Le déroulement\n(une ligne par grande étape du livre)\n## Les idées clés\n(une liste de 4 à 6 points)\n## À retenir\n(une liste de 5 points)\nReste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Pas de préambule.\n\nRésumés des parties :\n${parts.map((x, i) => `${i + 1}. ${x}`).join('\n\n')}`, say);
+  say('IA du téléphone : phrases clés…');
+  let keys = '';
+  try {
+    keys = await nanoAskRetry(`Voici le résumé du livre ${who}.\nÉcris 5 à 7 phrases clés ultra concises, de 12 mots au plus chacune, qui disent ensemble tout le livre. Une phrase par ligne, chaque ligne commence par « - ». Rien d'autre.\n\n${fin}`, say);
+    keys = keys.split('\n').map((x) => x.trim()).filter((x) => /^[-•*]\s+\S/.test(x)).map((x) => '- ' + x.replace(/^[-•*]\s+/, '')).slice(0, 8).join('\n');
+  } catch {}
   store.set(key, null);
-  return fin;
+  return fin.replace(/\n*#{1,3}\s*Phrases clés[\s\S]*$/i, '') + (keys ? `\n\n## Phrases clés\n${keys}` : '');
 }
 
 async function makeFreeSummary(b) {
@@ -1491,7 +1502,9 @@ class Reader {
         h('button', { class: 'rbtn', title: 'Phrase précédente', onclick: () => this.skip(-1) }, icon('prev')),
         this.playBtn,
         h('button', { class: 'rbtn', title: 'Phrase suivante', onclick: () => this.skip(1) }, icon('next')),
-        voiceSel || h('span', { style: { width: '48px' } })));
+        voiceSel || h('span', { style: { width: '48px' } })),
+      h('div', { class: 'jumps' }, [[-600, '−10 min'], [-180, '−3 min'], [-30, '−30 s'], [30, '+30 s'], [180, '+3 min'], [600, '+10 min']]
+        .map(([sec, l]) => h('button', { class: 'jump' + (sec > 0 ? ' fwd' : ''), title: (sec > 0 ? 'Avancer de ' : 'Reculer de ') + l.slice(1), onclick: () => this.jump(sec) }, l))));
     this.el.append(this.player);
     if (autoplay) this.play();
   }
@@ -1530,6 +1543,42 @@ class Reader {
     this.cap.replaceChildren(h('span', { class: 'wave' }, h('i'), h('i'), h('i'), h('i')), s);
     $$('.s', this.el).forEach((x) => x.classList.toggle('cur', Number(x.dataset.i) === this.sIdx));
     const cur = $('.s.cur', this.el); if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  // Phrases d'une page sans l'afficher (même découpage que l'affichage)
+  async pageSents(n) {
+    if (n === this.page && this.sents.length) return this.sents;
+    if (this.reflow) return (this.pages[n - 1] || []).flatMap((it) => sentences(it.text));
+    const t = await this.getText(n);
+    if (this.b.kind === 'pdf') return sentences(t);
+    return t.split(/\n{2,}/).flatMap((para) => sentences(para.replace(/^#{1,3} /, '')));
+  }
+  // Avance ou recule d'une durée : estimée d'après le débit de la voix (environ 14,5 caractères par seconde à vitesse 1)
+  async jump(sec) {
+    if (this.jumping) return; this.jumping = true;
+    try {
+      let budget = Math.abs(sec) * 14.5 * (this.rate || 1);
+      let n = this.page; let ss = await this.pageSents(n); let i = Math.min(this.sIdx, Math.max(0, ss.length - 1));
+      if (sec > 0) {
+        for (;;) {
+          if (i + 1 < ss.length) { budget -= (ss[i] || '').length; i++; if (budget <= 0) break; continue; }
+          if (n >= this.total) { i = Math.max(0, ss.length - 1); break; }
+          budget -= (ss[i] || '').length; n++; ss = await this.pageSents(n); i = 0; if (budget <= 0 && ss.length) break;
+        }
+      } else {
+        for (;;) {
+          if (i > 0) { i--; budget -= (ss[i] || '').length; if (budget <= 0) break; continue; }
+          if (n <= 1) { i = 0; break; }
+          n--; ss = await this.pageSents(n); i = ss.length;
+          if (!ss.length) i = 0;
+        }
+      }
+      const was = this.playing;
+      if (was) this.stopSpeech();
+      if (n !== this.page) { this.page = n; this.sIdx = 0; await this.render(sec > 0 ? 1 : -1); }
+      this.sIdx = Math.max(0, Math.min(i, this.sents.length - 1));
+      if (was) this.play(); else this.highlight();
+      toast(`${sec > 0 ? 'Avance' : 'Recul'} de ${Math.abs(sec) >= 60 ? Math.abs(sec) / 60 + ' min' : Math.abs(sec) + ' s'} · page ${this.page}`);
+    } finally { this.jumping = false; }
   }
   skip(d) { this.sIdx = Math.max(0, Math.min(this.sents.length - 1, this.sIdx + d)); if (this.playing) { this.stopSpeech(); this.speakCurrent(); } else this.highlight(); }
   stopSpeech() { this.tok = (this.tok || 0) + 1; TTS.stop(); }

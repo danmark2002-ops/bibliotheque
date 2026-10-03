@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
-        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.8");
+        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.9");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");

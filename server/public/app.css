@@ -650,3 +650,13 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .ti:last-child { opacity: .45; }
 .sumtext h4 + h4 { margin-top: 8px; }
 .sumtext h5 { font: 600 14px/1.3 var(--font-ui); margin: 12px 0 4px; color: var(--ink-2); }
+
+/* Sauts dans la lecture audio */
+.jumps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-top: 10px; }
+.jump { height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.04); color: #d9ccb9; font: 600 12px var(--font-ui); white-space: nowrap; padding: 0 2px; cursor: pointer; }
+.jump.fwd { color: #f3e9da; border-color: rgba(212,171,106,.45); }
+.jump:active { background: rgba(212,171,106,.25); }
+/* Phrases clés du résumé */
+.sumtext h4.keyh { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sumtext ul.keys, .sumtext ol.keys { list-style: none; padding: 0; display: grid; gap: 8px; }
+.sumtext ul.keys li, .sumtext ol.keys li { margin: 0; padding: 10px 14px; border-left: 3px solid var(--brass); background: var(--panel-2); border-radius: 0 10px 10px 0; font: italic 600 16px/1.4 var(--font-display); }
