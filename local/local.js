@@ -185,7 +185,7 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
-      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   async function upload(file, onp, extra = {}) {
@@ -222,12 +222,12 @@ window.LocalAPI = (() => {
       onp(75, 'Découpage en pages…');
       const pages = splitText(d.paras.join('\n\n'));
       meta.pages = pages.length;
-      await put('blob', { pages }, id);
+      await put('blob', { pages, file }, id);
     } else {
       onp(60, 'Découpage en pages…');
       const pages = splitText(await decodeText(file));
       meta.pages = pages.length;
-      await put('blob', { pages }, id);
+      await put('blob', { pages, file }, id);
     }
     await put('meta', meta);
     onp(100);
@@ -260,6 +260,7 @@ window.LocalAPI = (() => {
         Object.assign(meta, { title: String(body.title ?? meta.title).slice(0, 200), author: String(body.author ?? meta.author).slice(0, 120), color: String(body.color ?? meta.color) });
         if (body.fav !== undefined) meta.fav = !!body.fav;
         if (body.lib) meta.lib = String(body.lib);
+        if (body.summary !== undefined) meta.summary = body.summary;
         if (body.state !== undefined) meta.state = ['alire', 'lu'].includes(body.state) ? body.state : '';
         if (Array.isArray(body.cols)) meta.cols = [...new Set(body.cols.map(String))];
         if (body.trashed !== undefined) meta.trashed = body.trashed ? now() : 0;
@@ -337,5 +338,21 @@ window.LocalAPI = (() => {
     try { for (const x of JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]')) src.add(x); } catch {}
     return { has: (f) => src.has(f.src) || nameSize.has(f.name + '|' + f.size) || names.has(clean(f.name)) };
   }
-  return { handle, upload, pageCanvas, paragraphs, known };
+  // Fichier du livre (l'original si on l'a, sinon le texte) — pour l'ouvrir avec une autre application
+  async function fileOf(id, { asText } = {}) {
+    const meta = await get('meta', id); const rec = await get('blob', id); if (!meta || !rec) return null;
+    const base = (meta.fname || meta.title).replace(/\.[^.]+$/, '');
+    if (rec.file && !(asText && meta.kind !== 'pdf')) return { file: rec.file, name: meta.fname || meta.title + '.' + (meta.kind === 'pdf' ? 'pdf' : meta.kind === 'docx' ? 'docx' : 'txt') };
+    if (rec.pages) return { file: new Blob([rec.pages.join('\n\n').replace(/^# /gm, '')], { type: 'text/plain' }), name: base + '.txt', converted: meta.kind === 'docx' && !asText };
+    return null;
+  }
+  // Tout le texte du livre (pour le résumé), avec un plafond
+  async function fullText(id, onp, max = 1200000) {
+    const meta = await get('meta', id); if (!meta) throw new Error('Livre introuvable');
+    if (meta.kind !== 'pdf') { const t = ((await get('blob', id))?.pages || []).join('\n\n'); return { text: t.slice(0, max), truncated: t.length > max, pages: meta.pages }; }
+    let out = ''; let n = 1;
+    for (; n <= meta.pages && out.length < max; n++) { out += `\n\n[page ${n}]\n` + await pdfText(id, n); if (n % 5 === 0) onp?.(n, meta.pages); }
+    return { text: out.slice(0, max), truncated: n <= meta.pages || out.length > max, pages: meta.pages };
+  }
+  return { handle, upload, pageCanvas, paragraphs, known, fileOf, fullText };
 })();

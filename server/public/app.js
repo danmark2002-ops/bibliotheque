@@ -52,6 +52,8 @@ const ICONS = {
   layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
   reading: '<path d="M2.5 6c3-1.5 6.5-1.5 9.5.5 3-2 6.5-2 9.5-.5v13c-3-1.5-6.5-1.5-9.5.5-3-2-6.5-2-9.5-.5z"/><path d="M12 6.5v13"/>',
   dots: '<circle cx="12" cy="5.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="18.5" r="1.3" fill="currentColor"/>',
+  open: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };
 const icon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
@@ -275,7 +277,8 @@ function tinyIcons(b) {
     ic(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
     ic('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
     ic('checks', 'Déjà lu', b.state === 'lu', () => toggleState(b, 'lu')),
-    ic('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)));
+    ic('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)),
+    ic('dots', 'Plus : ouvrir avec, résumé IA…', false, () => editBook(b)));
 }
 // Boutons rapides de la vue liste
 function quickBar(b, { labels } = {}) {
@@ -739,7 +742,12 @@ function editBook(b) {
   const cols = S.cols.filter((c) => (b.cols || []).includes(c.id)).map((c) => c.name);
   const qb = local ? quickBar(b, { labels: true }) : null;
   if (qb) $$('button', qb).forEach((x) => x.addEventListener('click', () => close(), { capture: true })); // ferme la fenêtre avant l'action
-  const close = sheet(b.trashed ? 'Dans la poubelle' : 'Modifier le livre', h('div', {},
+  const actRow = local && !b.trashed ? h('div', { class: 'bookacts' },
+    h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon('book'), h('span', {}, 'Lire')),
+    h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
+    h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA'))) : null;
+  const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {},
+    actRow,
     qb,
     local && cols.length ? h('p', { class: 'muted' }, 'Collections : ' + cols.join(', ')) : null,
     b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
@@ -785,6 +793,122 @@ function openSettings() {
       } }, 'Enregistrer') : null)));
   // fermer sans enregistrer remet le décor d'avant
   const scrim = $$('.scrim').pop(); new MutationObserver((_, o) => { if (!scrim.isConnected) { local ? applyDecor() : (document.documentElement.dataset.decor = store.get('decor', 'noyer')); o.disconnect(); } }).observe(document.body, { childList: true });
+}
+
+// ================= Ouvrir avec une autre application =================
+function blobToB64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(blob); }); }
+async function openWith(b, mode = 'view', prompt = '') {
+  const fname = b.fname || b.title;
+  try {
+    if (window.AndroidOpen) {
+      // livre venu d'un dossier : on passe le fichier d'origine directement
+      if (b.src && b.src.startsWith('saf:') && AndroidOpen.openFolderDoc(b.lib || 'main', b.src.slice(4), fname, mode, prompt || '')) return;
+      const f = await LocalAPI.fileOf(b.id, { asText: mode === 'ai' && b.kind !== 'pdf' && !b.fname?.match(/\.docx$/i) });
+      if (!f) return toast('Fichier introuvable');
+      if (f.converted) toast('Le fichier Word d\'origine n\'a pas été gardé : il s\'ouvre en texte');
+      if (!AndroidOpen.begin(f.name)) return toast('Préparation du fichier impossible');
+      const CH = 3 * 256 * 1024; // morceaux de 768 ko
+      for (let i = 0; i < f.file.size; i += CH) if (!AndroidOpen.append(await blobToB64(f.file.slice(i, i + CH)))) return toast('Préparation du fichier impossible');
+      AndroidOpen.finish(mode, prompt || '');
+      return;
+    }
+    // navigateur : on télécharge le fichier
+    const f = await LocalAPI.fileOf(b.id); if (!f) return toast('Fichier introuvable');
+    const a = h('a', { href: URL.createObjectURL(f.file), download: f.name }); document.body.append(a); a.click(); a.remove();
+    if (mode === 'ai') { try { await navigator.clipboard.writeText(prompt); toast('Demande copiée : colle-la dans ton IA avec le fichier'); } catch {} }
+  } catch (e) { toast(e.message || 'Impossible d\'ouvrir ce livre'); }
+}
+window.__openDone = (msg) => { if (msg && msg !== 'ok') toast(msg); };
+
+// ================= Résumé par une IA =================
+const SUMMARY_PROMPT = `Fais un résumé bien construit, en français, du livre ci-joint.
+Structure :
+1. L'essentiel : l'idée centrale en 3 ou 4 phrases.
+2. Le déroulement : les grandes parties ou chapitres, dans l'ordre, avec leurs idées clés.
+3. Les concepts et arguments importants, expliqués simplement.
+4. Ce qu'il faut retenir : 5 à 8 points.
+Reste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Environ 800 à 1200 mots, titres courts, sans préambule.`;
+const CLAUDE_MODEL = 'claude-sonnet-5-5';
+const claudeKey = () => store.get('claudeKey', '');
+function mdToHtml(md) {
+  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inl = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+  let out = '', list = null;
+  const flush = () => { if (list) { out += `</${list}>`; list = null; } };
+  for (const raw of md.replace(/\r/g, '').split('\n')) {
+    const line = raw.trim();
+    let m;
+    if (!line) { flush(); continue; }
+    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flush(); out += `<h4>${inl(m[1])}</h4>`; continue; }
+    if ((m = line.match(/^[-•*]\s+(.*)$/))) { if (list !== 'ul') { flush(); out += '<ul>'; list = 'ul'; } out += `<li>${inl(m[1])}</li>`; continue; }
+    if ((m = line.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); out += '<ol>'; list = 'ol'; } out += `<li>${inl(m[1])}</li>`; continue; }
+    flush(); out += `<p>${inl(line)}</p>`;
+  }
+  flush(); return out;
+}
+function estimateCost(b) {
+  const chars = Math.min(1200000, (b.pages || 1) * (b.kind === 'pdf' ? 2200 : 1500));
+  const usd = (chars / 3.5) / 1e6 * 2 + 0.03; // Sonnet 5.5 : 2 $ par million de jetons lus, 10 $ par million écrits
+  return usd < 0.05 ? 'moins de 5 ¢ US' : `environ ${usd.toFixed(2).replace('.', ',')} $ US`;
+}
+function openSummary(b) {
+  const s = b.summary;
+  if (s?.text) {
+    const close = sheet('Résumé', h('div', { class: 'summary' },
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)}${s.truncated ? ' · livre trop long, résumé sur le début' : ''}`),
+      h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
+      h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+        h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
+        h('button', { class: 'btn', onclick: () => { close(); summaryChoices(b); } }, icon('refresh'), 'Refaire'))), { wide: true });
+    return close;
+  }
+  summaryChoices(b);
+}
+function summaryChoices(b) {
+  const keyIn = h('input', { type: 'password', placeholder: 'sk-ant-…', value: claudeKey(), autocomplete: 'off' });
+  const close = sheet('Résumé IA', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
+    h('div', { class: 'aiopt' },
+      h('h4', {}, 'Avec ton application d\'IA'),
+      h('p', {}, 'Claude, Gemini, ChatGPT… Le livre lui est envoyé avec une demande de résumé déjà écrite. Gratuit, rien à configurer.'),
+      h('button', { class: 'btn primary', onclick: () => { close(); openWith(b, 'ai', SUMMARY_PROMPT); } }, icon('share'), 'Choisir l\'application')),
+    h('div', { class: 'aiopt' },
+      h('h4', {}, 'Ici, avec Claude'),
+      h('p', {}, `Le résumé s'affiche dans la Bibliothèque et reste gardé avec le livre. Il faut une clé d'API Claude (console.anthropic.com → API Keys), facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
+      h('label', { class: 'field' }, 'Clé d\'API Claude', keyIn),
+      h('button', { class: 'btn primary', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Faire le résumé'))));
+}
+function callClaude(key, body) {
+  if (window.AndroidOpen?.claude) return new Promise((res) => { window.__claudeDone = (j) => { window.__claudeDone = null; try { res(JSON.parse(j)); } catch { res({ status: 0, body: '' }); } }; AndroidOpen.claude(key, JSON.stringify(body)); });
+  return fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) })
+    .then(async (r) => ({ status: r.status, body: await r.text() }), (e) => ({ status: 0, body: e.message }));
+}
+async function makeSummary(b) {
+  const box = h('div', { class: 'up' }, h('b', {}, 'Résumé : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+  $('#uploads')?.append(box);
+  const say = (t) => { $('span', box).textContent = t; };
+  try {
+    const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
+    if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
+    say('Claude rédige le résumé… (1 à 3 minutes)');
+    const r = await callClaude(claudeKey(), { model: CLAUDE_MODEL, max_tokens: 16000,
+      messages: [{ role: 'user', content: `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}${t.truncated ? '\n(Le livre est très long : seul le début est fourni.)' : ''}\n\n<livre>\n${t.text}\n</livre>` }] });
+    let data = null; try { data = JSON.parse(r.body); } catch {}
+    if (r.status !== 200) {
+      const msg = r.status === 401 ? 'Clé d\'API refusée. Vérifie-la dans console.anthropic.com.'
+        : r.status === 0 ? 'Pas de connexion Internet.'
+        : [429, 529, 503].includes(r.status) ? 'Le service est occupé. Réessaie dans un moment.'
+        : r.status === 400 && /credit|balance/i.test(data?.error?.message || '') ? 'Crédit insuffisant sur ton compte Claude (console.anthropic.com → Billing).'
+        : 'Erreur de Claude : ' + (data?.error?.message || r.status);
+      throw new Error(msg);
+    }
+    const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+    if (!text) throw new Error('Claude n\'a rien renvoyé. Réessaie.');
+    const summary = { text, date: Date.now(), model: CLAUDE_MODEL, truncated: t.truncated };
+    await post('/api/books/' + b.id, { summary }, 'PATCH');
+    box.remove(); await loadBooks(); renderLibrary();
+    openSummary(S.books.find((x) => x.id === b.id) || { ...b, summary });
+  } catch (e) { say(e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 9000); }
 }
 
 // ================= Partage =================

@@ -24,6 +24,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -69,10 +70,11 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
-        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.6");
+        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.7");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");
+        web.addJavascriptInterface(new OpenBridge(), "AndroidOpen");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -313,6 +315,95 @@ public class MainActivity extends Activity {
                     try { res.put("error", "Lecture du dossier impossible : " + e.getMessage()); } catch (Exception ignored) { }
                 }
                 js("__folderScanned", res.toString());
+            }).start();
+        }
+    }
+
+    // ---------- Ouvrir avec une autre application, envoyer à une IA, résumé Claude ----------
+    private java.io.FileOutputStream outFile;
+    private String outName;
+
+    private void launch(Uri uri, String name, String mode, String prompt) {
+        String mime = Partage.mimeOf(name);
+        Intent i;
+        if ("ai".equals(mode)) {
+            i = new Intent(Intent.ACTION_SEND);
+            i.setType(mime);
+            i.putExtra(Intent.EXTRA_STREAM, uri);
+            if (prompt != null && !prompt.isEmpty()) i.putExtra(Intent.EXTRA_TEXT, prompt);
+            i.putExtra(Intent.EXTRA_SUBJECT, name);
+            i.setClipData(android.content.ClipData.newRawUri(name, uri));
+        } else {
+            i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, mime);
+        }
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent chooser = Intent.createChooser(i, "ai".equals(mode) ? "Résumer avec…" : "Ouvrir avec…");
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        runOnUiThread(() -> {
+            try { startActivity(chooser); js("__openDone", "ok"); }
+            catch (Exception e) { js("__openDone", "Aucune application ne peut ouvrir ce fichier"); }
+        });
+    }
+
+    class OpenBridge {
+        /** Livre venu d'un dossier : on passe directement le fichier d'origine, sans copie. */
+        @JavascriptInterface
+        public boolean openFolderDoc(String lib, String docId, String name, String mode, String prompt) {
+            Uri tree = folderTree(lib);
+            if (tree == null) return false;
+            launch(DocumentsContract.buildDocumentUriUsingTree(tree, docId), name, mode, prompt);
+            return true;
+        }
+
+        /** Livre ajouté à la main : la page envoie le fichier par morceaux (base64), copié dans le cache. */
+        @JavascriptInterface
+        public boolean begin(String name) {
+            try {
+                File dir = new File(getCacheDir(), "partage");
+                if (dir.exists()) { File[] old = dir.listFiles(); if (old != null) for (File f : old) f.delete(); }
+                dir.mkdirs();
+                outName = name.replaceAll("[\\/:*?\"<>|]", "_");
+                outFile = new java.io.FileOutputStream(new File(dir, outName));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean append(String b64) {
+            try { outFile.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT)); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean finish(String mode, String prompt) {
+            try { outFile.close(); } catch (Exception e) { return false; }
+            launch(Partage.uriFor(outName), outName, mode, prompt);
+            return true;
+        }
+
+        /** Appel à l'API Claude (évite les restrictions du navigateur). Réponse : window.__claudeDone({status, body}). */
+        @JavascriptInterface
+        public void claude(String key, String body) {
+            new Thread(() -> {
+                JSONObject res = new JSONObject();
+                try {
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("https://api.anthropic.com/v1/messages").openConnection();
+                    c.setRequestMethod("POST");
+                    c.setConnectTimeout(30000); c.setReadTimeout(600000);
+                    c.setDoOutput(true);
+                    c.setRequestProperty("content-type", "application/json");
+                    c.setRequestProperty("x-api-key", key);
+                    c.setRequestProperty("anthropic-version", "2023-06-01");
+                    try (java.io.OutputStream o = c.getOutputStream()) { o.write(body.getBytes("UTF-8")); }
+                    int code = c.getResponseCode();
+                    InputStream in = code < 400 ? c.getInputStream() : c.getErrorStream();
+                    java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                    if (in != null) { byte[] b = new byte[8192]; int n; while ((n = in.read(b)) > 0) buf.write(b, 0, n); in.close(); }
+                    res.put("status", code); res.put("body", buf.toString("UTF-8"));
+                } catch (Exception e) {
+                    try { res.put("status", 0); res.put("body", String.valueOf(e.getMessage())); } catch (Exception ignored) { }
+                }
+                js("__claudeDone", res.toString());
             }).start();
         }
     }
