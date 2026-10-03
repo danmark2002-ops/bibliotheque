@@ -1513,7 +1513,8 @@ function heroEl(b) {
     h('div', { class: 'meta' }, `Page ${b.progress.page} sur ${b.pages} · ${pct} % · lu ${lastRead(b.progress.last)}`),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: () => openBook(b, mini) }, icon('book'), 'Continuer'),
-      h('button', { class: 'btn', onclick: () => openBook(b, mini, { audio: true }) }, icon('headphones'), 'Écouter'))));
+      h('button', { class: 'btn', onclick: () => openBook(b, mini, { audio: true }) }, icon('headphones'), 'Écouter'),
+      Prof.on() ? h('button', { class: 'btn', onclick: () => Prof.open(b) }, icon('prof'), 'Professeur') : null)));
 }
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if ($('.case') && !$('.reader')) renderLibrary(); }, 150); });
 
