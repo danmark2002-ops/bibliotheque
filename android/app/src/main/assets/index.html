@@ -1495,6 +1495,7 @@ function renderLibrary() {
   // hors de #app : les messages d'envoi survivent au rafraîchissement de l'étagère
   if (!$('#uploads')) document.body.append(h('div', { class: 'uploads', id: 'uploads' }));
   if (!$('#dz')) document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
+  AutoSync.schedule();
 }
 function heroEl(b) {
   const pct = Math.round((b.progress.page / b.pages) * 100);
@@ -1838,6 +1839,103 @@ function openSettings() {
   // fermer sans enregistrer remet le décor d'avant
   const scrim = $$('.scrim').pop(); new MutationObserver((_, o) => { if (!scrim.isConnected) { local ? applyDecor() : (document.documentElement.dataset.decor = store.get('decor', 'noyer')); o.disconnect(); } }).observe(document.body, { childList: true });
 }
+
+
+// ================= Android Auto (rien ne change à l'écran du téléphone) =================
+// L'application prépare en arrière-plan, pour le service Android Auto : le catalogue, le texte de chaque livre
+// découpé en phrases (avec sa page ou sa position) et les couvertures. Elle récupère aussi la position atteinte dans l'auto.
+const AutoSync = {
+  on: () => !!(window.AndroidAuto && window.LocalAPI),
+  t: null, running: false, again: false,
+  schedule(delay = 1500) { if (!this.on()) return; clearTimeout(this.t); this.t = setTimeout(() => this.run(), delay); },
+  async run() {
+    if (this.running) { this.again = true; return; }
+    this.running = true;
+    try {
+      await this.pullProgress();
+      this.writeCatalog();
+      const done = store.get('autoDone', {});
+      const live = S.books.filter((b) => !b.trashed && b.status === 'ready');
+      for (const b of live) {
+        const ck = `${b.title}|${b.author}|${b.color}|${b.coverUrl ? 1 : 0}`;
+        const d = done[b.id] || {};
+        if (d.c !== ck) { if (await this.exportCover(b)) { d.c = ck; done[b.id] = d; store.set('autoDone', done); this.writeCatalog(); } }
+        if (!d.t) { if (await this.exportText(b)) { d.t = 1; done[b.id] = d; store.set('autoDone', done); this.writeCatalog(); } }
+        if (document.hidden) break; // on reprendra au retour dans l'application
+      }
+      // livres supprimés : on retire leurs fichiers
+      const ids = new Set(live.map((b) => b.id));
+      for (const f of JSON.parse(AndroidAuto.list('books') || '[]')) { const id = f.replace(/\.json$/, ''); if (!ids.has(id)) { AndroidAuto.remove('books/' + f); delete done[id]; } }
+      for (const f of JSON.parse(AndroidAuto.list('covers') || '[]')) { const id = f.replace(/\.(jpg|png)$/, ''); if (!ids.has(id)) AndroidAuto.remove('covers/' + f); }
+      store.set('autoDone', done);
+    } catch (e) { /* Android Auto ne doit jamais gêner l'application */ }
+    finally { this.running = false; if (this.again) { this.again = false; this.schedule(500); } }
+  },
+  writeCatalog() {
+    const done = store.get('autoDone', {});
+    const L = libs(); const name = (id) => (L.find((l) => l.id === id) || L[0]).name;
+    const books = S.books.filter((b) => !b.trashed && b.status === 'ready').map((b) => ({
+      id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
+      cover: done[b.id]?.c ? `covers/${b.id}.${b.kind === 'pdf' && b.coverUrl ? 'jpg' : 'png'}` : '',
+      last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1 }));
+    AndroidAuto.writeText('catalog.json', JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1), updated: Date.now() }));
+  },
+  async pullProgress() {
+    let prog = {}; try { prog = JSON.parse(AndroidAuto.readText('progress.json') || '{}'); } catch {}
+    const applied = store.get('autoApplied', {}); let changed = false;
+    for (const [id, p] of Object.entries(prog)) {
+      const b = S.books.find((x) => x.id === id); if (!b || !p.t || applied[id] >= p.t) continue;
+      if ((b.progress?.last || 0) < p.t) {
+        const body = b.kind === 'pdf' ? { book: id, type: 'page', page: p.page }
+          : { book: id, type: 'page', page: Math.max(1, Math.round((p.frac || 0) * (b.pages || 1)) + 1), pages: b.pages, pos: p.pos };
+        try { await post('/api/track', body); changed = true; } catch {}
+      }
+      applied[id] = p.t;
+    }
+    store.set('autoApplied', applied);
+    if (changed) { await loadBooks(); if (!$('.reader')) renderLibrary(); }
+  },
+  async exportText(b) {
+    const u = [];
+    if (b.kind === 'pdf') {
+      for (let n = 1; n <= b.pages; n++) {
+        let t = ''; try { t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; } catch {}
+        for (const x of sentences(t)) u.push([x, n]);
+        if (n % 4 === 0) await new Promise((r) => setTimeout(r, 25)); // laisse respirer l'application
+      }
+    } else {
+      const paras = await LocalAPI.paragraphs(b.id); let offset = 0;
+      for (const raw of paras) {
+        const text = raw.replace(/^#{1,3} /, ''); const base = offset + (raw.length - text.length); let cur = 0;
+        for (const x of sentences(text)) { let k = text.indexOf(x.slice(0, 24), cur); if (k < 0) k = cur; u.push([x, base + k]); cur = k + Math.floor(x.length / 2); }
+        offset += raw.length + 2;
+      }
+    }
+    return AndroidAuto.writeText(`books/${b.id}.json`, JSON.stringify({ v: 1, kind: b.kind, u }));
+  },
+  async exportCover(b) {
+    try {
+      if (b.kind === 'pdf' && b.coverUrl) { const blob = await (await fetch(b.coverUrl)).blob(); return AndroidAuto.writeB64(`covers/${b.id}.jpg`, await blobToB64(blob)); }
+      const c = document.createElement('canvas'); c.width = 400; c.height = 600; const g = c.getContext('2d');
+      g.fillStyle = b.color || '#5b3a2a'; g.fillRect(0, 0, 400, 600);
+      const gr = g.createLinearGradient(0, 0, 400, 600); gr.addColorStop(0, 'rgba(255,255,255,.18)'); gr.addColorStop(1, 'rgba(0,0,0,.35)'); g.fillStyle = gr; g.fillRect(0, 0, 400, 600);
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(0, 0, 22, 600); g.fillStyle = 'rgba(255,255,255,.12)'; g.fillRect(22, 0, 3, 600);
+      g.strokeStyle = 'rgba(255,240,215,.45)'; g.lineWidth = 2; g.strokeRect(46, 34, 330, 532);
+      g.fillStyle = '#f6ead6'; g.textAlign = 'center'; g.font = '34px serif'; g.fillText('❦', 211, 110);
+      g.font = '600 40px Georgia, serif';
+      const lines = []; let line = '';
+      for (const w of b.title.split(/\s+/)) { const t = line ? line + ' ' + w : w; if (g.measureText(t).width > 290 && line) { lines.push(line); line = w; } else line = t; }
+      if (line) lines.push(line);
+      const L = lines.slice(0, 6); const y0 = 300 - (L.length - 1) * 25;
+      L.forEach((l, i) => g.fillText(l, 211, y0 + i * 50));
+      g.fillRect(181, y0 + L.length * 50 - 18, 60, 2);
+      if (b.author) { g.font = 'italic 26px Georgia, serif'; g.fillStyle = 'rgba(246,234,214,.85)'; g.fillText(b.author.slice(0, 32), 211, y0 + L.length * 50 + 26); }
+      const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+      return AndroidAuto.writeB64(`covers/${b.id}.png`, await blobToB64(blob));
+    } catch { return false; }
+  },
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden) AutoSync.schedule(300); });
 
 // ================= Ouvrir avec une autre application =================
 function blobToB64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(blob); }); }

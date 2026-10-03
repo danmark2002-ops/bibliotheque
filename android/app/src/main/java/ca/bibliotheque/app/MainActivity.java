@@ -70,12 +70,13 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
-        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.9");
+        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/2.0");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");
         web.addJavascriptInterface(new OpenBridge(), "AndroidOpen");
         web.addJavascriptInterface(new AiBridge(), "AndroidAI");
+        web.addJavascriptInterface(new AutoBridge(), "AndroidAuto");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -167,6 +168,7 @@ public class MainActivity extends Activity {
     class TtsBridge {
         @JavascriptInterface
         public void speak(String text, float rate, String id) {
+            LivreService.pauseFromApp();
             if (!ttsReady) { synchronized (pending) { pending.clear(); pending.add(new String[]{text, String.valueOf(rate), id}); } return; }
             speakNow(text, rate, id);
         }
@@ -406,6 +408,49 @@ public class MainActivity extends Activity {
                 }
                 js("__claudeDone", res.toString());
             }).start();
+        }
+    }
+
+    // ---------- Android Auto : l'application prépare les livres dans files/auto ----------
+    class AutoBridge {
+        private File f(String name) {
+            if (name == null || name.contains("..") || name.startsWith("/")) return null;
+            File x = new File(new File(getFilesDir(), "auto"), name);
+            x.getParentFile().mkdirs();
+            return x;
+        }
+
+        @JavascriptInterface
+        public boolean writeText(String name, String text) {
+            File x = f(name); if (x == null) return false;
+            File tmp = new File(x.getPath() + ".tmp");
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(tmp)) { o.write(text.getBytes("UTF-8")); }
+            catch (Exception e) { return false; }
+            return tmp.renameTo(x);
+        }
+
+        @JavascriptInterface
+        public boolean writeB64(String name, String b64) {
+            File x = f(name); if (x == null) return false;
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(x)) { o.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT)); return true; }
+            catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public String readText(String name) {
+            File x = f(name); if (x == null || !x.exists()) return "";
+            try { return new String(java.nio.file.Files.readAllBytes(x.toPath()), "UTF-8"); } catch (Exception e) { return ""; }
+        }
+
+        @JavascriptInterface
+        public boolean remove(String name) { File x = f(name); return x != null && x.delete(); }
+
+        @JavascriptInterface
+        public String list(String sub) {
+            File d = f(sub); JSONArray a = new JSONArray();
+            String[] names = d == null ? null : d.list();
+            if (names != null) for (String n : names) a.put(n);
+            return a.toString();
         }
     }
 
