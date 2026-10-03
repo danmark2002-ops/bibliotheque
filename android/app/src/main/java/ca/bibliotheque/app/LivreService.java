@@ -52,6 +52,7 @@ public class LivreService extends MediaBrowserService {
     private static final String STYLE_BROWSABLE = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT";
     private static final String STYLE_PLAYABLE = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT";
     private static final int STYLE_GRID = 2;
+    private static final int MAX_TABS = 4; // limite d'onglets d'Android Auto
 
     private MediaSession session;
     private TextToSpeech tts;
@@ -152,14 +153,28 @@ public class LivreService extends MediaBrowserService {
         JSONArray books = cat.optJSONArray("books"); if (books == null) books = new JSONArray();
         JSONArray libs = cat.optJSONArray("libs"); if (libs == null) libs = new JSONArray();
         if (ROOT.equals(parentId)) {
-            // onglets : « Lecture en cours » puis chaque bibliothèque
+            // onglets : « En cours » puis chaque bibliothèque.
+            // Android Auto n'affiche que 4 onglets : au-delà de 3 bibliothèques, elles passent toutes dans l'onglet « Bibliothèques ».
             out.add(folder("recent", "En cours"));
+            if (libs.length() <= MAX_TABS - 1) {
+                for (int i = 0; i < libs.length(); i++) {
+                    JSONObject l = libs.optJSONObject(i);
+                    if (l != null) out.add(folder("lib:" + l.optString("id"), l.optString("name")));
+                }
+            } else {
+                out.add(folder("libs", "Bibliothèques"));
+            }
+            if (books.length() == 0) out.clear();
+            if (out.isEmpty()) out.add(info("Ouvre la Bibliothèque sur ton téléphone pour y ajouter tes livres."));
+        } else if ("libs".equals(parentId)) {
             for (int i = 0; i < libs.length(); i++) {
                 JSONObject l = libs.optJSONObject(i);
                 if (l != null) out.add(folder("lib:" + l.optString("id"), l.optString("name")));
             }
-            if (books.length() == 0) out.clear();
-            if (out.isEmpty()) out.add(info("Ouvre la Bibliothèque sur ton téléphone pour y ajouter tes livres."));
+            out.add(folder("all", "Toutes ensemble"));
+        } else if ("all".equals(parentId)) {
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null) out.add(book(b)); }
+            if (out.isEmpty()) out.add(info("Aucun livre pour l'instant."));
         } else if ("recent".equals(parentId)) {
             List<JSONObject> list = new ArrayList<>();
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optLong("last") > 0) list.add(b); }
@@ -172,6 +187,22 @@ public class LivreService extends MediaBrowserService {
             if (out.isEmpty()) out.add(info("Cette bibliothèque est vide."));
         }
         result.sendResult(out);
+    }
+
+    /** Le téléphone a réécrit le catalogue : l'auto doit recharger ses onglets et leurs livres. */
+    static void catalogChanged() {
+        LivreService s = instance; if (s == null) return;
+        s.main.post(() -> {
+            JSONArray libs = s.catalog().optJSONArray("libs");
+            s.notifyChildrenChanged(ROOT);
+            s.notifyChildrenChanged("recent");
+            s.notifyChildrenChanged("libs");
+            s.notifyChildrenChanged("all");
+            if (libs != null) for (int i = 0; i < libs.length(); i++) {
+                JSONObject l = libs.optJSONObject(i);
+                if (l != null) s.notifyChildrenChanged("lib:" + l.optString("id"));
+            }
+        });
     }
 
     private MediaItem folder(String id, String name) {

@@ -441,7 +441,9 @@ public class MainActivity extends Activity {
             File tmp = new File(x.getPath() + ".tmp");
             try (java.io.FileOutputStream o = new java.io.FileOutputStream(tmp)) { o.write(text.getBytes("UTF-8")); }
             catch (Exception e) { return false; }
-            return tmp.renameTo(x);
+            boolean ok = tmp.renameTo(x);
+            if (ok && "catalog.json".equals(name)) LivreService.catalogChanged();
+            return ok;
         }
 
         @JavascriptInterface
