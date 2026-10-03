@@ -187,13 +187,13 @@ window.LocalAPI = (() => {
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
-  async function upload(file, onp) {
+  async function upload(file, onp, extra = {}) {
     const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
     if (ext === '.doc') throw new Error('Ancien format .doc : enregistre-le en .docx dans Word, puis ajoute-le.');
     const kind = ext === '.pdf' ? 'pdf' : ext === '.docx' ? 'docx' : ['.txt', '.md', '.text'].includes(ext) ? 'txt' : null;
     if (!kind) throw new Error('Formats acceptés : PDF, Word (.docx) ou texte (.txt)');
     const id = rid(); const count = (await all('meta')).length;
-    const meta = { id, title: file.name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Sans titre', author: '', kind, pages: 0, color: PALETTE[count % PALETTE.length], created: now(), position: -count };
+    const meta = { id, title: file.name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Sans titre', author: '', kind, pages: 0, color: PALETTE[count % PALETTE.length], created: now(), position: -count, fname: file.name, fsize: file.size, ...extra };
     onp(30, 'Lecture du fichier…');
     if (kind === 'pdf') {
       const lib = await pdfjs();
@@ -258,6 +258,7 @@ window.LocalAPI = (() => {
         await put('meta', meta); return bookOut(meta);
       }
       if (m === 'DELETE') {
+        if (meta.src) { try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); if (!ig.includes(meta.src)) { ig.push(meta.src); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } } catch {} }
         await del('meta', meta.id); await del('blob', meta.id); await del('prog', meta.id); docs.delete(meta.id);
         const u = coverUrls.get(meta.id); if (u) { URL.revokeObjectURL(u); coverUrls.delete(meta.id); }
         return { ok: true };
@@ -291,5 +292,19 @@ window.LocalAPI = (() => {
     const rec = await get('blob', id);
     return (rec?.pages || []).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
   }
-  return { handle, upload, pageCanvas, paragraphs };
+  // Ce qui est déjà sur l'étagère, pour ne pas importer deux fois le même livre depuis le dossier
+  const clean = (n) => String(n || '').replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim().toLowerCase();
+  async function known() {
+    const src = new Set(), nameSize = new Set(), names = new Set();
+    for (const m of await all('meta')) {
+      if (m.src) src.add(m.src);
+      let fname = m.fname, fsize = m.fsize;
+      if (!fname && m.kind === 'pdf') { const rec = await get('blob', m.id); if (rec?.file) { fname = rec.file.name; fsize = rec.file.size; } }
+      if (fname) { nameSize.add(fname + '|' + fsize); names.add(clean(fname)); }
+      else names.add(clean(m.title)); // anciens livres Word/texte : on compare le titre au nom du fichier
+    }
+    try { for (const x of JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]')) src.add(x); } catch {}
+    return { has: (f) => src.has(f.src) || nameSize.has(f.name + '|' + f.size) || names.has(clean(f.name)) };
+  }
+  return { handle, upload, pageCanvas, paragraphs, known };
 })();

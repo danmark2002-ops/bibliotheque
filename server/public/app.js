@@ -37,6 +37,8 @@ const ICONS = {
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1" fill="currentColor"/><circle cx="3.5" cy="12" r="1" fill="currentColor"/><circle cx="3.5" cy="18" r="1" fill="currentColor"/>',
   shelf: '<rect x="4" y="4" width="4" height="11" rx=".8"/><rect x="10" y="6" width="4" height="9" rx=".8"/><rect x="16" y="3" width="4" height="12" rx=".8"/><path d="M2 19h20"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };
 const icon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
@@ -201,12 +203,16 @@ function renderLibrary() {
     caseEl.firstChild.prepend(h('div', { class: 'empty' },
       h('h3', {}, owner ? 'Tes rayons t\'attendent' : 'Les rayons sont encore vides'),
       h('p', {}, owner ? 'Ajoute un PDF ou un fichier texte. Tu peux aussi glisser des fichiers ici.' : 'Reviens bientôt, de nouveaux livres arrivent.'),
-      owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), 'Ajouter un livre') : null));
+      owner ? h('div', { class: 'actions', style: { justifyContent: 'center' } },
+        h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), 'Ajouter un livre'),
+        window.LocalAPI ? h('button', { class: 'btn', onclick: openFolder }, icon('folder'), 'Choisir un dossier') : null) : null));
   }
   const ready = S.books.filter((b) => b.status === 'ready');
   const current = ready.filter((b) => b.progress && b.progress.page < b.pages).sort((a, b) => b.progress.last - a.progress.last)[0];
   const actions = h('div', { class: 'actions' },
     owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter un livre')) : null,
+    owner && window.LocalAPI ? h('button', { class: 'btn', title: 'Dossier source', onclick: openFolder }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
+    owner && window.LocalAPI && folderInfo() ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: 'Actualiser le dossier', 'aria-label': 'Actualiser le dossier', onclick: () => scanFolder() }, icon('refresh')) : null,
     owner && !window.LocalAPI ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
     owner && !window.LocalAPI ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     S.books.length ? h('button', { class: 'btn icon', title: asList ? 'Voir l\'étagère' : 'Voir la liste', onclick: () => { S.view = asList ? 'shelf' : 'list'; store.set('view', S.view); renderLibrary(); } }, icon(asList ? 'shelf' : 'list')) : null,
@@ -267,6 +273,98 @@ async function uploadFiles(files) {
     } catch (e) { $('span', box).textContent = e.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
   }
   await loadBooks(); renderLibrary();
+}
+// ================= Dossier source =================
+// Un dossier choisi une fois ; le bouton « Actualiser » le rescanne et ajoute seulement les nouveaux livres.
+const FOLDER = { busy: false };
+const hasNativeFolder = () => !!window.AndroidFolder;
+function folderInfo() {
+  if (hasNativeFolder()) { try { const j = AndroidFolder.info(); return j ? JSON.parse(j) : null; } catch { return null; } }
+  return store.get('folder', null); // navigateur : on garde seulement le nom, il faudra rechoisir le dossier
+}
+function nativeCall(cb, start) {
+  return new Promise((res) => { window[cb] = (j) => { window[cb] = null; try { res(j ? JSON.parse(j) : null); } catch { res(null); } }; start(); });
+}
+function pickWebFolder() {
+  return new Promise((res) => {
+    const inp = h('input', { type: 'file', multiple: true, webkitdirectory: true });
+    inp.style.display = 'none'; document.body.append(inp);
+    inp.onchange = () => { const files = [...inp.files]; inp.remove(); res(files); };
+    inp.click();
+  });
+}
+const BOOK_EXT = /\.(pdf|docx|txt|md)$/i;
+async function chooseFolder() {
+  if (hasNativeFolder()) {
+    const r = await nativeCall('__folderPicked', () => AndroidFolder.pick());
+    if (!r) return;
+    store.set('folderLast', 0); renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
+    return scanFolder();
+  }
+  const files = await pickWebFolder(); if (!files.length) return;
+  const name = (files[0].webkitRelativePath || '').split('/')[0] || 'Dossier';
+  store.set('folder', { name }); renderLibrary();
+  return scanFolder(files);
+}
+async function scanFolder(webFiles) {
+  if (FOLDER.busy) return toast('Recherche déjà en cours…');
+  let entries;
+  if (hasNativeFolder()) {
+    FOLDER.busy = true; renderLibrary();
+    const box = h('div', { class: 'up' }, h('b', {}, folderInfo()?.name || 'Dossier'), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+    $('#uploads')?.append(box);
+    const r = await nativeCall('__folderScanned', () => AndroidFolder.scan());
+    box.remove();
+    if (!r || r.error) { FOLDER.busy = false; renderLibrary(); return toast(r?.error || 'Lecture du dossier impossible'); }
+    entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, mtime: f.mtime, get: async () => {
+      const resp = await fetch('/__dossier?id=' + encodeURIComponent(f.id));
+      if (!resp.ok) throw new Error('Fichier illisible');
+      return new File([await resp.blob()], f.name, { lastModified: f.mtime || Date.now() });
+    } }));
+  } else {
+    if (!webFiles) { webFiles = await pickWebFolder(); if (!webFiles.length) return; }
+    entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }));
+    FOLDER.busy = true; renderLibrary();
+  }
+  try {
+    const k = await LocalAPI.known();
+    const fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
+    store.set('folderLast', Date.now());
+    if (!fresh.length) return toast(entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier');
+    let ok = 0, fail = 0;
+    for (let i = 0; i < fresh.length; i++) {
+      const e = fresh[i];
+      const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, `Dossier : livre ${i + 1} sur ${fresh.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+      $('#uploads')?.append(box);
+      try {
+        const file = await e.get();
+        await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src });
+        box.remove(); ok++;
+        if (ok % 5 === 0) { await loadBooks(); renderLibrary(); } // l'étagère se remplit pendant l'import
+      } catch (err) { fail++; $('span', box).textContent = err.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
+    }
+    toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
+  } finally {
+    FOLDER.busy = false; await loadBooks(); renderLibrary();
+  }
+}
+function openFolder() {
+  const f = folderInfo(); const last = store.get('folderLast', 0);
+  let ignored = []; try { ignored = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); } catch {}
+  const close = sheet('Dossier source', h('div', {},
+    h('p', { class: 'muted' }, f
+      ? `Les livres PDF, Word et texte de ce dossier (et de ses sous-dossiers) sont ajoutés à l'étagère. Touche « Actualiser » pour aller chercher les nouveaux : ceux déjà présents ne sont pas ajoutés deux fois.`
+      : `Choisis un dossier de ton téléphone. Tous ses livres PDF, Word et texte seront ajoutés à l'étagère, puis le bouton « Actualiser » ira chercher les nouveaux quand tu voudras.`),
+    f ? h('div', { class: 'field' }, 'Dossier', h('p', { style: { margin: '4px 0 0', fontSize: '17px' } }, f.name)) : null,
+    f ? h('p', { class: 'muted' }, 'Dernière recherche : ' + (last ? lastRead(last) : 'jamais')) : null,
+    !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
+    ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} du dossier retiré${ignored.length > 1 ? 's' : ''} de l'étagère ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
+      h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
+    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+      f ? h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent sur l\'étagère.')) return; if (hasNativeFolder()) AndroidFolder.forget(); store.set('folder', null); close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier') : h('span'),
+      h('div', { class: 'actions' },
+        h('button', { class: f ? 'btn' : 'btn primary', onclick: () => { close(); chooseFolder(); } }, icon('folder'), f ? 'Changer' : 'Choisir un dossier'),
+        f ? h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(); } }, icon('refresh'), 'Actualiser') : null))));
 }
 let dragDepth = 0;
 window.addEventListener('dragenter', (e) => { if (S.me?.role !== 'owner' || !e.dataTransfer?.types?.includes('Files')) return; dragDepth++; $('#dz')?.classList.add('show'); });
