@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'ca.bibliotheque.app'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId 'ca.bibliotheque.app'
-        minSdk 24
+        minSdk 26
         targetSdk 34
-        versionCode 8
-        versionName '1.7'
+        versionCode 9
+        versionName '1.8'
     }
 
     signingConfigs {
@@ -34,4 +34,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    // IA intégrée au téléphone (Gemini Nano, via AICore) : gratuite, sans Internet, sans compte
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
 }

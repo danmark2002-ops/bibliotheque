@@ -839,7 +839,7 @@ function mdToHtml(md) {
     const line = raw.trim();
     let m;
     if (!line) { flush(); continue; }
-    if ((m = line.match(/^#{1,6}\s+(.*)$/))) { flush(); out += `<h4>${inl(m[1])}</h4>`; continue; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flush(); const tag = m[1].length >= 3 ? 'h5' : 'h4'; out += `<${tag}>${inl(m[2])}</${tag}>`; continue; }
     if ((m = line.match(/^[-•*]\s+(.*)$/))) { if (list !== 'ul') { flush(); out += '<ul>'; list = 'ul'; } out += `<li>${inl(m[1])}</li>`; continue; }
     if ((m = line.match(/^\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { flush(); out += '<ol>'; list = 'ol'; } out += `<li>${inl(m[1])}</li>`; continue; }
     flush(); out += `<p>${inl(line)}</p>`;
@@ -855,7 +855,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)}${s.truncated ? ' · livre trop long, résumé sur le début' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -869,14 +869,168 @@ function summaryChoices(b) {
   const close = sheet('Résumé IA', h('div', {},
     h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
     h('div', { class: 'aiopt' },
-      h('h4', {}, 'Avec ton application d\'IA'),
-      h('p', {}, 'Claude, Gemini, ChatGPT… Le livre lui est envoyé avec une demande de résumé déjà écrite. Gratuit, rien à configurer.'),
-      h('button', { class: 'btn primary', onclick: () => { close(); openWith(b, 'ai', SUMMARY_PROMPT); } }, icon('share'), 'Choisir l\'application')),
+      h('h4', {}, 'Résumé gratuit'),
+      h('p', {}, window.AndroidAI
+        ? 'Fait sur ton téléphone, sans Internet ni compte. Sur les téléphones récents (Samsung S24/S25, Pixel 9…), c\'est l\'IA de Google intégrée (Gemini Nano) qui l\'écrit. Sinon, un résumé automatique choisit les passages clés du livre.'
+        : 'Un résumé automatique choisit les passages clés du livre, directement sur l\'appareil.'),
+      h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')),
     h('div', { class: 'aiopt' },
-      h('h4', {}, 'Ici, avec Claude'),
-      h('p', {}, `Le résumé s'affiche dans la Bibliothèque et reste gardé avec le livre. Il faut une clé d'API Claude (console.anthropic.com → API Keys), facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
-      h('label', { class: 'field' }, 'Clé d\'API Claude', keyIn),
-      h('button', { class: 'btn primary', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Faire le résumé'))));
+      h('h4', {}, 'Avec ton application d\'IA'),
+      h('p', {}, 'Claude, Gemini, ChatGPT… Le livre lui est envoyé avec une demande de résumé déjà écrite.'),
+      h('button', { class: 'btn', onclick: () => { close(); openWith(b, 'ai', SUMMARY_PROMPT); } }, icon('share'), 'Choisir l\'application')),
+    h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
+      h('div', { class: 'aiopt', style: { marginTop: '10px' } },
+        h('h4', {}, 'Avec Claude (payant)'),
+        h('p', {}, `Résumé plus poussé, avec une clé d'API Claude (console.anthropic.com → API Keys), facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
+        h('label', { class: 'field' }, 'Clé d\'API Claude', keyIn),
+        h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude')))));
+}
+
+// ---------- Résumé automatique (sans IA, fonctionne partout) ----------
+const STOP = new Set(('a à au aux avec ce ces cet cette c ça d dans de des du elle elles en et eux il ils je j la le les leur leurs l lui ma mais me même mes moi mon ne n nos notre nous on ou où par pas pour qu que qui sa se ses son sur ta te tes toi ton tu un une vos votre vous y été être est sont était étaient a ai as avons avez ont avait avaient sera seront fait faire plus moins très tout tous toute toutes aussi ainsi alors comme donc car si sans sous entre vers chez dont cela celui celle ceux celles leur peut peuvent bien encore autre autres deux trois un une non oui là ici cet chaque quand comment pourquoi lorsque puis après avant depuis pendant tandis selon contre the of and to in is that for it as with be on are this by was'.split(' ')));
+const words = (t) => (t.toLowerCase().match(/[a-zà-ÿœæ][a-zà-ÿœæ'-]{2,}/g) || []).map((w) => w.replace(/^[a-z]'/, '')).filter((w) => w.length > 3 && !STOP.has(w));
+function splitSentences(t) {
+  return t.replace(/^#{1,6}\s.*$/gm, '\n').replace(/\[page \d+\]/g, ' ').split(/\n{2,}/).flatMap((para) => para.replace(/\s+/g, ' ').split(/(?<=[.!?…»])\s+(?=[A-ZÀ-ÖØ-Ý«"(])/)).map((x) => x.trim()).filter((x) => x.length > 40 && x.length < 600 && /[a-zà-ÿ]{3}/.test(x) && (x.match(/[a-zà-ÿ]/gi) || []).length / x.length > .6);
+}
+function rankSentences(sents, freq) {
+  return sents.map((x, i) => { const w = words(x); const sc = w.reduce((a, k) => a + (freq.get(k) || 0), 0) / Math.pow(Math.max(8, w.length), .75); return { x, i, sc }; });
+}
+// coupe le livre en parties : titres (Word/texte) sinon tranches de pages
+function bookParts(text, title) {
+  const heads = [...text.matchAll(/^#\s+(.{2,90})$/gm)];
+  if (heads.length >= 3 && heads.length <= 60) {
+    const parts = []; for (let i = 0; i < heads.length; i++) parts.push({ name: heads[i][1].trim(), text: text.slice(heads[i].index, i + 1 < heads.length ? heads[i + 1].index : undefined) });
+    return parts.filter((p) => p.text.length > 300);
+  }
+  const pages = text.split(/\[page (\d+)\]/); // ['', '1', txt, '2', txt…]
+  if (pages.length > 3) {
+    const list = []; for (let i = 1; i < pages.length; i += 2) list.push({ n: +pages[i], t: pages[i + 1] || '' });
+    const k = Math.min(8, Math.max(2, Math.round(list.length / 15))); const per = Math.ceil(list.length / k); const parts = [];
+    for (let i = 0; i < list.length; i += per) { const sl = list.slice(i, i + per); parts.push({ name: `Pages ${sl[0].n} à ${sl.at(-1).n}`, text: sl.map((x) => x.t).join('\n') }); }
+    return parts;
+  }
+  const k = Math.min(6, Math.max(1, Math.round(text.length / 15000))); const per = Math.ceil(text.length / k); const parts = [];
+  for (let i = 0; i < k; i++) parts.push({ name: `Partie ${i + 1}`, text: text.slice(i * per, (i + 1) * per) });
+  return parts;
+}
+function autoSummary(text, title) {
+  const all = splitSentences(text);
+  if (all.length < 3) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
+  const freq = new Map(); for (const w of words(text)) freq.set(w, (freq.get(w) || 0) + 1);
+  const norm = (x) => x.toLowerCase().replace(/[^a-zà-ÿ0-9]+/g, ' ').trim();
+  const seen = new Map(); for (const x of all) seen.set(norm(x), (seen.get(norm(x)) || 0) + 1); // phrases répétées dans le livre
+  const used = []; // tout ce qui est déjà dans le résumé : pas de redite
+  const wset = (x) => new Set(words(x));
+  const similar = (a, b) => { let n = 0; for (const w of a) if (b.has(w)) n++; return n / Math.max(1, Math.min(a.size, b.size)); };
+  const pick = (sents, n) => {
+    const r = rankSentences(sents, freq).map((o) => ({ ...o, sc: o.sc / (seen.get(norm(o.x)) || 1), w: wset(o.x) })).sort((a, b) => b.sc - a.sc);
+    const out = [];
+    for (const o of r) { if (out.length >= n) break; if (used.some((u) => similar(o.w, u) > .6)) continue; out.push(o); used.push(o.w); }
+    return out.sort((a, b) => a.i - b.i).map((o) => o.x);
+  };
+  const parts = bookParts(text, title).map((p) => ({ ...p, sents: splitSentences(p.text) })).filter((p) => p.sents.length);
+  // L'essentiel : la phrase la plus forte de chaque partie, réparties sur tout le livre
+  const step = Math.max(1, Math.ceil(parts.length / 5));
+  let ess = []; for (let i = 0; i < parts.length && ess.length < 5; i += step) ess.push(...pick(parts[i].sents, 1));
+  if (ess.length < 3) ess.push(...pick(all, 5 - ess.length));
+  const top = [...freq.entries()].filter(([w]) => !title.toLowerCase().includes(w)).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([w]) => w);
+  let md = `## L'essentiel\n${ess.map((x) => '- ' + x).join('\n')}\n\n## Par parties\n`;
+  for (const part of parts) { const got = pick(part.sents, part.sents.length > 40 ? 3 : 2); if (got.length) md += `### ${part.name}\n${got.map((x) => '- ' + x).join('\n')}\n`; }
+  md += `\n## Mots-clés\n${top.join(' · ')}`;
+  return md;
+}
+// réduit un texte trop long en gardant ses phrases les plus importantes (dans l'ordre)
+function condense(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  const freq = new Map(); for (const w of words(text)) freq.set(w, (freq.get(w) || 0) + 1);
+  const block = 20000; let out = '';
+  for (let i = 0; i < text.length; i += block) {
+    const piece = text.slice(i, i + block); const budget = Math.floor(piece.length * maxChars / text.length);
+    const r = rankSentences(splitSentences(piece), freq).sort((a, b) => b.sc - a.sc); const keep = []; let n = 0;
+    for (const o of r) { if (n + o.x.length > budget) continue; keep.push(o); n += o.x.length + 1; }
+    out += keep.sort((a, b) => a.i - b.i).map((o) => o.x).join(' ') + '\n\n';
+  }
+  return out;
+}
+
+// ---------- IA du téléphone (Gemini Nano) ----------
+function nanoStatus() { return new Promise((res) => { window.__aiStatus = (s) => { window.__aiStatus = null; res(s); }; AndroidAI.status(); }); }
+function nanoDownload(onp) {
+  return new Promise((res, rej) => { window.__aiDownload = (s) => { if (s.startsWith('progress:')) return onp(+s.slice(9)); window.__aiDownload = null; s === 'done' ? res() : rej(new Error('Téléchargement de l\'IA impossible : ' + s.slice(6))); }; AndroidAI.download(); });
+}
+let nanoSeq = 0;
+function nanoAsk(prompt) {
+  const id = 'q' + (++nanoSeq);
+  return new Promise((res, rej) => { window.__aiResult = (j) => { const r = JSON.parse(j); if (r.id !== id) return; window.__aiResult = null; r.error ? rej(new Error(r.error)) : res((r.text || '').trim()); }; AndroidAI.generate(id, prompt); });
+}
+async function nanoAskRetry(prompt, say) {
+  for (let t = 0; ; t++) {
+    try { const r = await nanoAsk(prompt); if (r) return r; throw new Error('réponse vide'); }
+    catch (e) {
+      if (t >= 3) throw new Error('L\'IA du téléphone n\'a pas pu répondre (' + e.message + '). Garde l\'application ouverte pendant le résumé, puis réessaie : il reprendra où il en était.');
+      say(`L'IA du téléphone est occupée, nouvel essai dans ${10 * (t + 1)} s…`); await new Promise((r) => setTimeout(r, 10000 * (t + 1)));
+    }
+  }
+}
+const CHUNK = 6000, MAX_CHUNKS = 24;
+function chunkText(text) {
+  const out = []; let cur = '';
+  for (const para of text.split(/\n{2,}|(?=\[page \d+\])/)) {
+    if (cur.length + para.length > CHUNK && cur) { out.push(cur); cur = ''; }
+    if (para.length > CHUNK) { for (let i = 0; i < para.length; i += CHUNK) out.push(para.slice(i, i + CHUNK)); continue; }
+    cur += (cur ? '\n\n' : '') + para;
+  }
+  if (cur.trim()) out.push(cur); return out.filter((c) => c.replace(/\[page \d+\]|\s/g, '').length > 100);
+}
+async function nanoSummary(b, text, say) {
+  const who = `« ${b.title} »${b.author ? ' de ' + b.author : ''}`;
+  const chunks = chunkText(condense(text, CHUNK * MAX_CHUNKS));
+  const key = 'sumwork.' + b.id; let work = store.get(key, null);
+  if (!work || work.n !== chunks.length) work = { n: chunks.length, parts: [] };
+  for (let i = work.parts.length; i < chunks.length; i++) {
+    say(`IA du téléphone : lecture de la partie ${i + 1} sur ${chunks.length}…`);
+    const r = await nanoAskRetry(`Voici un extrait (partie ${i + 1} sur ${chunks.length}) du livre ${who}.\nRésume-le en français en 4 à 6 phrases claires et fidèles. Garde les idées, les concepts et les noms importants. N'ajoute rien qui n'est pas dans l'extrait, et ne commente pas.\n\nExtrait :\n${chunks[i].replace(/\[page \d+\]/g, '')}`, say);
+    work.parts.push(r); store.set(key, work);
+  }
+  let parts = work.parts;
+  while (parts.join('\n\n').length > CHUNK) { // fusion par étapes si les résumés partiels sont trop longs
+    const groups = []; let cur = [];
+    for (const x of parts) { if ((cur.join('\n\n') + x).length > CHUNK && cur.length) { groups.push(cur); cur = []; } cur.push(x); }
+    if (cur.length) groups.push(cur);
+    if (groups.length === parts.length) break;
+    const next = [];
+    for (let g = 0; g < groups.length; g++) { say(`IA du téléphone : assemblage ${g + 1} sur ${groups.length}…`); next.push(await nanoAskRetry(`Voici les résumés de parties successives du livre ${who}. Fusionne-les en un seul résumé en français de 6 à 10 phrases, fidèle et dans l'ordre, sans commentaire.\n\n${groups[g].join('\n\n')}`, say)); }
+    parts = next;
+  }
+  say('IA du téléphone : rédaction du résumé final…');
+  const fin = await nanoAskRetry(`Voici les résumés, dans l'ordre, des parties du livre ${who}.\nÉcris en français un résumé structuré du livre entier, avec exactement ces titres :\n## L'essentiel\n(3 ou 4 phrases sur l'idée centrale)\n## Le déroulement\n(une ligne par grande étape du livre)\n## Les idées clés\n(une liste de 4 à 6 points)\n## À retenir\n(une liste de 5 points)\nReste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Pas de préambule.\n\nRésumés des parties :\n${parts.map((x, i) => `${i + 1}. ${x}`).join('\n\n')}`, say);
+  store.set(key, null);
+  return fin;
+}
+
+async function makeFreeSummary(b) {
+  const box = h('div', { class: 'up' }, h('b', {}, 'Résumé : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+  $('#uploads')?.append(box);
+  const say = (t) => { $('span', box).textContent = t; };
+  try {
+    const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
+    if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
+    let text = null, model = 'auto';
+    if (window.AndroidAI) {
+      say('Recherche de l\'IA du téléphone…');
+      let st = await nanoStatus();
+      if (st === 'downloadable' || st === 'downloading') {
+        say('Préparation de l\'IA du téléphone (téléchargement unique par Android)…');
+        try { await nanoDownload((bytes) => say(`Téléchargement de l'IA du téléphone… ${Math.round(bytes / 1e6)} Mo`)); st = 'available'; } catch (e) { st = 'unavailable'; }
+      }
+      if (st === 'available') { text = await nanoSummary(b, t.text, say); model = 'gemini-nano'; }
+    }
+    if (!text) { say('Résumé automatique…'); await new Promise((r) => setTimeout(r, 30)); text = autoSummary(t.text, b.title); }
+    const summary = { text, date: Date.now(), model, truncated: t.truncated };
+    await post('/api/books/' + b.id, { summary }, 'PATCH');
+    box.remove(); await loadBooks(); renderLibrary();
+    openSummary(S.books.find((x) => x.id === b.id) || { ...b, summary });
+  } catch (e) { say(e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 12000); }
 }
 function callClaude(key, body) {
   if (window.AndroidOpen?.claude) return new Promise((res) => { window.__claudeDone = (j) => { window.__claudeDone = null; try { res(JSON.parse(j)); } catch { res({ status: 0, body: '' }); } }; AndroidOpen.claude(key, JSON.stringify(body)); });

@@ -70,11 +70,12 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
-        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.7");
+        s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/1.8");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");
         web.addJavascriptInterface(new OpenBridge(), "AndroidOpen");
+        web.addJavascriptInterface(new AiBridge(), "AndroidAI");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -405,6 +406,72 @@ public class MainActivity extends Activity {
                 }
                 js("__claudeDone", res.toString());
             }).start();
+        }
+    }
+
+    // ---------- IA intégrée au téléphone : Gemini Nano (ML Kit GenAI, API « Prompt ») ----------
+    private com.google.mlkit.genai.prompt.java.GenerativeModelFutures nano;
+    private final java.util.concurrent.ExecutorService aiExec = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    private com.google.mlkit.genai.prompt.java.GenerativeModelFutures nano() {
+        if (nano == null) nano = com.google.mlkit.genai.prompt.java.GenerativeModelFutures.from(com.google.mlkit.genai.prompt.Generation.INSTANCE.getClient());
+        return nano;
+    }
+
+    private static String errText(Throwable e) {
+        Throwable c = e;
+        while (c.getCause() != null && c.getCause() != c && !(c instanceof com.google.mlkit.genai.common.GenAiException)) c = c.getCause();
+        String code = c instanceof com.google.mlkit.genai.common.GenAiException ? " [" + ((com.google.mlkit.genai.common.GenAiException) c).getErrorCode() + "]" : "";
+        return String.valueOf(c.getMessage()) + code;
+    }
+
+    class AiBridge {
+        /** Réponse : window.__aiStatus("available" | "downloadable" | "downloading" | "unavailable" | "error:…") */
+        @JavascriptInterface
+        public void status() {
+            aiExec.execute(() -> {
+                String r;
+                try {
+                    int st = nano().checkStatus().get();
+                    r = st == com.google.mlkit.genai.common.FeatureStatus.AVAILABLE ? "available"
+                      : st == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE ? "downloadable"
+                      : st == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING ? "downloading" : "unavailable";
+                } catch (Throwable e) { r = "unavailable"; }
+                js("__aiStatus", r);
+            });
+        }
+
+        /** Télécharge le modèle (fait par Android, une seule fois). Progression : window.__aiDownload("progress:octets" | "done" | "error:…") */
+        @JavascriptInterface
+        public void download() {
+            aiExec.execute(() -> {
+                try {
+                    nano().download(new com.google.mlkit.genai.common.DownloadCallback() {
+                        @Override public void onDownloadProgress(long bytes) { js("__aiDownload", "progress:" + bytes); }
+                        @Override public void onDownloadFailed(com.google.mlkit.genai.common.GenAiException e) { js("__aiDownload", "error:" + errText(e)); }
+                        @Override public void onDownloadCompleted() { js("__aiDownload", "done"); }
+                    }).get();
+                    js("__aiDownload", "done");
+                } catch (Throwable e) { js("__aiDownload", "error:" + errText(e)); }
+            });
+        }
+
+        /** Une demande à l'IA. Réponse : window.__aiResult({id, text} ou {id, error}) */
+        @JavascriptInterface
+        public void generate(String id, String prompt) {
+            aiExec.execute(() -> {
+                JSONObject res = new JSONObject();
+                try {
+                    res.put("id", id);
+                    com.google.mlkit.genai.prompt.GenerateContentResponse r = nano().generateContent(prompt).get();
+                    StringBuilder sb = new StringBuilder();
+                    if (r.getCandidates() != null && !r.getCandidates().isEmpty() && r.getCandidates().get(0).getText() != null) sb.append(r.getCandidates().get(0).getText());
+                    res.put("text", sb.toString());
+                } catch (Throwable e) {
+                    try { res.put("error", errText(e)); } catch (Exception ignored) { }
+                }
+                js("__aiResult", res.toString());
+            });
         }
     }
 
