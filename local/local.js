@@ -185,6 +185,7 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
+      fav: !!m.fav, state: m.state || '', cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   async function upload(file, onp, extra = {}) {
@@ -234,6 +235,8 @@ window.LocalAPI = (() => {
   }
 
   // ---------- Routeur (même forme que l'API du serveur) ----------
+  const loadCols = () => { try { return JSON.parse(localStorage.getItem('bib.collections') || '[]'); } catch { return []; } };
+  const saveCols = (c) => { try { localStorage.setItem('bib.collections', JSON.stringify(c)); } catch {} };
   const libName = () => { try { return localStorage.getItem('bib.libname') || 'Ma Bibliothèque'; } catch { return 'Ma Bibliothèque'; } };
   async function handle(path, opts = {}) {
     const m = (opts.method || 'GET').toUpperCase();
@@ -255,6 +258,10 @@ window.LocalAPI = (() => {
       const meta = await get('meta', mm[1]); if (!meta) throw new Error('Livre introuvable');
       if (m === 'PATCH') {
         Object.assign(meta, { title: String(body.title ?? meta.title).slice(0, 200), author: String(body.author ?? meta.author).slice(0, 120), color: String(body.color ?? meta.color) });
+        if (body.fav !== undefined) meta.fav = !!body.fav;
+        if (body.state !== undefined) meta.state = ['alire', 'lu'].includes(body.state) ? body.state : '';
+        if (Array.isArray(body.cols)) meta.cols = [...new Set(body.cols.map(String))];
+        if (body.trashed !== undefined) meta.trashed = body.trashed ? now() : 0;
         await put('meta', meta); return bookOut(meta);
       }
       if (m === 'DELETE') {
@@ -269,10 +276,32 @@ window.LocalAPI = (() => {
       const meta = await get('meta', String(body.book || '')); if (!meta) throw new Error('Livre introuvable');
       if (meta.kind !== 'pdf' && Number(body.pages) > 0 && Number(body.pages) !== meta.pages) { meta.pages = Number(body.pages); await put('meta', meta); }
       const page = Math.max(1, Math.min(meta.pages || 1, Number(body.page) || 1)); const t = now();
+      let changed = false;
+      if (body.type === 'open' && meta.state === 'alire') { meta.state = ''; changed = true; }
+      if (body.type === 'page' && meta.pages > 1 && page >= meta.pages && meta.state !== 'lu') { meta.state = 'lu'; changed = true; }
+      if (changed) await put('meta', meta);
       const ex = await get('prog', meta.id);
       await put('prog', { book: meta.id, page: body.type === 'open' && body.page == null && ex ? ex.page : page, max_page: Math.max(ex?.max_page || 0, page),
         opens: (ex?.opens || 0) + (body.type === 'open' ? 1 : 0), first: ex?.first || t, last: t, pos: body.pos ?? ex?.pos });
       return { ok: true };
+    }
+    if (path === '/api/collections') {
+      const cols = loadCols();
+      if (m === 'POST') {
+        const name = String(body.name || '').trim().slice(0, 60); if (!name) throw new Error('Donne un nom à la collection');
+        const c = { id: rid(), name, created: now() }; cols.push(c); saveCols(cols); return c;
+      }
+      return cols;
+    }
+    if ((mm = path.match(/^\/api\/collections\/([\w-]+)$/))) {
+      const cols = loadCols(); const c = cols.find((x) => x.id === mm[1]); if (!c) throw new Error('Collection introuvable');
+      if (m === 'PATCH') { c.name = String(body.name || c.name).trim().slice(0, 60) || c.name; saveCols(cols); return c; }
+      if (m === 'DELETE') {
+        saveCols(cols.filter((x) => x.id !== c.id));
+        for (const mt of await all('meta')) if (mt.cols?.includes(c.id)) { mt.cols = mt.cols.filter((x) => x !== c.id); await put('meta', mt); }
+        return { ok: true };
+      }
+      return c;
     }
     if (path === '/api/settings' && m === 'PATCH') {
       if (body.library) { try { localStorage.setItem('bib.libname', String(body.library).slice(0, 80)); } catch {} }

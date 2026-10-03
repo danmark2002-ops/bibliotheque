@@ -39,6 +39,18 @@ const ICONS = {
   shelf: '<rect x="4" y="4" width="4" height="11" rx=".8"/><rect x="10" y="6" width="4" height="9" rx=".8"/><rect x="16" y="3" width="4" height="12" rx=".8"/><path d="M2 19h20"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+  starFill: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  checks: '<path d="M2.5 12.5l4 4 8-9"/><path d="M11 15.5l1 1 9-10"/>',
+  collection: '<path d="M5 4v16M9 4v16"/><path d="M13.5 5.2l4.6 14.6"/><path d="M3 20h18"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  restore: '<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+  reading: '<path d="M2.5 6c3-1.5 6.5-1.5 9.5.5 3-2 6.5-2 9.5-.5v13c-3-1.5-6.5-1.5-9.5.5-3-2-6.5-2-9.5-.5z"/><path d="M12 6.5v13"/>',
+  dots: '<circle cx="12" cy="5.5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="18.5" r="1.3" fill="currentColor"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };
 const icon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
@@ -85,7 +97,7 @@ async function boot() {
   await loadBooks();
   renderLibrary();
 }
-async function loadBooks() { S.books = await api('/api/books'); }
+async function loadBooks() { S.books = await api('/api/books'); await loadCols(); }
 
 // ================= Connexion =================
 function renderAuth() {
@@ -150,11 +162,13 @@ function bookEl(b) {
   const pct = b.progress && b.pages ? Math.round((b.progress.page / b.pages) * 100) : 0;
   const el = h('button', { class: 'book', title: b.title, 'aria-label': `${b.title}${b.author ? ', ' + b.author : ''}` }, coverEl(b));
   const cv = $('.cover', el);
-  if (!b.progress && b.status === 'ready') cv.append(h('span', { class: 'ribbon', title: 'Nouveau' }));
+  if (!b.progress && b.status === 'ready' && !b.state) cv.append(h('span', { class: 'ribbon', title: 'Nouveau' }));
+  if (b.fav) cv.append(h('span', { class: 'fav-badge', title: 'Favori' }, icon('starFill')));
   if (b.status === 'processing') cv.append(h('span', { class: 'status-pill' }, 'Préparation…'));
   if (b.status === 'error') cv.append(h('span', { class: 'status-pill' }, 'Fichier illisible'));
-  el.append(h('span', { class: 'under' }, h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()), pct ? h('span', { class: 'tag pct' }, pct >= 99 ? 'Terminé' : pct + ' %') : null));
-  el.addEventListener('click', () => { if (S.organize) return editBook(b); if (b.status === 'ready') openBook(b, el); });
+  el.append(h('span', { class: 'under' }, h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()),
+    b.state === 'lu' ? h('span', { class: 'tag st' }, 'Lu') : b.state === 'alire' ? h('span', { class: 'tag st' }, 'À lire') : pct ? h('span', { class: 'tag pct' }, pct >= 99 ? 'Terminé' : pct + ' %') : null));
+  el.addEventListener('click', () => { if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
   ownerGestures(el, b);
   return el;
 }
@@ -172,62 +186,243 @@ function listEl(books) {
   for (const b of books) {
     const pr = b.progress; const pct = pr && b.pages ? Math.min(100, Math.round((pr.page / b.pages) * 100)) : 0;
     const thumb = h('div', { class: 'thumb' }, coverEl(b));
-    const row = h('button', { class: 'brow', title: b.title },
+    const row = h('div', { class: 'brow', role: 'button', tabindex: '0', title: b.title },
       thumb,
       h('div', { class: 'binfo' },
-        h('div', { class: 'btitle' }, b.title),
+        h('div', { class: 'btitle' }, b.fav ? h('span', { class: 'tstar' }, icon('starFill')) : null, b.title),
         h('div', { class: 'bsub' }, b.author || '\u00a0'),
         h('div', { class: 'bbar' }, h('i', { style: { width: pct + '%' } })),
         h('div', { class: 'bmeta' },
           h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()),
-          h('span', {}, pr ? (pct >= 99 ? 'Terminé' : `Page ${pr.page} sur ${b.pages} · ${pct} %`) : `${b.pages} pages · pas encore lu`)),
-        h('div', { class: 'blast' }, pr ? `Dernière lecture : ${lastRead(pr.last)}` : 'Jamais ouvert')));
-    row.addEventListener('click', () => { if (S.organize) return editBook(b); if (b.status === 'ready') openBook(b, thumb); });
+          h('span', {}, pr ? (pct >= 99 ? 'Terminé' : `Page ${pr.page} sur ${b.pages} · ${pct} %`) : `${b.pages} page${b.pages > 1 ? "s" : ""} · pas encore lu`)),
+        h('div', { class: 'blast' }, b.trashed ? `À la poubelle depuis ${lastRead(b.trashed)}` : pr ? `Dernière lecture : ${lastRead(pr.last)}` : 'Jamais ouvert'),
+        S.me.role === 'owner' && window.LocalAPI ? quickBar(b) : null));
+    row.addEventListener('click', (e) => { if (e.target.closest('.qbar')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, thumb); });
     ownerGestures(row, b);
     list.append(row);
   }
   return list;
 }
+// ================= Rayons : menu, tri, favoris, collections =================
+const NAV = {
+  reading: ['Lecture en cours', 'reading'], all: ['Tous les livres', 'book'], fav: ['Favoris', 'star'],
+  alire: ['À lire', 'clock'], lu: ['Déjà lu', 'checks'], authors: ['Auteurs', 'person'], trash: ['Poubelle', 'trash'],
+};
+const FMT = { pdf: 'PDF', docx: 'Word', txt: 'Texte' };
+const SORTS = { recent: 'Ajout récent', title: 'Titre', author: 'Auteur', last: 'Dernière lecture' };
+S.nav = store.get('nav', { k: 'all' }); S.sort = store.get('sort', 'recent'); S.cols = [];
+const authorOf = (b) => (b.author || '').trim() || 'Auteur inconnu';
+const sameNav = (a, b) => a.k === b.k && (a.v || '') === (b.v || '');
+function navTitle(nav = S.nav) {
+  if (nav.k === 'author') return nav.v;
+  if (nav.k === 'col') return S.cols.find((c) => c.id === nav.v)?.name || 'Collection';
+  if (nav.k === 'fmt') return FMT[nav.v] || nav.v;
+  return (NAV[nav.k] || NAV.all)[0];
+}
+function inNav(b, nav = S.nav) {
+  if (nav.k === 'trash') return !!b.trashed;
+  if (b.trashed) return false;
+  switch (nav.k) {
+    case 'reading': return !!b.progress && b.state !== 'lu';
+    case 'fav': return b.fav;
+    case 'alire': return b.state === 'alire';
+    case 'lu': return b.state === 'lu';
+    case 'author': return authorOf(b) === nav.v;
+    case 'col': return (b.cols || []).includes(nav.v);
+    case 'fmt': return b.kind === nav.v;
+    default: return true;
+  }
+}
+const frCmp = (a, b) => String(a).localeCompare(String(b), 'fr', { sensitivity: 'base', numeric: true });
+const authorCmp = (a, b) => (a === 'Auteur inconnu') - (b === 'Auteur inconnu') || frCmp(a, b);
+function sortBooks(list) {
+  const s = S.nav.k === 'reading' && S.sort === 'recent' ? 'last' : S.sort;
+  const by = {
+    title: (a, b) => frCmp(a.title, b.title),
+    author: (a, b) => authorCmp(authorOf(a), authorOf(b)) || frCmp(a.title, b.title),
+    last: (a, b) => (b.progress?.last || 0) - (a.progress?.last || 0),
+  };
+  return by[s] ? [...list].sort(by[s]) : list;
+}
+function groupByAuthor(books) {
+  const m = new Map(); for (const b of books) { const a = authorOf(b); if (!m.has(a)) m.set(a, []); m.get(a).push(b); }
+  return [...m.entries()];
+}
+function go(nav) { S.nav = nav; store.set('nav', nav); S.filter = ''; S.organize = false; renderLibrary(); scrollTo(0, 0); }
+async function loadCols() { try { S.cols = window.LocalAPI ? await api('/api/collections') : []; } catch { S.cols = []; } }
+async function patchBook(b, data, msg) {
+  try { await post('/api/books/' + b.id, data, 'PATCH'); Object.assign(b, data); await loadBooks(); renderLibrary(); if (msg) toast(msg); }
+  catch (e) { toast(e.message); }
+}
+const toggleFav = (b) => patchBook(b, { fav: !b.fav }, b.fav ? 'Retiré des favoris' : 'Ajouté aux favoris');
+const toggleState = (b, st) => patchBook(b, { state: b.state === st ? '' : st }, b.state === st ? (st === 'lu' ? 'Retiré de « Déjà lu »' : 'Retiré de « À lire »') : (st === 'lu' ? 'Marqué « Déjà lu »' : 'Ajouté à « À lire »'));
+const trashBook = (b) => patchBook(b, { trashed: true }, 'Mis à la poubelle');
+const restoreBook = (b) => patchBook(b, { trashed: false }, 'Livre restauré');
+async function deleteForever(b) {
+  if (!confirm(`Supprimer définitivement « ${b.title} » ?`)) return;
+  await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Supprimé définitivement');
+}
+
+// Boutons rapides, comme sous chaque livre dans ReadEra
+function quickBar(b, { labels } = {}) {
+  const btn = (ic, label, on, fn) => h('button', { class: 'qb' + (on ? ' on' : ''), title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false', onclick: (e) => { e.stopPropagation(); fn(); } }, icon(ic), labels ? h('span', {}, label) : null);
+  if (b.trashed) return h('div', { class: 'qbar' + (labels ? ' big' : '') },
+    btn('restore', 'Restaurer', false, () => restoreBook(b)), btn('trash', 'Supprimer', false, () => deleteForever(b)));
+  return h('div', { class: 'qbar' + (labels ? ' big' : '') },
+    btn(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
+    btn('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
+    btn('checks', 'Déjà lu', b.state === 'lu', () => toggleState(b, 'lu')),
+    btn('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)),
+    labels ? null : btn('dots', 'Plus', false, () => editBook(b)));
+}
+
+function collectionsDialog(b) {
+  const chosen = new Set(b.cols || []);
+  const list = h('div', { class: 'checks' });
+  const draw = () => list.replaceChildren(...(S.cols.length ? S.cols.map((c) => h('label', { class: 'check' },
+    h('input', { type: 'checkbox', checked: chosen.has(c.id), onchange: (e) => e.target.checked ? chosen.add(c.id) : chosen.delete(c.id) }), h('span', {}, c.name))) : [h('p', { class: 'muted' }, 'Aucune collection pour l\'instant.')]));
+  draw();
+  const name = h('input', { placeholder: 'Nom de la collection', maxlength: 60 });
+  const create = async () => {
+    try { const c = await post('/api/collections', { name: name.value }); S.cols.push(c); chosen.add(c.id); name.value = ''; draw(); } catch (e) { toast(e.message); }
+  };
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') create(); });
+  const close = sheet('Collections', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
+    h('div', { class: 'newcol' }, name, h('button', { class: 'btn', onclick: create }, icon('plus'), 'Créer')),
+    list,
+    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'flex-end' } },
+      h('button', { class: 'btn primary', onclick: async () => { close(); await patchBook(b, { cols: [...chosen] }); } }, 'OK'))));
+}
+function editCollection(c) {
+  const name = h('input', { value: c.name, maxlength: 60 });
+  const n = S.books.filter((b) => !b.trashed && (b.cols || []).includes(c.id)).length;
+  const close = sheet('Collection', h('div', {},
+    h('label', { class: 'field' }, 'Nom', name),
+    h('p', { class: 'muted' }, `${n} livre${n > 1 ? 's' : ''}`),
+    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+      h('button', { class: 'btn danger', onclick: async () => { if (!confirm(`Supprimer la collection « ${c.name} » ? Les livres restent dans la bibliothèque.`)) return; await api('/api/collections/' + c.id, { method: 'DELETE' }); close(); await loadBooks(); if (S.nav.k === 'col' && S.nav.v === c.id) S.nav = { k: 'all' }; store.set('nav', S.nav); renderLibrary(); toast('Collection supprimée'); } }, 'Supprimer'),
+      h('button', { class: 'btn primary', onclick: async () => { await post('/api/collections/' + c.id, { name: name.value }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
+}
+async function newCollection() {
+  const name = prompt('Nom de la nouvelle collection'); if (!name || !name.trim()) return;
+  try { const c = await post('/api/collections', { name }); await loadBooks(); go({ k: 'col', v: c.id }); toast('Collection créée. Ajoute des livres avec le bouton collections.'); } catch (e) { toast(e.message); }
+}
+
+// Menu latéral
+function openDrawer() {
+  const count = (nav) => S.books.filter((b) => inNav(b, nav)).length;
+  const close = () => scrim.remove();
+  const item = (nav, label, ic, extra) => h('div', { class: 'ditem-row' },
+    h('button', { class: 'ditem' + (sameNav(nav, S.nav) ? ' sel' : ''), onclick: () => { close(); go(nav); } }, icon(ic), h('span', {}, label), h('em', {}, nav.k === 'authors' ? new Set(S.books.filter((b) => !b.trashed).map(authorOf)).size : count(nav))),
+    extra || null);
+  const fmts = Object.keys(FMT).filter((k) => count({ k: 'fmt', v: k }));
+  const panel = h('aside', { class: 'drawer', role: 'dialog', 'aria-label': 'Menu' },
+    h('div', { class: 'dhead' }, h('div', { class: 'dmark' }, '❦'), h('b', {}, S.me.library || 'Bibliothèque')),
+    ['reading', 'all', 'fav', 'alire', 'lu', 'authors'].map((k) => item({ k }, NAV[k][0], NAV[k][1])),
+    h('div', { class: 'dsec' }, 'Collections'),
+    S.cols.map((c) => item({ k: 'col', v: c.id }, c.name, 'collection', h('button', { class: 'dedit', 'aria-label': 'Modifier ' + c.name, onclick: () => { close(); editCollection(c); } }, icon('pencil')))),
+    h('button', { class: 'ditem add', onclick: () => { close(); newCollection(); } }, icon('plus'), h('span', {}, 'Créer une collection')),
+    fmts.length ? h('div', { class: 'dsec' }, 'Formats') : null,
+    fmts.map((k) => item({ k: 'fmt', v: k }, FMT[k], 'layers')),
+    h('div', { class: 'dline' }),
+    item({ k: 'trash' }, 'Poubelle', 'trash'));
+  const scrim = h('div', { class: 'scrim drawer-scrim', onclick: (e) => { if (e.target === scrim) close(); } }, panel);
+  document.body.append(scrim);
+}
+
+function authorsEl(q) {
+  const groups = groupByAuthor(S.books.filter((b) => !b.trashed)).filter(([a]) => !q || a.toLowerCase().includes(q)).sort((x, y) => authorCmp(x[0], y[0]));
+  if (!groups.length) return h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Aucun auteur.');
+  return h('div', { class: 'authors' }, groups.map(([a, bs]) => h('button', { class: 'author', onclick: () => go({ k: 'author', v: a }) },
+    h('span', { class: 'ini' }, a === 'Auteur inconnu' ? '?' : a.trim()[0].toUpperCase()),
+    h('span', { class: 'aname' }, a), h('em', {}, `${bs.length} livre${bs.length > 1 ? 's' : ''}`))));
+}
+const EMPTY = {
+  reading: 'Aucune lecture en cours. Ouvre un livre pour le retrouver ici.',
+  fav: 'Aucun favori. Touche ☆ sous un livre (vue liste) ou fais un appui long sur sa couverture.',
+  alire: 'Rien à lire pour l\'instant. Touche l\'horloge sous un livre pour l\'ajouter ici.',
+  lu: 'Aucun livre terminé. Un livre lu jusqu\'à la dernière page arrive ici tout seul.',
+  col: 'Cette collection est vide. Touche le bouton collections sous un livre pour l\'y ranger.',
+  trash: 'La poubelle est vide.',
+};
+function caseFor(groups, owner) {
+  const n = perRow();
+  const caseEl = h('div', { class: 'case' + (S.organize ? ' organize' : '') });
+  for (const [label, bs] of groups) {
+    if (label) caseEl.append(h('div', { class: 'shelf-label' }, label, h('em', {}, bs.length)));
+    const rows = Math.max(groups.length === 1 ? (owner || bs.length ? 2 : 1) : 1, Math.ceil(bs.length / n));
+    for (let r = 0; r < rows; r++) {
+      const row = h('div', { class: 'shelf-books', style: { gridTemplateColumns: `repeat(${n}, 1fr)` } }, bs.slice(r * n, r * n + n).map(bookEl));
+      caseEl.append(h('div', { class: 'shelf' }, row, h('div', { class: 'plank' })));
+    }
+  }
+  return caseEl;
+}
+
 function renderLibrary() {
   const owner = S.me.role === 'owner';
-  const books = S.books.filter((b) => !S.filter || (b.title + ' ' + b.author).toLowerCase().includes(S.filter.toLowerCase()));
-  const n = perRow();
-  const rows = Math.max(owner || books.length ? 2 : 1, Math.ceil(books.length / n));
+  const local = !!window.LocalAPI;
+  if (!local) S.nav = { k: 'all' };
+  if (S.nav.k === 'col' && !S.cols.some((c) => c.id === S.nav.v)) S.nav = { k: 'all' };
+  const q = S.filter.toLowerCase();
+  const books = sortBooks(S.books.filter((b) => inNav(b) && (!q || (b.title + ' ' + b.author).toLowerCase().includes(q))));
   const asList = S.view === 'list';
-  const caseEl = asList ? listEl(books) : h('div', { class: 'case' + (S.organize ? ' organize' : '') });
-  for (let r = 0; r < (asList ? 0 : rows); r++) {
-    const row = h('div', { class: 'shelf-books', style: { gridTemplateColumns: `repeat(${n}, 1fr)` } }, books.slice(r * n, r * n + n).map(bookEl));
-    caseEl.append(h('div', { class: 'shelf' }, row, h('div', { class: 'plank' })));
+  const live = S.books.filter((b) => !b.trashed);
+  let body;
+  if (S.nav.k === 'authors') body = authorsEl(q);
+  else {
+    const groups = S.sort === 'author' && S.nav.k !== 'author' && books.length ? groupByAuthor(books) : [[null, books]];
+    body = asList ? h('div', {}, groups.map(([g, bs]) => [g ? h('h3', { class: 'group-h' }, g, h('em', {}, bs.length)) : null, listEl(bs)]).flat()) : caseFor(groups, owner);
+    if (!live.length && S.nav.k !== 'trash') {
+      const msg = h('div', { class: 'empty' },
+        h('h3', {}, owner ? 'Tes rayons t\'attendent' : 'Les rayons sont encore vides'),
+        h('p', {}, owner ? 'Ajoute un PDF ou un fichier texte. Tu peux aussi glisser des fichiers ici.' : 'Reviens bientôt, de nouveaux livres arrivent.'),
+        owner ? h('div', { class: 'actions', style: { justifyContent: 'center' } },
+          h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), 'Ajouter un livre'),
+          local ? h('button', { class: 'btn', onclick: openFolder }, icon('folder'), 'Choisir un dossier') : null) : null);
+      asList ? body.prepend(msg) : (body.querySelector('.shelf') || body).prepend(msg);
+    } else if (!books.length) {
+      const msg = h('div', { class: 'empty' }, h('p', {}, q ? 'Aucun livre ne correspond à ta recherche.' : (EMPTY[S.nav.k] || 'Aucun livre ici.')));
+      asList ? body.prepend(msg) : (body.querySelector('.shelf') || body).prepend(msg);
+    }
   }
-  if (!S.books.length && !asList) {
-    caseEl.firstChild.prepend(h('div', { class: 'empty' },
-      h('h3', {}, owner ? 'Tes rayons t\'attendent' : 'Les rayons sont encore vides'),
-      h('p', {}, owner ? 'Ajoute un PDF ou un fichier texte. Tu peux aussi glisser des fichiers ici.' : 'Reviens bientôt, de nouveaux livres arrivent.'),
-      owner ? h('div', { class: 'actions', style: { justifyContent: 'center' } },
-        h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), 'Ajouter un livre'),
-        window.LocalAPI ? h('button', { class: 'btn', onclick: openFolder }, icon('folder'), 'Choisir un dossier') : null) : null));
-  }
-  const ready = S.books.filter((b) => b.status === 'ready');
-  const current = ready.filter((b) => b.progress && b.progress.page < b.pages).sort((a, b) => b.progress.last - a.progress.last)[0];
+  const ready = live.filter((b) => b.status === 'ready');
+  const current = ['all', 'reading'].includes(S.nav.k) && !q ? ready.filter((b) => b.progress && b.progress.page < b.pages && b.state !== 'lu').sort((a, b) => b.progress.last - a.progress.last)[0] : null;
   const actions = h('div', { class: 'actions' },
     owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter un livre')) : null,
-    owner && window.LocalAPI ? h('button', { class: 'btn', title: 'Dossier source', onclick: openFolder }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
-    owner && window.LocalAPI && folderInfo() ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: 'Actualiser le dossier', 'aria-label': 'Actualiser le dossier', onclick: () => scanFolder() }, icon('refresh')) : null,
-    owner && !window.LocalAPI ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
-    owner && !window.LocalAPI ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
-    S.books.length ? h('button', { class: 'btn icon', title: asList ? 'Voir l\'étagère' : 'Voir la liste', onclick: () => { S.view = asList ? 'shelf' : 'list'; store.set('view', S.view); renderLibrary(); } }, icon(asList ? 'shelf' : 'list')) : null,
-    owner && S.books.length ? h('button', { class: 'btn icon' + (S.organize ? ' on' : ''), title: 'Organiser', onclick: () => { S.organize = !S.organize; renderLibrary(); if (S.organize) toast('Touche un livre pour le modifier'); } }, icon('pencil')) : null,
+    owner && local ? h('button', { class: 'btn', title: 'Dossier source', onclick: openFolder }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
+    owner && local && folderInfo() ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: 'Actualiser le dossier', 'aria-label': 'Actualiser le dossier', onclick: () => scanFolder() }, icon('refresh')) : null,
+    owner && !local ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
+    owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     h('button', { class: 'btn icon', title: 'Réglages', onclick: openSettings }, icon('gear')),
   );
+  const count = S.nav.k === 'authors' ? `${new Set(live.map(authorOf)).size} auteurs` : `${books.length} livre${books.length > 1 ? 's' : ''}`;
+  const toolbar = S.books.length ? h('div', { class: 'toolbar' },
+    h('input', { class: 'search', placeholder: S.nav.k === 'authors' ? 'Rechercher un auteur' : 'Rechercher un titre ou un auteur', value: S.filter, oninput: (e) => { S.filter = e.target.value; const pos = e.target.selectionStart; renderLibrary(); const i = $('.search'); i.focus(); i.setSelectionRange(pos, pos); } }),
+    S.nav.k !== 'authors' ? h('label', { class: 'sortsel', title: 'Trier' }, h('span', {}, 'Trier'),
+      h('select', { onchange: (e) => { S.sort = e.target.value; store.set('sort', S.sort); renderLibrary(); } },
+        Object.entries(SORTS).map(([k, l]) => h('option', { value: k, selected: k === S.sort }, l)))) : null,
+    S.nav.k !== 'authors' ? h('button', { class: 'btn icon', title: asList ? 'Voir l\'étagère' : 'Voir la liste', onclick: () => { S.view = asList ? 'shelf' : 'list'; store.set('view', S.view); renderLibrary(); } }, icon(asList ? 'shelf' : 'list')) : null,
+    owner && S.nav.k !== 'authors' && S.nav.k !== 'trash' && books.length ? h('button', { class: 'btn icon' + (S.organize ? ' on' : ''), title: 'Organiser', onclick: () => { S.organize = !S.organize; renderLibrary(); if (S.organize) toast('Touche un livre pour le modifier'); } }, icon('pencil')) : null,
+    S.nav.k === 'trash' && books.length ? h('button', { class: 'btn danger', onclick: async () => { if (!confirm(`Supprimer définitivement les ${books.length} livres de la poubelle ?`)) return; for (const b of books) await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Poubelle vidée'); } }, 'Vider') : null,
+  ) : null;
+  const navBack = ['author', 'col', 'fmt'].includes(S.nav.k);
   const room = h('div', { class: 'room' }, h('div', { class: 'wrap' },
     h('header', { class: 'top' },
-      h('div', { class: 'brand' }, h('h1', {}, S.me.library || 'Bibliothèque'),
-        h('p', {}, `${ready.length} livre${ready.length > 1 ? 's' : ''}${owner ? '' : ' · Bonjour ' + S.me.name}`)),
+      h('div', { class: 'brand' },
+        h('div', { class: 'brand-row' },
+          local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null,
+          h('h1', {}, S.me.library || 'Bibliothèque')),
+        h('p', { class: 'navline' },
+          navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null,
+          h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`,
+          S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)),
       actions),
     current ? heroEl(current) : null,
-    S.books.length > 8 ? h('div', { class: 'toolbar' }, h('input', { class: 'search', placeholder: 'Rechercher un titre ou un auteur', value: S.filter, oninput: (e) => { S.filter = e.target.value; const pos = e.target.selectionStart; renderLibrary(); const i = $('.search'); i.focus(); i.setSelectionRange(pos, pos); } })) : null,
-    caseEl,
-    owner && S.books.length ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, 'Appui long ou clic droit sur un livre pour le modifier.') : null,
+    toolbar,
+    body,
+    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : 'Appui long sur un livre : favori, à lire, collections…') : null,
   ));
   $('#app').replaceChildren(room);
   // hors de #app : les messages d'envoi survivent au rafraîchissement de l'étagère
@@ -389,14 +584,23 @@ function editBook(b) {
   const author = h('input', { value: b.author || '', maxlength: 120, placeholder: 'Auteur' });
   let color = b.color;
   const sw = h('div', { class: 'swatches' }, PALETTE.map((c) => h('button', { class: c === color ? 'sel' : '', style: { background: c }, 'aria-label': c, onclick: (e) => { color = c; $$('button', sw).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); } })));
-  const close = sheet('Modifier le livre', h('div', {},
-    h('label', { class: 'field' }, 'Titre', title),
-    h('label', { class: 'field' }, 'Auteur', author),
-    b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null,
-    h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages`),
+  const local = !!window.LocalAPI;
+  const cols = S.cols.filter((c) => (b.cols || []).includes(c.id)).map((c) => c.name);
+  const qb = local ? quickBar(b, { labels: true }) : null;
+  if (qb) $$('button', qb).forEach((x) => x.addEventListener('click', () => close(), { capture: true })); // ferme la fenêtre avant l'action
+  const close = sheet(b.trashed ? 'Dans la poubelle' : 'Modifier le livre', h('div', {},
+    qb,
+    local && cols.length ? h('p', { class: 'muted' }, 'Collections : ' + cols.join(', ')) : null,
+    b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
+    b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author),
+    !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null,
+    h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages${b.size ? ' · ' + (b.size > 1e6 ? (b.size / 1e6).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(b.size / 1e3)) + ' ko') : ''}`),
     h('p', { class: 'muted' }, b.progress ? `Page ${b.progress.page} sur ${b.pages} · dernière lecture : ${lastRead(b.progress.last)} · ouvert ${b.progress.opens} fois` : 'Pas encore ouvert'),
-    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
-      h('button', { class: 'btn danger', onclick: async () => { if (!confirm(`Retirer « ${b.title} » de la bibliothèque ?`)) return; await api('/api/books/' + b.id, { method: 'DELETE' }); close(); await loadBooks(); renderLibrary(); toast('Livre retiré'); } }, 'Supprimer'),
+    b.trashed ? null : h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+      h('button', { class: 'btn danger', onclick: async () => {
+        if (local) { close(); return trashBook(b); }
+        if (!confirm(`Retirer « ${b.title} » de la bibliothèque ?`)) return; await api('/api/books/' + b.id, { method: 'DELETE' }); close(); await loadBooks(); renderLibrary(); toast('Livre retiré');
+      } }, local ? 'Mettre à la poubelle' : 'Supprimer'),
       h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
 }
 function openSettings() {
