@@ -34,6 +34,11 @@ public class Partage extends ContentProvider {
         if (n.endsWith(".mp4")) return "video/mp4";
         if (n.endsWith(".biblio")) return "application/zip";
         if (n.endsWith(".epub")) return "application/epub+zip";
+        if (n.endsWith(".mp3")) return "audio/mpeg";
+        if (n.matches(".*\\.(m4b|m4a|aac)$")) return "audio/mp4";
+        if (n.matches(".*\\.(ogg|oga|opus)$")) return "audio/ogg";
+        if (n.endsWith(".flac")) return "audio/flac";
+        if (n.endsWith(".wav")) return "audio/wav";
         if (n.matches(".*\\.(mobi|azw|azw3|prc)$")) return "application/x-mobipocket-ebook";
         if (n.endsWith(".doc")) return "application/msword";
         if (n.endsWith(".odt")) return "application/vnd.oasis.opendocument.text";

@@ -757,3 +757,127 @@ svg.rot-r { transform: rotate(-90deg); }
 .scanpanel.paused .bar i { opacity: .45; }
 .scandir { display: block; color: var(--ink-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; min-height: 1.3em; }
 .scanpanel .actions { margin-top: 10px; justify-content: flex-end; }
+
+/* Minuterie, prononciation */
+.player .chips { display: flex; gap: 6px; }
+.player .chip.sleep.on { border-color: #d4ab6a; color: #e8c88f; }
+.sleepgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sleepgrid .btn { justify-content: center; }
+.pronadd { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 6px; margin: 12px 0; }
+@media (max-width: 460px) { .pronadd { grid-template-columns: 1fr 1fr; } }
+.pronlist { display: flex; flex-direction: column; gap: 4px; }
+.pronrow { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 12px; border-radius: 12px; border: 1px solid var(--glass-line); }
+.pronrow span { flex: 1; }
+
+/* Appui long : définition */
+.reader.looking .tapzone, .reader.looking .r-top, .reader.looking .r-bottom { pointer-events: none; }
+.lookmark { position: fixed; z-index: 6; border-radius: 4px; background: rgba(212,171,106,.32); pointer-events: none; }
+.lookup { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 8; max-width: 560px; margin: 0 auto; max-height: 58vh; overflow: auto; padding: 12px 14px 14px; border-radius: 18px; background: #1d1611; color: #f1e7d6; box-shadow: 0 18px 50px rgba(0,0,0,.45); font-size: 14.5px; line-height: 1.45; user-select: text; -webkit-user-select: text; }
+.lookhead { display: flex; align-items: center; gap: 4px; }
+.lookhead b { font: 600 22px/1.2 var(--font-display); }
+.lookhead .grow { flex: 1; }
+.lookup .rbtn { color: #f1e7d6; }
+.lookbody p, .looktr p { margin: 4px 0 8px; }
+.lookpos { display: block; margin-top: 8px; font: 600 11px/1 Inter, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: #d4ab6a; }
+.looklemma { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+.looklemma > b { font: 600 17px/1.2 var(--font-display); }
+.looktr small { display: block; margin-top: 8px; font: 600 11px/1 Inter, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: #8fc1d9; }
+.looktr p { font-style: italic; }
+.lookacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lookacts .btn { font-size: 13px; padding: 7px 12px; }
+.lookup .muted { color: #a8987f; }
+
+/* Vitesse de lecture, toujours visible dans le lecteur */
+.speedrow { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 6px; border-radius: 14px; background: rgba(255,255,255,.05); }
+.splbl { font-size: 12px; color: #b9a888; padding-left: 6px; }
+.spcats { display: flex; flex: 1; gap: 4px; }
+.spcat { flex: 1; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: #f3e9da; font-size: 14px; font-weight: 600; }
+.spcat.sel { background: #d4ab6a; border-color: #d4ab6a; color: #241809; }
+.spfine { display: flex; align-items: center; gap: 2px; }
+.spbtn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: transparent; color: #f3e9da; font-size: 22px; line-height: 1; }
+.spval { min-width: 56px; text-align: center; font-size: 16px; color: #f3e9da; font-variant-numeric: tabular-nums; }
+@media (max-width: 400px) { .splbl { display: none; } .spval { min-width: 48px; } }
+
+.gotbook { display: flex; gap: 14px; align-items: center; }
+.gotbook .cover { width: 72px; flex: none; aspect-ratio: 2 / 3; }
+.gotbook b { display: block; font: 600 18px/1.25 var(--font-display); }
+.gotbook small { display: block; color: var(--ink-2); margin-top: 3px; }
+
+/* Livres audio */
+.audiobook { background: radial-gradient(120% 80% at 50% 0%, #2a2018 0%, #0f0c0a 70%); color: #f1e7d6; }
+.audiobook .r-top { background: transparent; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; color: #f1e7d6; }
+.abmain { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; padding: 78px 20px calc(24px + env(safe-area-inset-bottom)); gap: 10px; }
+.abcover { width: min(62vw, 300px); }
+.abcover .cover { width: 100%; aspect-ratio: 2 / 3; box-shadow: 0 24px 60px rgba(0,0,0,.6); border-radius: 6px; overflow: hidden; }
+.abtitle { text-align: center; margin-top: 10px; }
+.abtitle b { display: block; font: 600 22px/1.25 var(--font-display); }
+.abtitle span { color: #b9a888; font-size: 14px; }
+.abchap { color: #d4ab6a; font-size: 13px; text-align: center; min-height: 1.3em; }
+.abseek { width: 100%; max-width: 520px; }
+.abseek input { width: 100%; accent-color: #d4ab6a; }
+.abtimes { display: flex; justify-content: space-between; font-size: 12px; color: #b9a888; font-variant-numeric: tabular-nums; }
+.ableft { font-size: 12px; color: #8a7a66; }
+.abctl { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 4px 0; }
+.abctl .rbtn { color: #f1e7d6; }
+.abplay { width: 72px; height: 72px; border-radius: 50%; border: 0; background: #d4ab6a; color: #241809; display: grid; place-items: center; }
+.abplay svg { width: 30px; height: 30px; }
+.abjump { width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(255,255,255,.15); background: transparent; color: #f1e7d6; font-weight: 700; font-size: 15px; display: grid; place-items: center; line-height: 1; }
+.abjump small { font-size: 10px; font-weight: 500; opacity: .7; margin-top: -10px; }
+.audiobook .speedrow { width: 100%; max-width: 520px; }
+.abchips { display: flex; gap: 8px; }
+.abchips .chip { height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: transparent; color: #f3e9da; font-size: 13px; font-weight: 600; }
+.abchips .chip svg { width: 15px; height: 15px; vertical-align: -3px; }
+.abchips .chip.sleep.on { border-color: #d4ab6a; color: #e8c88f; }
+.chaplist { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow: auto; }
+.chaprow { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); text-align: left; }
+.chaprow.sel { background: var(--glass); box-shadow: inset 3px 0 0 var(--brass); }
+.chapn { width: 28px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.chapt { flex: 1; }
+.chapd { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Ranger dans une bibliothèque */
+.libchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.libchip { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer; }
+.libchip.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.libchip svg { width: 16px; height: 16px; color: var(--brass); }
+.libchip.add { border-style: dashed; background: transparent; }
+.libchip .libsw { width: 16px; height: 16px; }
+.qb.hot { color: var(--brass) !important; opacity: 1 !important; }
+.webnote { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink-2); font-size: 14px; }
+.webnote > svg { width: 22px; height: 22px; color: var(--brass); flex: none; }
+.webnote > span { flex: 1; min-width: 180px; }
+.webnote b { color: var(--ink); }
+
+/* Lire québécois */
+.qcbox { margin: 6px 0 4px; padding: 14px; border-radius: 18px; background: linear-gradient(160deg, rgba(0,51,153,.28), rgba(0,51,153,.08)); border: 1px solid rgba(120,160,255,.18); }
+.qchead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.qchead b { display: block; font: 600 19px/1.2 var(--font-display); color: var(--ink); }
+.qchead small { color: var(--ink-2); font-size: 13px; }
+.qcflag { width: 36px; height: 24px; border-radius: 4px; flex: none; background:
+  radial-gradient(circle at 25% 28%, #fff 0 3px, transparent 3.5px), radial-gradient(circle at 75% 28%, #fff 0 3px, transparent 3.5px),
+  radial-gradient(circle at 25% 74%, #fff 0 3px, transparent 3.5px), radial-gradient(circle at 75% 74%, #fff 0 3px, transparent 3.5px),
+  linear-gradient(#fff, #fff) center / 100% 5px no-repeat, linear-gradient(#fff, #fff) center / 5px 100% no-repeat, #003da5; }
+.qcrow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.qcbook { flex: none; width: 92px; scroll-snap-align: start; border: 0; background: transparent; color: var(--ink); text-align: left; padding: 0; cursor: pointer; }
+.qcbook .cover { width: 92px; aspect-ratio: 2 / 3; border-radius: 4px; overflow: hidden; box-shadow: 0 8px 18px rgba(0,0,0,.35); }
+.qcbook > span { display: block; margin-top: 6px; font-size: 12px; line-height: 1.25; color: var(--ink-2); }
+.qclinks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.qclinks .btn { font-size: 13px; padding: 7px 12px; }
+
+/* Trouver des livres : les livres dans l'application */
+.fsearch { display: flex; gap: 8px; margin-bottom: 14px; }
+.fsearch input { flex: 1; min-width: 0; }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 10px; }
+.fbook { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fbook .cover { width: 100%; aspect-ratio: 2 / 3; border-radius: 4px; overflow: hidden; box-shadow: 0 8px 18px rgba(0,0,0,.35); }
+.fbook .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fbook b { font-size: 13px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fbook small { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fbook .btn { margin-top: auto; justify-content: center; font-size: 13px; padding: 6px 8px; }
+.qcrow .qcitem { flex: none; width: 104px; scroll-snap-align: start; }
+.catrow.pending { opacity: .45; pointer-events: none; }
+
+.fcats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; -webkit-overflow-scrolling: touch; }
+.fcat { flex: none; height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); font-size: 13.5px; font-weight: 500; }
+.fcat.sel { background: var(--brass); border-color: var(--brass); color: var(--brass-ink, #241809); }
+.qcitem.pending { opacity: .5; pointer-events: none; }

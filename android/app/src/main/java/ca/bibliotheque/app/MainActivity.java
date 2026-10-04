@@ -129,7 +129,7 @@ public class MainActivity extends Activity {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     "text/plain", "text/markdown", "text/html", "application/xhtml+xml", "application/epub+zip",
                     "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/msword", "application/rtf", "text/rtf",
-                    "application/vnd.oasis.opendocument.text", "application/x-fictionbook+xml", "application/octet-stream"});
+                    "application/vnd.oasis.opendocument.text", "application/x-fictionbook+xml", "audio/*", "application/octet-stream"});
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try {
                     startActivityForResult(i, FILE_REQUEST);
@@ -305,6 +305,9 @@ public class MainActivity extends Activity {
                 if (r.equals("Android/data") || r.equals("Android/obb") || r.equalsIgnoreCase("LOST.DIR")) continue;
                 dirs.add(f);
             } else if (isBook(name) && f.length() > 0) {
+                // l'audio du téléphone, c'est surtout de la musique : on ne garde que les vrais livres audio
+                if (isAudio(name) && !name.toLowerCase(Locale.ROOT).endsWith(".m4b")
+                    && !r.toLowerCase(Locale.ROOT).matches(".*(audiobook|audio ?book|livres? audio|livre-audio|audible|libby|ohdio|biblioth).*")) continue;
                 JSONObject o = new JSONObject();
                 o.put("id", f.getAbsolutePath()); o.put("name", name); o.put("path", r);
                 o.put("size", f.length()); o.put("mtime", f.lastModified());
@@ -343,7 +346,11 @@ public class MainActivity extends Activity {
 
     private static boolean isBook(String name) {
         String n = name.toLowerCase(Locale.ROOT);
-        return n.matches(".*\\.(pdf|epub|mobi|azw|azw3|prc|docx|doc|odt|rtf|fb2|html|htm|xhtml|txt|md|markdown|text)$");
+        return n.matches(".*\\.(pdf|epub|mobi|azw|azw3|prc|docx|doc|odt|rtf|fb2|html|htm|xhtml|txt|md|markdown|text|mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$");
+    }
+
+    private static boolean isAudio(String name) {
+        return name.toLowerCase(Locale.ROOT).matches(".*\\.(mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$");
     }
 
     private void walk(ContentResolver cr, Uri tree, String parent, String rel, int depth, JSONArray out) throws Exception {
@@ -744,6 +751,49 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) { } });
         }
         @JavascriptInterface public void fetch(String url) { downloadBook(url, null, null, null, true); }
+        /** Vérifie qu'un lien répond (redirections suivies, erreurs de sécurité comprises) : window.__webGot({id, status}). */
+        @JavascriptInterface public void check(String url, String id) {
+            new Thread(() -> {
+                JSONObject r = new JSONObject();
+                try {
+                    r.put("id", id);
+                    String cur = url; int code = 0;
+                    for (int hop = 0; hop < 8; hop++) {
+                        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(cur).openConnection();
+                        c.setInstanceFollowRedirects(false); c.setConnectTimeout(12000); c.setReadTimeout(12000);
+                        c.setRequestProperty("User-Agent", web.getSettings().getUserAgentString());
+                        code = c.getResponseCode(); String loc = c.getHeaderField("Location"); c.disconnect();
+                        if (code >= 300 && code < 400 && loc != null) { cur = new java.net.URL(new java.net.URL(cur), loc).toString(); continue; }
+                        break;
+                    }
+                    r.put("status", code);
+                } catch (Exception e) { try { r.put("error", String.valueOf(e.getClass().getSimpleName())); } catch (Exception ignored) { } }
+                js("__webGot", r.toString());
+            }).start();
+        }
+
+        /** Lit une page ou un catalogue (JSON) sans les limites du navigateur ; réponse dans window.__webGot({id, status, body}). */
+        @JavascriptInterface public void get(String url, String id) {
+            new Thread(() -> {
+                JSONObject r = new JSONObject();
+                java.net.HttpURLConnection c = null;
+                try {
+                    r.put("id", id);
+                    c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    c.setConnectTimeout(15000); c.setReadTimeout(30000);
+                    c.setRequestProperty("User-Agent", web.getSettings().getUserAgentString());
+                    c.setRequestProperty("Accept", "application/json, text/xml, */*");
+                    int code = c.getResponseCode(); r.put("status", code);
+                    try (InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream()) {
+                        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] buf = new byte[1 << 15]; int n;
+                        while (in != null && (n = in.read(buf)) > 0) { bo.write(buf, 0, n); if (bo.size() > 6_000_000) break; }
+                        r.put("body", bo.toString("UTF-8"));
+                    }
+                } catch (Exception e) { try { r.put("error", "Pas de connexion"); } catch (Exception ignored) { } }
+                finally { if (c != null) c.disconnect(); }
+                js("__webGot", r.toString());
+            }).start();
+        }
         @JavascriptInterface public void done(String name) { if (name != null && name.matches("w\\d+\\.[a-z0-9]{1,6}")) new File(webDir(), name).delete(); }
     }
 

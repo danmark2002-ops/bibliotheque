@@ -391,6 +391,108 @@ window.LocalAPI = (() => {
     return { paras };
   }
 
+  // ---------- Livres audio : titre, auteur, couverture, chapitres (ID3 pour MP3, atomes MP4 pour M4B/M4A) ----------
+  const latin = new TextDecoder('latin1');
+  async function sliceBytes(file, a, b) { return new Uint8Array(await file.slice(a, b).arrayBuffer()); }
+  function id3Text(d) {
+    const enc = d[0], body = d.subarray(1);
+    const dec = enc === 3 ? new TextDecoder('utf-8') : enc === 1 ? new TextDecoder('utf-16') : enc === 2 ? new TextDecoder('utf-16be') : latin;
+    return dec.decode(body).replace(/\u0000+$/g, '').split('\u0000')[0].trim();
+  }
+  async function readId3(file) {
+    const head = await sliceBytes(file, 0, 10);
+    if (latin.decode(head.subarray(0, 3)) !== 'ID3') return {};
+    const ver = head[3], size = (head[6] << 21) | (head[7] << 14) | (head[8] << 7) | head[9];
+    const d = await sliceBytes(file, 10, 10 + Math.min(size, 30e6));
+    const out = { chapters: [] }; let o = 0;
+    const readFrames = (buf, start, end, into) => {
+      let i = start;
+      while (i + 10 <= end) {
+        const id = latin.decode(buf.subarray(i, i + 4)); if (!/^[A-Z0-9]{4}$/.test(id)) break;
+        const fs = ver === 4 ? (buf[i + 4] << 21) | (buf[i + 5] << 14) | (buf[i + 6] << 7) | buf[i + 7] : ((buf[i + 4] << 24) | (buf[i + 5] << 16) | (buf[i + 6] << 8) | buf[i + 7]) >>> 0;
+        const f = buf.subarray(i + 10, i + 10 + fs); i += 10 + fs;
+        if (id === 'TIT2') into.title = id3Text(f); else if (id === 'TPE1') into.author = id3Text(f); else if (id === 'TALB') into.album = id3Text(f);
+        else if (id === 'APIC' && !into.cover) {
+          let k = 1; while (k < f.length && f[k]) k++; const mime = latin.decode(f.subarray(1, k)) || 'image/jpeg'; k += 2; // type d'image
+          if (f[0] === 1 || f[0] === 2) { while (k + 1 < f.length && (f[k] || f[k + 1])) k += 2; k += 2; } else { while (k < f.length && f[k]) k++; k++; }
+          into.cover = new Blob([f.subarray(k)], { type: mime.includes('/') ? mime : 'image/' + mime.toLowerCase() });
+        } else if (id === 'CHAP') {
+          let k = 0; while (k < f.length && f[k]) k++; k++;
+          const dv = new DataView(f.buffer, f.byteOffset + k, 16); const ch = { start: dv.getUint32(0) / 1000 };
+          readFrames(f, k + 16, f.length, ch); out.chapters.push({ start: ch.start, title: ch.title || '' });
+        }
+      }
+    };
+    readFrames(d, 0, d.length, out);
+    out.chapters.sort((a, b) => a.start - b.start);
+    return out;
+  }
+  async function readMp4(file) {
+    const out = { chapters: [] };
+    const atoms = async (start, end, fn) => { let o = start; while (o + 8 <= end) { const h = await sliceBytes(file, o, o + 16); const dv = new DataView(h.buffer); let sz = dv.getUint32(0); const ty = latin.decode(h.subarray(4, 8)); let hl = 8; if (sz === 1) { sz = Number(dv.getBigUint64(8)); hl = 16; } else if (sz === 0) sz = end - o; if (sz < 8) break; await fn(ty, o + hl, o + sz); o += sz; } };
+    let moov = null; await atoms(0, file.size, async (ty, a, b) => { if (ty === 'moov') moov = [a, b]; });
+    if (!moov || moov[1] - moov[0] > 60e6) return out;
+    const m = await sliceBytes(file, moov[0], moov[1]); const base = moov[0];
+    const dv = new DataView(m.buffer);
+    const walk = (a, b, path) => { let o = a; while (o + 8 <= b) {
+      let sz = dv.getUint32(o); const ty = latin.decode(m.subarray(o + 4, o + 8)); if (sz < 8 || o + sz > b) break;
+      const p = path + '/' + ty;
+      if (['/udta', '/udta/meta', '/udta/meta/ilst', '/trak', '/trak/mdia'].some((x) => p.endsWith(x)) || /\/ilst\/[^/]+$/.test(p)) walk(o + 8 + (ty === 'meta' ? 4 : 0), o + sz, p);
+      else if (ty === 'data' && /\/ilst\//.test(p)) {
+        const key = path.split('/').pop(), payload = m.subarray(o + 16, o + sz), td = new TextDecoder();
+        if (key === '©nam') out.title = td.decode(payload); else if (key === '©ART' || (key === 'aART' && !out.author)) out.author = td.decode(payload);
+        else if (key === '©alb') out.album = td.decode(payload); else if (key === 'covr' && !out.cover) out.cover = new Blob([payload], { type: imgType(payload) });
+      } else if (ty === 'chpl') {
+        const v = m[o + 8]; let k = o + 12 + (v === 1 ? 4 : 0); const n = m[k++];
+        for (let c = 0; c < n && k + 9 <= o + sz; c++) { const t = Number(new DataView(m.buffer, k, 8).getBigUint64(0)) / 1e7; const l = m[k + 8]; out.chapters.push({ start: t, title: new TextDecoder().decode(m.subarray(k + 9, k + 9 + l)) }); k += 9 + l; }
+      }
+      o += sz;
+    } };
+    walk(0, m.length, '');
+    return out;
+  }
+  function durationOf(file) {
+    return new Promise((res) => {
+      const a = document.createElement('audio'); const url = URL.createObjectURL(file); let done = false;
+      const end = (v) => { if (done) return; done = true; URL.revokeObjectURL(url); res(Number.isFinite(v) ? v : 0); };
+      a.preload = 'metadata'; a.onloadedmetadata = () => end(a.duration); a.onerror = () => end(0); setTimeout(() => end(0), 10000); a.src = url;
+    });
+  }
+  async function audioMeta(file) {
+    const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+    let m = {};
+    try { m = ['.m4b', '.m4a', '.aac'].includes(ext) ? await readMp4(file) : ext === '.mp3' ? await readId3(file) : {}; } catch { m = {}; }
+    return { ...m, dur: await durationOf(file) };
+  }
+  // Un livre audio : un seul fichier, ou plusieurs pistes (les fichiers d'un même dossier, dans l'ordre)
+  async function uploadAudio(files, onp, extra = {}) {
+    files = [...files].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    const id = rid(); const count = (await all('meta')).length;
+    const tracks = []; let first = null;
+    for (let i = 0; i < files.length; i++) {
+      onp(Math.round((i / files.length) * 90), `Lecture de la piste ${i + 1} sur ${files.length}…`);
+      const am = await audioMeta(files[i]); if (!first) first = am;
+      tracks.push({ name: files[i].name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim(), title: am.title || '', dur: am.dur || 0 });
+    }
+    const common = (() => { if (files.length < 2) return ''; let p = files[0].name; for (const f of files) while (p && !f.name.startsWith(p)) p = p.slice(0, -1); return p.replace(/[\s\-_.(\[]*\d*$/, '').trim(); })();
+    const chapters = files.length > 1 ? tracks.map((t, i) => ({ track: i, start: 0, title: t.title && !tracks.every((x) => x.title === t.title) ? t.title : t.name }))
+      : (first.chapters || []).filter((c) => c.title || c.start >= 0).map((c) => ({ track: 0, start: c.start, title: c.title }));
+    const meta = { id, title: (files.length > 1 ? first.album || common : first.title || first.album) || files[0].name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim(), author: first.author || '', kind: 'audio',
+      pages: tracks.length, tracks, chapters, dur: tracks.reduce((a, t) => a + t.dur, 0), color: PALETTE[count % PALETTE.length], created: now(), position: -count,
+      fname: files[0].name, fsize: files.reduce((a, f) => a + f.size, 0), ...extra };
+    const cover = first.cover ? await coverFrom(first.cover) : null;
+    if (cover) meta.hasCover = true;
+    await put('blob', files.length > 1 ? { files, cover } : { file: files[0], cover }, id);
+    await put('meta', meta); onp(100);
+    return meta;
+  }
+  const audioUrls = new Map();
+  async function audioOf(id) {
+    const rec = await get('blob', id); const list = rec?.files || (rec?.file ? [rec.file] : []);
+    if (!audioUrls.has(id)) audioUrls.set(id, list.map((f) => URL.createObjectURL(f)));
+    return audioUrls.get(id);
+  }
+
   const pageTextCache = new Map();
   async function pdfText(id, n) {
     const key = id + ':' + n; if (pageTextCache.has(key)) return pageTextCache.get(key);
@@ -414,14 +516,17 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
+      tracks: m.tracks, chapters: m.chapters, dur: m.dur,
       fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
     '.epub': 'epub', '.mobi': 'mobi', '.azw': 'mobi', '.azw3': 'mobi', '.prc': 'mobi', '.odt': 'odt', '.rtf': 'rtf', '.fb2': 'fb2', '.doc': 'doc',
-    '.html': 'html', '.htm': 'html', '.xhtml': 'html' };
+    '.html': 'html', '.htm': 'html', '.xhtml': 'html',
+    '.mp3': 'audio', '.m4b': 'audio', '.m4a': 'audio', '.aac': 'audio', '.ogg': 'audio', '.oga': 'audio', '.opus': 'audio', '.flac': 'audio', '.wav': 'audio' };
   async function upload(file, onp, extra = {}) {
     const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+    if (KIND_OF[ext] === 'audio') return uploadAudio([file], onp, extra);
     const kind = KIND_OF[ext] || null;
     if (!kind) throw new Error('Formats acceptés : PDF, EPUB, Kindle (MOBI, AZW), Word, OpenDocument, RTF, HTML, FB2 et texte');
     const id = rid(); const count = (await all('meta')).length;
@@ -588,6 +693,7 @@ window.LocalAPI = (() => {
     for (const m of await all('meta')) {
       if ((m.lib || 'main') !== lib) continue; // chaque bibliothèque a ses propres livres
       if (m.src) src.add(m.src);
+      if (m.srcs) for (const x of m.srcs) src.add(x); // pistes d'un livre audio
       let fname = m.fname, fsize = m.fsize;
       if (!fname && m.kind === 'pdf') { const rec = await get('blob', m.id); if (rec?.file) { fname = rec.file.name; fsize = rec.file.size; } }
       if (fname) { nameSize.add(fname + '|' + fsize); names.add(clean(fname)); }
@@ -600,6 +706,7 @@ window.LocalAPI = (() => {
   async function fileOf(id, { asText } = {}) {
     const meta = await get('meta', id); const rec = await get('blob', id); if (!meta || !rec) return null;
     const base = (meta.fname || meta.title).replace(/\.[^.]+$/, '');
+    if (rec.files) return { files: rec.files, name: meta.title };
     if (rec.file && !(asText && meta.kind !== 'pdf')) return { file: rec.file, name: meta.fname || rec.file.name || meta.title + '.' + (meta.kind === 'txt' ? 'txt' : meta.kind) };
     if (rec.pages) return { file: new Blob([rec.pages.join('\n\n').replace(/^# /gm, '')], { type: 'text/plain' }), name: base + '.txt', converted: meta.kind === 'docx' && !asText };
     return null;
@@ -612,5 +719,15 @@ window.LocalAPI = (() => {
     for (; n <= meta.pages && out.length < max; n++) { out += `\n\n[page ${n}]\n` + await pdfText(id, n); if (n % 5 === 0) onp?.(n, meta.pages); }
     return { text: out.slice(0, max), truncated: n <= meta.pages || out.length > max, pages: meta.pages };
   }
-  return { handle, upload, pageCanvas, paragraphs, known, fileOf, fullText };
+  // Position des mots d'une page PDF (coordonnées de 0 à 1), pour définir le mot touché
+  async function pageItems(id, n) {
+    const doc = await pdfDoc(id); const page = await doc.getPage(n);
+    const vb = page.view, W = vb[2] - vb[0], H = vb[3] - vb[1];
+    const tc = await page.getTextContent();
+    return tc.items.filter((it) => it.str && it.str.trim()).map((it) => {
+      const hgt = it.height || Math.abs(it.transform[3]) || 10;
+      return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
+    });
+  }
+  return { handle, upload, uploadAudio, audioOf, pageCanvas, paragraphs, known, fileOf, fullText, pageItems };
 })();
