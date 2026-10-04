@@ -41,16 +41,19 @@ final class IaGratuite {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
         Exception err = null;
-        for (int t = 0; t < 4; t++) {
+        int tries = urgent ? 5 : 8;
+        for (int t = 0; t < tries; t++) {
             try {
                 String r = once(k, system, prompt, urgent);
                 if (r != null && !r.trim().isEmpty()) return r.trim();
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
             catch (Exception e) { err = e; }
-            Thread.sleep((urgent ? 2000L : 5000L) * (t + 1));
+            Thread.sleep(Math.min(30000L, (urgent ? 2000L : 4000L) * (t + 1)));
         }
-        throw new Exception("Gemini ne répond pas (" + (err == null ? "?" : err.getMessage()) + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
+        String m = err == null ? "?" : String.valueOf(err.getMessage());
+        if (m.contains("surcharg")) throw new Exception("Les serveurs de Gemini sont surchargés en ce moment. Réessaie dans quelques minutes : la préparation reprendra où elle en était.");
+        throw new Exception("Gemini ne répond pas (" + m + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
     }
 
     private static void pace() throws InterruptedException {
@@ -81,6 +84,8 @@ final class IaGratuite {
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
             if (code == 429) { Thread.sleep(urgent ? 4000 : 20000); throw new Exception("quota gratuit momentanément atteint"); }
+            // serveurs surchargés (503, 500…) : on passe au modèle suivant, souvent moins encombré
+            if (code >= 500) { model = (model + 1) % MODELS.length; throw new Exception("surchargé (" + code + ")"); }
             if (code >= 400) throw new Exception("erreur " + code);
             JSONObject j = new JSONObject(res[1]);
             JSONArray cands = j.optJSONArray("candidates");
