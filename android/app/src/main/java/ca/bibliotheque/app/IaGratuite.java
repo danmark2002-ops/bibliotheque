@@ -37,14 +37,17 @@ final class IaGratuite {
     static String ask(Context c, String system, String prompt) throws Exception { return ask(c, system, prompt, false); }
 
     /** urgent : une question de l'auditeur, qui passe devant la préparation du cours. */
-    static String ask(Context c, String system, String prompt, boolean urgent) throws Exception {
+    static String ask(Context c, String system, String prompt, boolean urgent) throws Exception { return ask(c, system, prompt, urgent, false); }
+
+    /** json : Gemini doit répondre en JSON strict (scénario de la vidéo). */
+    static String ask(Context c, String system, String prompt, boolean urgent, boolean json) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
         Exception err = null;
         int tries = urgent ? 5 : 8;
         for (int t = 0; t < tries; t++) {
             try {
-                String r = once(k, system, prompt, urgent);
+                String r = once(k, system, prompt, urgent, json);
                 if (r != null && !r.trim().isEmpty()) return r.trim();
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
@@ -64,12 +67,14 @@ final class IaGratuite {
         }
     }
 
-    private static String once(String key, String system, String prompt, boolean urgent) throws Exception {
+    private static String once(String key, String system, String prompt, boolean urgent, boolean json) throws Exception {
         JSONObject body = new JSONObject();
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
         body.put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", prompt)))));
-        body.put("generationConfig", new JSONObject().put("temperature", 0.9).put("maxOutputTokens", 8192));
+        JSONObject gc = new JSONObject().put("temperature", 0.9).put("maxOutputTokens", json ? 16384 : 8192);
+        if (json) gc.put("responseMimeType", "application/json");
+        body.put("generationConfig", gc);
         while (true) {
             if (!urgent) pace();
             String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";

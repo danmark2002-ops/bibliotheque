@@ -732,16 +732,20 @@ public class MainActivity extends Activity {
 
         /** Une demande à l'IA gratuite en ligne (sans clé). Réponse : window.__aiResult({id, text} ou {id, error}) */
         @JavascriptInterface
-        public void generateOnline(String id, String system, String prompt) { online(id, system, prompt, false); }
+        public void generateOnline(String id, String system, String prompt) { online(id, system, prompt, false, false); }
 
         /** Une question de l'auditeur : elle passe devant la préparation du cours. */
         @JavascriptInterface
-        public void generateUrgent(String id, String system, String prompt) { online(id, system, prompt, true); }
+        public void generateUrgent(String id, String system, String prompt) { online(id, system, prompt, true, false); }
 
-        private void online(String id, String system, String prompt, boolean urgent) {
+        /** Réponse en JSON strict (scénario de la vidéo). */
+        @JavascriptInterface
+        public void generateJson(String id, String system, String prompt) { online(id, system, prompt, false, true); }
+
+        private void online(String id, String system, String prompt, boolean urgent, boolean json) {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
-                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent)); }
+                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent, json)); }
                 catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
                 js("__aiResult", res.toString());
             }).start();

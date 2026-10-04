@@ -1267,6 +1267,7 @@ Pour chaque scène :
 - "narration" : le texte dit à voix haute, vivant et passionné (exclamations, questions à l'auditeur, images frappantes), en tutoyant l'auditeur, sans supposer où il se trouve. Pas de listes ni de symboles.
 - "images" : 2 recherches d'images courtes en ANGLAIS (2 à 4 mots, des choses concrètes et photographiables, ex. "ancient library books", "night sky stars"), pertinentes pour la scène.
 Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
+Dans les textes, n'utilise jamais de guillemets droits ("). Pour citer, utilise les guillemets français « ».
 Réponds UNIQUEMENT avec du JSON valide, sans texte autour, de la forme :
 {"scenes":[{"phrase":"…","narration":"…","images":["…","…"]}]}
 
@@ -1278,7 +1279,10 @@ ${text}
     let t = String(raw || '').replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
     const a = t.indexOf('{'), z = t.lastIndexOf('}');
     if (a < 0 || z <= a) throw new Error('Gemini n\'a pas renvoyé de scénario lisible. Réessaie.');
-    const j = JSON.parse(t.slice(a, z + 1));
+    t = t.slice(a, z + 1);
+    let j;
+    try { j = JSON.parse(t); }
+    catch { j = JSON.parse(t.replace(/,\s*([}\]])/g, '$1').replace(/[\u201C\u201D]/g, '«')); } // petites fautes courantes
     if (!Array.isArray(j.scenes) || !j.scenes.length) throw new Error('Le scénario de Gemini est vide. Réessaie.');
     j.scenes = j.scenes.filter((s) => s && typeof s.narration === 'string' && s.narration.trim()).map((s) => ({
       phrase: String(s.phrase || '').trim(), narration: Prof.clean(String(s.narration)), images: (Array.isArray(s.images) ? s.images : []).map(String).slice(0, 3) }));
@@ -1301,7 +1305,14 @@ ${text}
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
       say('Gemini écrit le condensé… (environ une minute)');
       const words = t.text.split(/\s+/).length;
-      const script = this.parse(await onlineAsk('', this.prompt(b, condense(t.text, 300000), words)));
+      const raw = await onlineAsk('', this.prompt(b, condense(t.text, 300000), words), false, true);
+      let script;
+      try { script = this.parse(raw); }
+      catch {
+        // scénario mal formé : Gemini le corrige lui-même
+        say('Gemini corrige le format du condensé…');
+        script = this.parse(await onlineAsk('', `Le texte ci-dessous devait être du JSON valide de la forme {"scenes":[{"phrase":"…","narration":"…","images":["…","…"]}]} mais il contient une erreur de syntaxe. Renvoie exactement le même contenu, corrigé en JSON valide (remplace les guillemets droits à l'intérieur des textes par « »). Rien d'autre.\n\n${raw}`, false, true));
+      }
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
       say(`Condensé prêt : ${script.scenes.length} scènes. Recherche des images…`);
       await new Promise((res, rej) => {
@@ -1470,11 +1481,11 @@ function nanoAsk(prompt) {
   return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
 }
 // Gemini en ligne, avec la clé gratuite de la personne : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
-function onlineAsk(system, prompt, urgent) {
+function onlineAsk(system, prompt, urgent, json) {
   const id = 'o' + (++nanoSeq);
   const wait = (window.__aiWait ||= {});
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
-  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); (urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
+  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); (json && AndroidAI.generateJson ? AndroidAI.generateJson : urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {
