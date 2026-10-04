@@ -734,6 +734,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (instance == this) { instance = null; LivreService.phoneState(""); }
+        if (isFinishing()) LivreService.appClosed(); // fermer l'application arrête la lecture
         if (tts != null) { tts.stop(); tts.shutdown(); }
         if (web != null) { web.removeAllViews(); web.destroy(); }
         super.onDestroy();

@@ -84,6 +84,7 @@ public class LivreService extends MediaBrowserService {
     private android.speech.tts.Voice defaultVoice, profVoice;
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
+    private boolean fromCar; // lecture lancée depuis l'auto : elle continue même si l'application du téléphone se ferme
     private boolean profDone = true, waitingMore; // cours encore en préparation : on attend la partie suivante
     private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.";
 
@@ -165,6 +166,7 @@ public class LivreService extends MediaBrowserService {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String cmd = intent == null ? null : intent.getStringExtra("cmd");
+        if (cmd != null) fromCar = false; // commande venue du téléphone
         String id = intent == null ? null : intent.getStringExtra("id");
         if ("prof".equals(cmd) && id != null) {
             if (("prof:" + id).equals(bookId)) { inter.clear(); if (!playing) play(); }
@@ -189,6 +191,16 @@ public class LivreService extends MediaBrowserService {
             if (("prof:" + id).equals(bookId)) play(); else start("prof:" + id);
         }
         return START_NOT_STICKY;
+    }
+
+    /** L'application du téléphone se ferme : sa lecture s'arrête (celle lancée depuis l'auto continue). */
+    static void appClosed() { LivreService s = instance; if (s != null) s.main.post(() -> { if (!s.fromCar) s.stopAll(); }); }
+
+    /** L'application est retirée des applications récentes : tout s'arrête, sauf une lecture lancée depuis l'auto. */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        if (!fromCar) { stopAll(); stopSelf(); }
+        super.onTaskRemoved(rootIntent);
     }
 
     /** Bouton « Arrêt » : la voix se tait, la notification disparaît. */
@@ -319,7 +331,7 @@ public class LivreService extends MediaBrowserService {
 
     // ---------------------------------------------------------------- lecture
     private class Callback extends MediaSession.Callback {
-        @Override public void onPlayFromMediaId(String mediaId, Bundle extras) { if (mediaId != null && mediaId.startsWith("book:")) start(mediaId.substring(5)); }
+        @Override public void onPlayFromMediaId(String mediaId, Bundle extras) { fromCar = true; if (mediaId != null && mediaId.startsWith("book:")) start(mediaId.substring(5)); }
         @Override public void onPlay() {
             if (toPhone("play", 0)) return;
             if (bookId != null) { play(); return; }
@@ -338,6 +350,7 @@ public class LivreService extends MediaBrowserService {
             if ("m180".equals(action)) move(-180); else if ("p180".equals(action)) move(180); else if ("p600".equals(action)) move(600); else if ("m600".equals(action)) move(-600);
         }
         @Override public void onPlayFromSearch(String query, Bundle extras) {
+            fromCar = true;
             JSONArray books = catalog().optJSONArray("books");
             if (books == null || books.length() == 0) return;
             String q = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();

@@ -979,7 +979,13 @@ function estimateCost(b) {
   const usd = (chars / 3.5) / 1e6 * 2 + 0.03; // Sonnet 5.5 : 2 $ par million de jetons lus, 10 $ par million écrits
   return usd < 0.05 ? 'moins de 5 ¢ US' : `environ ${usd.toFixed(2).replace('.', ',')} $ US`;
 }
+// une autre action commence (résumé…) : toute lecture à voix haute s'arrête
+function stopAllAudio() {
+  try { window.__reader?.pause(); } catch {}
+  try { if (window.AndroidAuto?.profStop) AndroidAuto.profStop(); } catch {}
+}
 function openSummary(b) {
+  stopAllAudio();
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
