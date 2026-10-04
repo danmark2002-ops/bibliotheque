@@ -692,3 +692,58 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 /* Vidéo sur la télé : liste des appareils Google Cast */
 button.librow { width: 100%; padding: 10px 12px; gap: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
 button.librow small { display: block; color: var(--ink-3); font-size: 13px; }
+
+/* ---------- Menu « Ajouter » ---------- */
+.addgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 420px) { .addgrid { grid-template-columns: 1fr; } }
+.addbig { display: flex; gap: 14px; align-items: flex-start; text-align: left; padding: 16px; border-radius: 18px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); cursor: pointer; transition: transform .15s, border-color .2s; }
+.addbig:hover, .addbig:active { border-color: var(--brass); transform: translateY(-1px); }
+.addic { flex: none; width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: var(--brass); color: var(--brass-ink, #241809); }
+.addic svg { width: 24px; height: 24px; }
+.addtx b { display: block; font: 600 17px/1.25 var(--font-display); margin-bottom: 4px; }
+.addtx small { display: block; color: var(--ink-2); font-size: 13px; line-height: 1.4; }
+.addrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.addsmall { flex: 1 1 0; min-width: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 10px; border-radius: 14px; border: 1px solid var(--glass-line); background: transparent; color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer; }
+.addsmall svg { width: 18px; height: 18px; opacity: .8; }
+.addsmall:hover { border-color: var(--brass); }
+.addfind { display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 16px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--glass-line); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.addfind > svg { width: 22px; height: 22px; flex: none; color: var(--brass); }
+.addfind > svg:last-child { width: 16px; height: 16px; color: var(--ink-3); }
+.addfind span { flex: 1; }
+.addfind b { display: block; font-size: 15px; }
+.addfind small { color: var(--ink-2); font-size: 12.5px; }
+/* ---------- Catalogues ---------- */
+.catlist { display: flex; flex-direction: column; gap: 6px; }
+.catrow { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); text-align: left; cursor: pointer; }
+.catrow:hover { border-color: var(--brass); }
+.catrow > svg { width: 16px; height: 16px; color: var(--ink-3); flex: none; }
+.catbadge { flex: none; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; color: #fff; font: 700 13px/1 Inter, sans-serif; letter-spacing: .02em; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.cattx { flex: 1; min-width: 0; }
+.cattx b { display: block; font-size: 15px; }
+.cattx small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.catbuy { margin-top: 12px; }
+.btn.on { border-color: var(--brass); }
+/* ---------- Tout le téléphone : choix des dossiers ---------- */
+.foundlist { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
+.foundrow { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--glass-line); cursor: pointer; }
+.foundrow input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--brass); flex: none; }
+.foundrow b { display: block; font-size: 14px; word-break: break-word; }
+.foundrow small { display: block; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
+/* ---------- Voix et ton ---------- */
+.vh { font: 600 13px/1 Inter, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); margin: 6px 0 10px; }
+.vh + .tonegrid { margin-bottom: 18px; }
+.tonegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (max-width: 520px) { .tonegrid { grid-template-columns: repeat(2, 1fr); } }
+.tonecard { text-align: left; padding: 12px; border-radius: 14px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--ink); cursor: pointer; }
+.tonecard b { display: block; font: 600 16px/1.2 var(--font-display); margin-bottom: 3px; }
+.tonecard small { display: block; color: var(--ink-2); font-size: 12px; line-height: 1.35; }
+.tonecard.sel { border-color: var(--brass); box-shadow: inset 0 0 0 1px var(--brass); }
+.vlist { display: flex; flex-direction: column; gap: 4px; }
+.vrow { display: flex; align-items: center; gap: 6px; border-radius: 16px; padding: 4px 6px 4px 4px; border: 1px solid transparent; }
+.vrow.sel { border-color: var(--brass); background: var(--glass); }
+.vpick { flex: 1; display: flex; align-items: center; gap: 14px; padding: 8px; background: transparent; border: 0; color: var(--ink); text-align: left; cursor: pointer; min-width: 0; }
+.orb { flex: none; width: 46px; height: 46px; border-radius: 50%; box-shadow: inset -4px -6px 12px rgba(0,0,0,.35), inset 3px 4px 10px rgba(255,255,255,.25); }
+.vtx b { display: block; font-size: 16px; }
+.vtx small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.player .chip svg { width: 15px; height: 15px; vertical-align: -3px; }
+svg.rot-r { transform: rotate(-90deg); }

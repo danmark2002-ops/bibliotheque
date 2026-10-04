@@ -19,6 +19,13 @@ const store = {
   set(k, v) { try { localStorage.setItem('bib.' + k, JSON.stringify(v)); } catch {} },
 };
 const ICONS = {
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  cart: '<path d="M3 4h2l2.4 11h10.2L20 7H6.2"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h3"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',
+  voice: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   share: '<path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>',
   people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 6 4.8"/>',
@@ -63,6 +70,7 @@ const ICONS = {
   spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };
+const chevR = () => { const s = icon('chev'); s.classList.add('rot-r'); return s; };
 const icon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
 const KIND = { pdf: 'PDF', docx: 'DOCX', txt: 'TXT' };
 const PALETTE = ['#7a2e2e', '#1f4e5f', '#3b5d3a', '#5b3a6b', '#8a5a1c', '#2c3e66', '#6b2d4f', '#355c55', '#7d4b2a', '#3d3d5c', '#24343f', '#8c3b2a'];
@@ -423,7 +431,7 @@ function renderLibrary(opts = {}) {
   const ready = live.filter((b) => b.status === 'ready');
   const current = ['all', 'reading'].includes(S.nav.k) && !q ? ready.filter((b) => b.progress && b.progress.page < b.pages && b.state !== 'lu').sort((a, b) => b.progress.last - a.progress.last)[0] : null;
   const actions = h('div', { class: 'actions' },
-    owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter un livre')) : null,
+    owner ? h('button', { class: 'btn primary', onclick: local ? openAddMenu : pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter')) : null,
     owner && local && S.lib !== 'all' ? h('button', { class: 'btn', title: 'Dossier source', onclick: () => openFolder() }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
     owner && local && (folderInfo() || (S.lib === 'all' && libsWithFolder().length)) ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: S.lib === 'all' ? 'Actualiser tous les dossiers' : 'Actualiser le dossier', 'aria-label': 'Actualiser', onclick: () => refreshFolders() }, icon('refresh')) : null,
     owner && local && window.AndroidShare ? h('button', { class: 'btn icon', title: 'Partager cette bibliothèque', 'aria-label': 'Partager cette bibliothèque', onclick: () => shareLibraryPick() }, icon('share')) : null,
@@ -526,6 +534,148 @@ async function uploadFiles(files) {
   }
   await loadBooks(); renderLibrary();
 }
+// ================= Menu « Ajouter » =================
+// Deux grands choix évidents (un livre, un dossier), puis les autres façons ; les catalogues viennent après
+function openAddMenu() {
+  const lib = curLib();
+  const big = (ic, title, sub, fn) => h('button', { class: 'addbig', onclick: () => { close(); fn(); } }, h('span', { class: 'addic' }, icon(ic)), h('span', { class: 'addtx' }, h('b', {}, title), h('small', {}, sub)));
+  const small = (ic, title, fn) => h('button', { class: 'addsmall', onclick: () => { close(); fn(); } }, icon(ic), h('span', {}, title));
+  const f = lib ? folderOf(lib.id) : null;
+  const close = sheet('Ajouter', h('div', {},
+    h('div', { class: 'addgrid' },
+      big('file', 'Un livre', 'Choisis un ou plusieurs fichiers sur le téléphone : PDF, EPUB, Kindle, Word, texte…', pickFiles),
+      big('folder', 'Un dossier entier', f ? `Tous les livres d'un autre dossier, dans une nouvelle bibliothèque. Celle-ci suit déjà « ${f.name} ».` : 'Tous les livres d\'un dossier, d\'un coup. Les nouveaux s\'ajouteront quand tu actualises.', () => (lib && !f ? chooseFolder(lib.id, { adopt: true }) : addFolderLib()))),
+    h('div', { class: 'addrow' },
+      window.AndroidFolder?.askPhoneAccess ? small('scan', 'Tout le téléphone', scanPhone) : null,
+      window.AndroidWeb ? small('link', 'Depuis un lien', addFromLink) : null,
+      small('paste', 'Coller un texte', pasteText)),
+    window.AndroidWeb ? h('button', { class: 'addfind', onclick: () => { close(); openCatalogues(); } },
+      icon('globe'), h('span', {}, h('b', {}, 'Trouver des livres'), h('small', {}, 'Des milliers de livres gratuits en français')), chevR()) : null,
+    lib ? h('p', { class: 'hint', style: { marginTop: '14px' } }, `Ils iront dans « ${lib.name} ».`) : null));
+}
+// « Tout le téléphone » : une bibliothèque à part, remplie avec les livres trouvés partout dans le téléphone
+async function scanPhone() {
+  if (!AndroidFolder.phoneAccess()) {
+    const ok = await new Promise((res) => {
+      const close = sheet('Chercher dans tout le téléphone', h('div', {},
+        h('p', {}, 'L\'application va chercher tous les livres (PDF, EPUB, Word, texte…) rangés n\'importe où dans le téléphone : Téléchargements, documents WhatsApp, Drive hors ligne…'),
+        h('p', { class: 'muted' }, 'Android va te demander d\'autoriser « l\'accès à tous les fichiers ». Active l\'interrupteur, puis reviens ici. Rien ne quitte le téléphone.'),
+        h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
+          h('button', { class: 'btn', onclick: () => { close(); res(false); } }, 'Annuler'),
+          h('button', { class: 'btn primary', onclick: async () => { close(); res(!!(await nativeCall('__phoneAccess', () => AndroidFolder.askPhoneAccess()))); } }, 'Autoriser'))));
+    });
+    if (!ok) return toast('Sans autorisation, choisis plutôt un dossier');
+  }
+  const m = folderMap();
+  let lib = libs().find((l) => m[l.id]?.phone);
+  if (!lib) {
+    const l = libs(); const used = new Set(l.map((x) => x.decor));
+    const decor = ['ardoise', 'olivier', 'ebene', 'chene', 'acajou', 'bouleau', 'noyer'].find((k) => !used.has(k)) || 'ardoise';
+    lib = { id: 'lib' + Date.now().toString(36), name: 'Tout le téléphone', decor };
+    l.push(lib); saveLibs(l); AndroidFolder.setPhone(lib.id);
+  }
+  switchLib(lib.id);
+  await scanFolder(lib.id, null, { review: true, elsewhere: true });
+}
+// Après la recherche : on montre les dossiers trouvés, l'utilisateur coche ceux à garder
+function reviewFound(entries) {
+  return new Promise((res) => {
+    const groups = new Map();
+    for (const e of entries) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : 'Stockage principal'; if (!groups.has(d)) groups.set(d, []); groups.get(d).push(e); }
+    const junk = /(facture|invoice|re[çc]u|receipt|relev[ée]|statement|billet|ticket|boarding|commande|order|scan|cv|resume|contrat|bail|impot|tax)/i;
+    const rows = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([d, list]) => {
+      const cb = h('input', { type: 'checkbox', checked: !list.every((e) => junk.test(e.name)) });
+      const size = list.reduce((a, e) => a + (e.size || 0), 0);
+      return { cb, list, el: h('label', { class: 'foundrow' }, cb, h('span', {}, h('b', {}, d.split('/').slice(-2).join(' › ')), h('small', {}, `${list.length} fichier${list.length > 1 ? 's' : ''} · ${fmtSize(size)} · ${list.slice(0, 3).map((e) => e.name.replace(/\.[^.]+$/, '')).join(', ')}${list.length > 3 ? '…' : ''}`))) };
+    });
+    let done = false; const finish = (v) => { if (done) return; done = true; close(); res(v); };
+    const close = sheet(`${entries.length} livre${entries.length > 1 ? 's' : ''} trouvé${entries.length > 1 ? 's' : ''}`, h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-4px' } }, 'Décoche les dossiers qui ne contiennent pas de livres (factures, papiers…).'),
+      h('div', { class: 'actions', style: { margin: '0 0 10px' } },
+        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = true; }) }, 'Tout cocher'),
+        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = false; }) }, 'Tout décocher')),
+      h('div', { class: 'foundlist' }, rows.map((r) => r.el)),
+      h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
+        h('button', { class: 'btn', onclick: () => finish([]) }, 'Annuler'),
+        h('button', { class: 'btn primary', onclick: () => finish(rows.filter((r) => r.cb.checked).flatMap((r) => r.list)) }, icon('plus'), 'Ajouter les dossiers cochés'))), { wide: true });
+    const obs = new MutationObserver(() => { if (!document.body.contains(rows[0]?.el)) { obs.disconnect(); finish([]); } });
+    if (rows.length) obs.observe(document.body, { childList: true, subtree: true }); else finish([]);
+  });
+}
+function addFromLink() {
+  const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
+  const go = () => { const u = inp.value.trim(); if (!/^https?:\/\/\S+/i.test(u)) return toast('Colle une adresse qui commence par https://'); close(); AndroidWeb.fetch(u); };
+  const close = sheet('Ajouter depuis un lien', h('div', {},
+    h('p', { class: 'muted' }, 'Le lien d\'un livre (PDF, EPUB…) ou d\'un article : l\'article devient un livre que tu peux lire ou écouter.'),
+    h('label', { class: 'field' }, 'Adresse', inp),
+    h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '14px' } },
+      navigator.clipboard?.readText ? h('button', { class: 'btn', onclick: async () => { try { inp.value = (await navigator.clipboard.readText()).trim(); } catch { toast('Colle l\'adresse dans la case'); } } }, icon('paste'), 'Coller') : null,
+      h('button', { class: 'btn primary', onclick: go }, icon('plus'), 'Ajouter'))));
+  inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+  setTimeout(() => inp.focus(), 250);
+}
+function pasteText() {
+  const title = h('input', { placeholder: 'Titre', maxlength: 120 });
+  const area = h('textarea', { rows: 10, placeholder: 'Colle ou écris ton texte ici…', style: { width: '100%', resize: 'vertical' } });
+  const close = sheet('Coller un texte', h('div', {},
+    h('label', { class: 'field' }, 'Titre', title), area,
+    h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '14px' } },
+      h('button', { class: 'btn primary', onclick: () => {
+        const t = area.value.trim(); if (t.length < 2) return toast('Le texte est vide');
+        const name = safeName(title.value.trim() || t.split('\n')[0].slice(0, 60)) + '.txt';
+        close(); uploadFiles([new File([t], name, { type: 'text/plain' })]);
+      } }, icon('plus'), 'Ajouter à l\'étagère'))));
+}
+// Catalogues : les gratuits s'ouvrent dans l'application (le livre téléchargé arrive sur l'étagère) ;
+// les librairies sont rangées à part, derrière un bouton, et s'ouvrent dans le navigateur du téléphone
+const CATALOGUES = {
+  free: [
+    ['BEQ', 'Bibliothèque électronique du Québec', 'Des milliers de classiques, québécois et du monde', 'https://beq.ebooksgratuits.com/', '#1f4e7a'],
+    ['ELG', 'Ebooks libres et gratuits', 'Plus de 3 000 livres en EPUB et PDF', 'https://www.ebooksgratuits.com/', '#7a2e2e'],
+    ['BNR', 'Bibliothèque numérique romande', 'Littérature de Suisse romande et d\'ailleurs', 'https://ebooks-bnr.com/', '#b33a3a'],
+    ['G', 'Gallica', 'La bibliothèque numérique de la BnF', 'https://gallica.bnf.fr/', '#5b3a2a'],
+    ['W', 'Wikisource', 'Textes libres, à télécharger en EPUB', 'https://fr.wikisource.org/', '#3d3d5c'],
+    ['PG', 'Projet Gutenberg', 'Les livres en français du plus ancien catalogue libre', 'https://www.gutenberg.org/browse/languages/fr', '#355c55'],
+    ['L', 'Livres pour tous', 'Livres gratuits en français', 'https://www.livrespourtous.com/', '#6a8a1f'],
+    ['IA', 'Internet Archive', 'Une immense collection de textes numérisés', 'https://archive.org/details/texts', '#444'],
+  ],
+  buy: [
+    ['LL', 'Leslibraires.ca', 'Les librairies indépendantes du Québec', 'https://www.leslibraires.ca/', '#8a5a1c'],
+    ['RB', 'Renaud-Bray', 'Livres et livres numériques', 'https://www.renaud-bray.com/', '#c0392b'],
+    ['A', 'Archambault', 'Livres et livres numériques', 'https://www.archambault.ca/', '#2c3e66'],
+    ['K', 'Kobo', 'Livres numériques et audio', 'https://www.kobo.com/ca/fr', '#b8262b'],
+    ['GP', 'Google Play Livres', 'Livres numériques et audio', 'https://play.google.com/store/books', '#1f7a4a'],
+    ['PN', 'Prêt numérique (bibliothèques du Québec)', 'Emprunte gratuitement avec ta carte de bibliothèque', 'https://www.pretnumerique.ca/', '#5b3a6b'],
+  ],
+};
+function openCatalogues() {
+  const row = ([badge, name, desc, url, color], buy) => h('button', { class: 'catrow', onclick: () => {
+    if (buy) { AndroidWeb.external(url); return; }
+    close(); if (!store.get('catSeen', false)) { store.set('catSeen', true); toast('Touche « Télécharger » (EPUB ou PDF) : le livre arrive sur ton étagère'); }
+    AndroidWeb.open(url, name);
+  } }, h('span', { class: 'catbadge', style: { background: color } }, badge), h('span', { class: 'cattx' }, h('b', {}, name), h('small', {}, desc)), buy ? icon('open') : chevR());
+  const buyBox = h('div', { class: 'catbuy', hidden: true },
+    h('p', { class: 'hint' }, 'Ces sites s\'ouvrent dans ton navigateur : l\'achat se fait chez eux. Un livre acheté sans verrou (DRM) peut ensuite être ajouté ici avec « Un livre ».'),
+    h('div', { class: 'catlist' }, CATALOGUES.buy.map((c) => row(c, true))));
+  const buyBtn = h('button', { class: 'btn', onclick: () => { buyBox.hidden = !buyBox.hidden; buyBtn.classList.toggle('on', !buyBox.hidden); } }, icon('cart'), 'Acheter ou emprunter un livre');
+  const close = sheet('Trouver des livres', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-4px' } }, 'Des livres libres de droits, gratuits et légaux. Touche « Télécharger » sur le site : le livre se range tout seul sur ton étagère.'),
+    h('div', { class: 'catlist' }, CATALOGUES.free.map((c) => row(c, false))),
+    h('div', { class: 'actions', style: { marginTop: '18px' } }, buyBtn),
+    buyBox));
+}
+window.__webBookStart = (name) => toast(`Téléchargement de « ${String(name || 'livre').replace(/\.[^.]+$/, '')} »…`);
+window.__webBook = async (j) => {
+  let r = null; try { r = JSON.parse(j); } catch {}
+  if (!r || r.error) return toast(r?.error || 'Téléchargement impossible');
+  try {
+    const resp = await fetch('/__web?f=' + encodeURIComponent(r.file));
+    if (!resp.ok) throw new Error('Fichier illisible');
+    await uploadFiles([new File([await resp.blob()], r.name, { lastModified: Date.now() })]);
+  } catch (e) { toast(e.message); }
+  finally { try { AndroidWeb.done(r.file); } catch {} }
+};
+
 // ================= Bibliothèques et dossiers sources =================
 // Chaque bibliothèque a son nom, son décor et (si on veut) son dossier source. « Toutes » les montre ensemble.
 const DECORS = [['noyer', 'Noyer'], ['chene', 'Chêne clair'], ['acajou', 'Acajou'], ['ebene', 'Ébène'], ['ardoise', 'Ardoise'], ['olivier', 'Olivier'], ['bouleau', 'Bouleau']];
@@ -619,7 +769,7 @@ function scanFolder(libId, webFiles, opts) {
   FOLDER.queue = run.catch(() => 0);
   return run;
 }
-async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
+async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
   let entries;
   FOLDER.busy = true; renderLibrary();
@@ -646,7 +796,12 @@ async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
       if (moved) await loadBooks();
     }
     const k = await LocalAPI.known(libId);
-    const fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
+    let fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
+    if (elsewhere) { // déjà dans une autre bibliothèque : on ne le copie pas une deuxième fois
+      const have = new Set(S.books.filter((b) => !b.trashed && b.fname).map((b) => b.fname + '|' + b.size));
+      fresh = fresh.filter((e) => !have.has(e.name + '|' + e.size));
+    }
+    if (review && fresh.length) { FOLDER.busy = false; renderLibrary(); fresh = await reviewFound(fresh); if (!fresh.length) return 0; FOLDER.busy = true; }
     const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
     if (!fresh.length) { if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
@@ -917,7 +1072,8 @@ function openSettings() {
     h('div', { class: 'field' }, local && !lib ? 'Décor de la vue « Toutes ensemble »' : 'Décor', picker),
     owner && (!local || lib) ? h('label', { class: 'field' }, 'Nom de la bibliothèque', nameIn) : null,
     owner && !local ? h('label', { class: 'field' }, 'Nouveau mot de passe', pw) : null,
-    local ? h('p', { class: 'muted' }, 'Mode local : tes livres sont gardés sur cet appareil seulement. Le partage et le suivi des lecteurs demandent un serveur.') : null,
+    TTS.supported() ? h('div', { class: 'field' }, 'Lecture audio', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { close(); openVoices(); } }, icon('voice'), 'Voix et ton : ' + Voice.label()))) : null,
+    local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
         local ? h('button', { class: 'btn', onclick: () => { close(); openLibraries(); } }, icon('collection'), 'Bibliothèques') : h('button', { class: 'btn', onclick: async () => { await post('/api/logout', {}); close(); boot(); } }, icon('logout'), 'Déconnexion'),
@@ -1816,18 +1972,85 @@ const TTS = {
     if (this.native()) return [];
     return (speechSynthesis.getVoices() || []).filter((v) => /^fr/i.test(v.lang)).concat((speechSynthesis.getVoices() || []).filter((v) => !/^fr/i.test(v.lang)));
   },
-  speak(text, rate, voiceName, onend) {
+  speak(text, rate, voiceName, onend, pitch = 1) {
     const id = String(++this.seq);
-    if (this.native()) { this.cb[id] = onend; AndroidTTS.speak(text, rate, id); return; }
+    if (this.native()) { this.cb[id] = onend; if (AndroidTTS.speak2) AndroidTTS.speak2(text, rate, pitch, voiceName || '', id); else AndroidTTS.speak(text, rate, id); return; }
     const u = new SpeechSynthesisUtterance(text);
     const v = this.voices().find((x) => x.name === voiceName) || this.voices().find((x) => /^fr/i.test(x.lang));
-    if (v) u.voice = v; u.lang = v?.lang || 'fr-FR'; u.rate = rate;
+    if (v) u.voice = v; u.lang = v?.lang || 'fr-FR'; u.rate = rate; u.pitch = pitch;
     u.onend = () => onend && onend(); u.onerror = (e) => { if (e.error !== 'interrupted' && e.error !== 'canceled') onend && onend(); };
     speechSynthesis.speak(u);
   },
   stop() { this.cb = {}; if (this.native()) AndroidTTS.stop(); else if (window.speechSynthesis) speechSynthesis.cancel(); },
   supported() { return this.native() || 'speechSynthesis' in window; },
 };
+// ---- Voix et ton : la voix du téléphone, avec une intonation qui change selon le ton choisi ----
+const TONES = [
+  ['calme', 'Calme', 'Posé et doux, pour lire le soir', { p: 0.96, r: 0.88, v: 0.012 }, 'La nuit tombait doucement sur la ville. Au loin, une seule fenêtre restait allumée… On pouvait enfin lire en paix.'],
+  ['serieux', 'Sérieux', 'Sobre et clair, pour les essais et la science', { p: 0.92, r: 0.96, v: 0 }, 'L\'information serait le substrat fondamental de la réalité. Examinons cette hypothèse avec rigueur, étape par étape.'],
+  ['naturel', 'Naturel', 'Une lecture simple, sans effet', { p: 1, r: 1, v: 0.02 }, 'Bonjour ! Voici comment je vais lire tes livres. Tu peux changer de voix quand tu veux.'],
+  ['conteur', 'Conteur', 'Lent et vivant, pour les histoires', { p: 1.02, r: 0.9, v: 0.05 }, 'Il était une fois, au bord d\'une forêt immense, une petite bibliothèque. Personne ne savait qui l\'avait construite… Et chaque nuit, ses livres changeaient de place !'],
+  ['enjoue', 'Enjoué', 'Souriant et rythmé', { p: 1.1, r: 1.06, v: 0.04 }, 'Bonne nouvelle : ton prochain livre t\'attend ! On commence tout de suite ? Allez, c\'est parti.'],
+  ['passionne', 'Passionné', 'La voix monte, accélère et vibre', { p: 1.12, r: 1.06, v: 0.07, x: true }, 'Imagine ! Et si l\'univers tout entier n\'était qu\'information ? C\'est fascinant… Et ce n\'est que le début !'],
+];
+const VOICE_NAMES = ['Camille', 'Dominique', 'Sacha', 'Alex', 'Charlie', 'Morgan', 'Lou', 'Eden', 'Noa', 'Claude', 'Ariel', 'Jo', 'Sam', 'Andréa', 'Maxime', 'Gaby'];
+const REGION = { CA: 'Québec', FR: 'France', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg' };
+const Voice = {
+  tone: () => store.get('tone', 'naturel'),
+  toneOf: (k) => TONES.find((t) => t[0] === k) || TONES[2],
+  current: () => store.get('voice', ''),
+  list() {
+    let raw = [];
+    if (TTS.native()) { try { raw = JSON.parse(AndroidTTS.voices?.() || '[]'); } catch {} }
+    else raw = TTS.voices().filter((v) => /^fr/i.test(v.lang)).map((v) => ({ name: v.name, country: (v.lang.split(/[-_]/)[1] || '').toUpperCase(), online: !v.localService }));
+    return raw.map((v, i) => ({ ...v, nick: VOICE_NAMES[i % VOICE_NAMES.length] + (i >= VOICE_NAMES.length ? ' ' + (Math.floor(i / VOICE_NAMES.length) + 1) : ''),
+      sub: [REGION[v.country] || v.country || 'Français', v.online ? 'en ligne, plus naturelle' : 'sur le téléphone', v.quality >= 400 ? 'haute qualité' : ''].filter(Boolean).join(' · ') }));
+  },
+  label() { const v = this.list().find((x) => x.name === this.current()); return this.toneOf(this.tone())[1] + (v ? ' · ' + v.nick : ''); },
+  // Hauteur et débit de chaque phrase : le ton donne la base, le sens de la phrase fait varier
+  shape(text, i, rate, toneKey = this.tone()) {
+    const t = this.toneOf(toneKey)[3], s = String(text).trim();
+    let p = t.p + ((((i * 37) % 7) - 3) / 3) * t.v, r = rate * t.r * (1 + ((((i * 53) % 5) - 2) / 2) * t.v * 0.6);
+    if (/!\s*[»”"]?$/.test(s)) { p += t.x ? 0.15 : t.v * 1.5; r *= t.x ? 1.08 : 1.02; }
+    else if (/\?\s*[»”"]?$/.test(s)) p += t.v ? 0.05 + t.v : 0.03;
+    else if (/(…|\.\.\.)\s*[»”"]?$/.test(s)) { r *= 0.92; p -= 0.03; }
+    if (t.x && /^(ah|oh|eh|wow|imagine[zs]?|attention|incroyable|fascinant|extraordinaire|tiens|écoute[zs]?)\b/i.test(s)) p += 0.08;
+    if (s.length > 180) r *= 0.95;
+    return { rate: Math.max(0.4, Math.min(2.6, r)), pitch: Math.max(0.7, Math.min(1.45, p)) };
+  },
+};
+const orbStyle = (seed) => { const hsh = hashStr(seed), a = hsh % 360, b = (a + 70 + (hsh >> 8) % 120) % 360;
+  return { background: `radial-gradient(circle at 30% 28%, hsl(${b} 90% 85%), transparent 45%), radial-gradient(circle at 70% 75%, hsl(${(a + 200) % 360} 70% 45%), transparent 55%), linear-gradient(140deg, hsl(${a} 65% 50%), hsl(${b} 60% 30%))` }; };
+function openVoices() {
+  const r = window.__reader; if (r?.playing) r.pause();
+  let cur = Voice.current(), tone = Voice.tone();
+  const vs = Voice.list();
+  const preview = (name, tk) => {
+    TTS.stop(); const ss = sentences(Voice.toneOf(tk)[4]); let i = 0;
+    const next = () => { if (i >= ss.length) return; const x = ss[i], sh = Voice.shape(x, i, store.get('rate', 1), tk); i++; TTS.speak(x, sh.rate, name, next, sh.pitch); };
+    next();
+  };
+  const tones = h('div', { class: 'tonegrid' }, TONES.map(([k, name, desc]) => h('button', { class: 'tonecard' + (k === tone ? ' sel' : ''), onclick: (e) => {
+    tone = k; store.set('tone', k); if (window.__reader?.toneBtn) window.__reader.toneBtn.replaceChildren(icon('voice'), ' ', Voice.toneOf(k)[1]); $$('.tonecard', tones).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); preview(cur, k);
+  } }, h('b', {}, name), h('small', {}, desc))));
+  const row = (v) => h('div', { class: 'vrow' + ((v ? v.name : '') === cur ? ' sel' : '') },
+    h('button', { class: 'vpick', onclick: (e) => {
+      cur = v ? v.name : ''; store.set('voice', cur); if (window.__reader) window.__reader.voice = cur;
+      $$('.vrow', list).forEach((x) => x.classList.remove('sel')); e.currentTarget.parentNode.classList.add('sel'); preview(cur, tone);
+    } }, h('span', { class: 'orb', style: v ? orbStyle(v.name) : { background: 'conic-gradient(from 90deg, #d4ab6a, #7a2e2e, #1f4e5f, #d4ab6a)' } }),
+      h('span', { class: 'vtx' }, h('b', {}, v ? v.nick : 'Automatique'), h('small', {}, v ? v.sub : 'La meilleure voix française du téléphone'))),
+    h('button', { class: 'rbtn', 'aria-label': 'Écouter', onclick: () => preview(v ? v.name : '', tone) }, icon('play')));
+  const list = h('div', { class: 'vlist' }, row(null), vs.map(row));
+  const close = sheet('Voix et ton', h('div', {},
+    h('h3', { class: 'vh' }, 'Le ton'), tones,
+    h('h3', { class: 'vh' }, 'La voix'),
+    vs.length ? list : h('p', { class: 'muted' }, 'Aucune voix française n\'est installée sur le téléphone.'),
+    TTS.native() ? h('div', { class: 'addfind', style: { marginTop: '14px' }, onclick: () => AndroidTTS.openSettings?.() },
+      icon('download'), h('span', {}, h('b', {}, 'Plus de voix'), h('small', {}, 'Réglages Android › Synthèse vocale › Moteur Google › Installer des données vocales (Français Canada ou France)')), chevR()) : null,
+    h('p', { class: 'hint', style: { marginTop: '12px' } }, 'Touche un ton ou une voix pour l\'entendre. Le choix sert à toute la lecture audio.')), { wide: true });
+  const stopOnClose = new MutationObserver(() => { if (!document.body.contains(list)) { stopOnClose.disconnect(); TTS.stop(); } });
+  stopOnClose.observe(document.body, { childList: true });
+}
 window.__ttsDone = (id) => { const f = TTS.cb[id]; delete TTS.cb[id]; f && f(); };
 if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
 
@@ -2305,13 +2528,14 @@ class Reader {
       voiceSel.replaceChildren(...vs.slice(0, 40).map((v) => h('option', { value: v.name, selected: v.name === this.voice ? true : null }, `${v.name.replace(/Microsoft |Google |\(.*\)/g, '').trim()} · ${v.lang}`)));
     };
     if (!TTS.native()) { voiceSel = h('select', { 'aria-label': 'Voix', onchange: () => { this.voice = voiceSel.value; store.set('voice', this.voice); if (this.playing) { this.stopSpeech(); this.play(); } } }); fillVoices(); speechSynthesis.onvoiceschanged = fillVoices; }
+    this.toneBtn = h('button', { class: 'chip', title: 'Voix et ton', onclick: () => openVoices() }, icon('voice'), ' ', Voice.toneOf(Voice.tone())[1]);
     this.player = h('div', { class: 'player paused' }, this.cap,
       h('div', { class: 'ctl' },
         sp,
         h('button', { class: 'rbtn', title: 'Phrase précédente', onclick: () => this.skip(-1) }, icon('prev')),
         this.playBtn,
         h('button', { class: 'rbtn', title: 'Phrase suivante', onclick: () => this.skip(1) }, icon('next')),
-        voiceSel || h('span', { style: { width: '48px' } })),
+        this.toneBtn),
       h('div', { class: 'jumps' }, [[-600, '−10 min'], [-180, '−3 min'], [-30, '−30 s'], [30, '+30 s'], [180, '+3 min'], [600, '+10 min']]
         .map(([sec, l]) => h('button', { class: 'jump' + (sec > 0 ? ' fwd' : ''), title: (sec > 0 ? 'Avancer de ' : 'Reculer de ') + l.slice(1), onclick: () => this.jump(sec) }, l))));
     this.el.append(this.player);
@@ -2336,7 +2560,8 @@ class Reader {
     const s = this.sents[this.sIdx];
     this.highlight();
     const t0 = Date.now();
-    TTS.speak(s, this.rate, this.voice, () => {
+    const sh = Voice.shape(s, this.sIdx, this.rate);
+    TTS.speak(s, sh.rate, this.voice, () => {
       if (token !== this.tok || !this.playing) return;
       // Garde-fou : si la synthèse vocale échoue (fin quasi instantanée), on s'arrête au lieu de défiler tout le livre
       if (s.length > 20 && Date.now() - t0 < 120) { this.quick = (this.quick || 0) + 1; } else this.quick = 0;

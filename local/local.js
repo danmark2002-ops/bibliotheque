@@ -463,7 +463,15 @@ window.LocalAPI = (() => {
       else if (kind === 'rtf') { const raw = await decodeText(file); const info = (k) => clip(rtfText('{' + ((raw.match(new RegExp('\\{\\\\' + k + '\\s([^}]*)\\}')) || [])[1] || '') + '}')); d = { paras: rtfText(raw).split(/\n{2,}/).map(clip).filter(Boolean), title: info('title'), author: info('author') }; }
       else if (kind === 'fb2') { d = readFb2(decodeBytes(new Uint8Array(await file.arrayBuffer()))); if (d.coverBlob) d.cover = await coverFrom(d.coverBlob); }
       else if (kind === 'doc') d = readDoc(new Uint8Array(await file.arrayBuffer()));
-      else { const doc = parseHtml(decodeBytes(new Uint8Array(await file.arrayBuffer()))); d = { paras: htmlParas(doc.body || doc.documentElement, []), title: clip(doc.title) }; }
+      else { // page web ou fichier HTML : on garde l'article, sans menus ni pieds de page
+        const doc = parseHtml(decodeBytes(new Uint8Array(await file.arrayBuffer())));
+        doc.querySelectorAll('nav, footer, aside, form, script, style, noscript, iframe, [role="navigation"], [role="banner"], [role="contentinfo"], .comments, #comments, .share, .social, .advert, .ad, .cookie, .newsletter').forEach((x) => x.remove());
+        const arts = [...doc.querySelectorAll('article, main, [role="main"], .post-content, .entry-content, .article-body')].sort((x, y) => y.textContent.length - x.textContent.length);
+        const root = arts[0] && arts[0].textContent.trim().length > 400 ? arts[0] : (doc.body || doc.documentElement);
+        if (root === doc.body) root.querySelectorAll('header').forEach((x) => x.remove());
+        const og = doc.querySelector('meta[property="og:title"]')?.content, by = doc.querySelector('meta[name="author"]')?.content;
+        d = { paras: htmlParas(root, []), title: clip(og || doc.querySelector('h1')?.textContent || doc.title).slice(0, 140), author: clip(by) };
+      }
       if (!d.paras.length) throw new Error('Ce livre ne contient aucun texte lisible');
       const bad = /untitled|sans titre|unknown|inconnu|microsoft word|calibre|\.(docx?|pdf|epub|html?)$|^document\d*$/i;
       if (d.title && d.title.length > 1 && d.title.length < 150 && !bad.test(d.title)) meta.title = d.title;

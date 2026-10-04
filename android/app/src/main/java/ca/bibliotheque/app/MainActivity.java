@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
     private static final int LISTEN_REQUEST = 4244;
     private static final String FOLDER_PATH = "/__dossier";
     private static final String RECU_PATH = "/__recu";
+    private static final String WEB_PATH = "/__web";
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
@@ -86,6 +87,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new VideoBridge(), "AndroidVideo");
         web.addJavascriptInterface(new TeleBridge(), "AndroidTele");
         web.addJavascriptInterface(new ShareBridge(), "AndroidShare");
+        web.addJavascriptInterface(new WebBridge(), "AndroidWeb");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -95,6 +97,7 @@ public class MainActivity extends Activity {
                 String path = u.getPath();
                 if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("lib"), u.getQueryParameter("id"));
                 if (RECU_PATH.equals(path)) return recuFile(u.getQueryParameter("f"));
+                if (WEB_PATH.equals(path)) return privateFile(webDir(), u.getQueryParameter("f"));
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
                 try {
                     InputStream in = getAssets().open(path.substring(1));
@@ -152,7 +155,7 @@ public class MainActivity extends Activity {
             });
             ttsReady = true;
             synchronized (pending) {
-                for (String[] p : pending) speakNow(p[0], Float.parseFloat(p[1]), p[2]);
+                for (String[] p : pending) speakNow(p[0], Float.parseFloat(p[1]), Float.parseFloat(p[3]), p[4], p[2]);
                 pending.clear();
             }
         });
@@ -180,17 +183,58 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> web.evaluateJavascript("window.__ttsDone && window.__ttsDone('" + id.replace("'", "") + "')", null));
     }
 
-    private void speakNow(String text, float rate, String id) {
-        tts.setSpeechRate(rate);
+    private void speakNow(String text, float rate, String id) { speakNow(text, rate, 1f, "", id); }
+
+    private void speakNow(String text, float rate, float pitch, String voice, String id) {
+        try {
+            android.speech.tts.Voice v = null;
+            if (voice != null && !voice.isEmpty() && tts.getVoices() != null)
+                for (android.speech.tts.Voice x : tts.getVoices()) if (voice.equals(x.getName())) { v = x; break; }
+            if (v != null && !v.equals(tts.getVoice())) tts.setVoice(v);
+            else if (v == null && (voice == null || voice.isEmpty()) && tts.getVoice() != null && !"fr".equals(tts.getVoice().getLocale().getLanguage())) tts.setLanguage(Locale.CANADA_FRENCH);
+        } catch (Exception ignored) { }
+        tts.setPitch(Math.max(0.5f, Math.min(2f, pitch)));
+        tts.setSpeechRate(Math.max(0.3f, Math.min(3f, rate)));
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id);
     }
 
     class TtsBridge {
         @JavascriptInterface
-        public void speak(String text, float rate, String id) {
+        public void speak(String text, float rate, String id) { speak2(text, rate, 1f, "", id); }
+
+        /** Lecture avec voix et intonation choisies (le ton varie la hauteur et le débit phrase par phrase). */
+        @JavascriptInterface
+        public void speak2(String text, float rate, float pitch, String voice, String id) {
             LivreService.pauseFromApp();
-            if (!ttsReady) { synchronized (pending) { pending.clear(); pending.add(new String[]{text, String.valueOf(rate), id}); } return; }
-            speakNow(text, rate, id);
+            if (!ttsReady) { synchronized (pending) { pending.clear(); pending.add(new String[]{text, String.valueOf(rate), id, String.valueOf(pitch), voice == null ? "" : voice}); } return; }
+            speakNow(text, rate, pitch, voice, id);
+        }
+
+        /** Voix françaises du téléphone : [{name, country, online, quality}] */
+        @JavascriptInterface
+        public String voices() {
+            JSONArray a = new JSONArray();
+            try {
+                if (!ttsReady || tts.getVoices() == null) return "[]";
+                java.util.List<android.speech.tts.Voice> vs = new ArrayList<>(tts.getVoices());
+                vs.sort((x, y) -> x.getName().compareTo(y.getName()));
+                for (android.speech.tts.Voice v : vs) {
+                    if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
+                    if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                    a.put(new JSONObject().put("name", v.getName()).put("country", v.getLocale().getCountry())
+                        .put("online", v.isNetworkConnectionRequired()).put("quality", v.getQuality()));
+                }
+            } catch (Exception ignored) { }
+            return a.toString();
+        }
+
+        /** Ouvre les réglages Android de synthèse vocale (pour installer d'autres voix). */
+        @JavascriptInterface
+        public void openSettings() {
+            runOnUiThread(() -> {
+                try { startActivity(new Intent("com.android.settings.TTS_SETTINGS")); }
+                catch (Exception e) { try { startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)); } catch (Exception ignored) { } }
+            });
         }
 
         @JavascriptInterface
@@ -220,9 +264,41 @@ public class MainActivity extends Activity {
 
     private void saveFolders(JSONObject o) { prefs().edit().putString("folders", o.toString()).apply(); }
 
+    // ---------- « Tout le téléphone » : une bibliothèque qui cherche les livres dans tout le stockage ----------
+    private static final String PHONE = "phone:";
+    private boolean isPhone(String lib) { return PHONE.equals(folders().optString(lib == null ? "main" : lib, "")); }
+    private File phoneRoot() { return android.os.Environment.getExternalStorageDirectory(); }
+    private boolean phoneAccess() {
+        if (Build.VERSION.SDK_INT >= 30) return android.os.Environment.isExternalStorageManager();
+        return checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+    private boolean askingPhone = false;
+
+    private void walkPhone(File dir, String rel, int depth, JSONArray out) throws Exception {
+        if (depth > 14 || out.length() > 5000) return;
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        java.util.Arrays.sort(kids);
+        for (File f : kids) {
+            String name = f.getName();
+            if (name.startsWith(".")) continue;
+            String r = rel.isEmpty() ? name : rel + "/" + name;
+            if (f.isDirectory()) {
+                // Android/data et obb : réservés aux applications ; Android/media garde par ex. les documents WhatsApp
+                if (r.equals("Android/data") || r.equals("Android/obb") || r.equalsIgnoreCase("LOST.DIR")) continue;
+                walkPhone(f, r, depth + 1, out);
+            } else if (isBook(name) && f.length() > 0) {
+                JSONObject o = new JSONObject();
+                o.put("id", f.getAbsolutePath()); o.put("name", name); o.put("path", r);
+                o.put("size", f.length()); o.put("mtime", f.lastModified());
+                out.put(o);
+            }
+        }
+    }
+
     private Uri folderTree(String lib) {
         String t = folders().optString(lib == null ? "main" : lib, null);
-        if (t == null || t.isEmpty()) return null;
+        if (t == null || t.isEmpty() || PHONE.equals(t)) return null;
         Uri tree = Uri.parse(t);
         for (UriPermission p : getContentResolver().getPersistedUriPermissions())
             if (p.getUri().equals(tree) && p.isReadPermission()) return tree;
@@ -230,6 +306,7 @@ public class MainActivity extends Activity {
     }
 
     private void releaseIfUnused(String tree) {
+        if (PHONE.equals(tree)) return;
         JSONObject o = folders();
         for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) if (tree.equals(o.optString(it.next()))) return;
         try { getContentResolver().releasePersistableUriPermission(Uri.parse(tree), Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { }
@@ -271,6 +348,14 @@ public class MainActivity extends Activity {
     }
 
     private WebResourceResponse folderFile(String lib, String docId) {
+        if (isPhone(lib) && docId != null && phoneAccess()) {
+            try {
+                File f = new File(docId).getCanonicalFile();
+                if (f.getPath().startsWith(phoneRoot().getCanonicalPath() + "/") && f.isFile() && isBook(f.getName()))
+                    return new WebResourceResponse("application/octet-stream", null, 200, "OK", new java.util.HashMap<>(), new java.io.FileInputStream(f));
+            } catch (Exception ignored) { }
+            return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
+        }
         Uri tree = folderTree(lib);
         if (tree == null || docId == null) return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
         try {
@@ -294,8 +379,9 @@ public class MainActivity extends Activity {
             for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) {
                 String id = it.next();
                 try {
-                    Uri tree = folderTree(id);
                     JSONObject f = new JSONObject();
+                    if (PHONE.equals(o.optString(id))) { f.put("id", id); f.put("ok", phoneAccess()); f.put("phone", true); f.put("name", "Tout le téléphone"); out.put(f); continue; }
+                    Uri tree = folderTree(id);
                     f.put("id", id); f.put("ok", tree != null); f.put("name", tree != null ? folderName(tree) : "Dossier inaccessible");
                     out.put(f);
                 } catch (Exception ignored) { }
@@ -313,6 +399,26 @@ public class MainActivity extends Activity {
             });
         }
 
+        @JavascriptInterface public boolean phoneAccess() { return MainActivity.this.phoneAccess(); }
+
+        /** Demande l'autorisation ; la réponse arrive dans window.__phoneAccess("1" ou "0") au retour dans l'application. */
+        @JavascriptInterface
+        public void askPhoneAccess() {
+            runOnUiThread(() -> {
+                if (MainActivity.this.phoneAccess()) { js("__phoneAccess", "1"); return; }
+                askingPhone = true;
+                try {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        try { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getPackageName()))); }
+                        catch (Exception e) { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
+                    } else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, 4250);
+                } catch (Exception e) { askingPhone = false; js("__phoneAccess", "0"); }
+            });
+        }
+
+        @JavascriptInterface
+        public void setPhone(String lib) { JSONObject o = folders(); try { o.put(lib, PHONE); } catch (Exception ignored) { } saveFolders(o); }
+
         @JavascriptInterface
         public void forget(String lib) {
             JSONObject o = folders();
@@ -328,7 +434,10 @@ public class MainActivity extends Activity {
                 try {
                     res.put("lib", lib);
                     Uri tree = folderTree(lib);
-                    if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
+                    if (isPhone(lib)) {
+                        if (!phoneAccess()) res.put("error", "L'application n'a plus l'autorisation de lire le téléphone.");
+                        else { JSONArray files = new JSONArray(); walkPhone(phoneRoot(), "", 0, files); res.put("files", files); }
+                    } else if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
                     else {
                         JSONArray files = new JSONArray();
                         walk(getContentResolver(), tree, DocumentsContract.getTreeDocumentId(tree), "", 0, files);
@@ -351,8 +460,10 @@ public class MainActivity extends Activity {
     private File recuDir() { return new File(getCacheDir(), "recu"); }
     private static void wipe(File f) { File[] k = f.listFiles(); if (k != null) for (File x : k) wipe(x); f.delete(); }
 
-    private WebResourceResponse recuFile(String name) {
-        File f = name != null && name.matches("f\\d+\\.[a-z0-9]{1,6}") ? new File(recuDir(), name) : null;
+    private WebResourceResponse recuFile(String name) { return privateFile(recuDir(), name); }
+
+    private WebResourceResponse privateFile(File dir, String name) {
+        File f = name != null && name.matches("[fw]\\d+\\.[a-z0-9]{1,6}") ? new File(dir, name) : null;
         try {
             if (f == null || !f.exists()) throw new IOException();
             return new WebResourceResponse("application/octet-stream", null, 200, "OK", new java.util.HashMap<>(), new java.io.FileInputStream(f));
@@ -470,6 +581,141 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void clearReceived() { wipe(recuDir()); }
+    }
+
+    // ---------- Catalogues : un navigateur intégré dont les livres téléchargés arrivent sur l'étagère ----------
+    private FrameLayout browserBox;
+    private WebView browser;
+    private android.widget.TextView browserTitle;
+    private File webDir() { return new File(getCacheDir(), "web"); }
+    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    private void openBrowser(String url, String title) {
+        if (browserBox == null) {
+            browserBox = new FrameLayout(this);
+            browserBox.setBackgroundColor(Color.parseColor("#140f0b"));
+            android.widget.LinearLayout col = new android.widget.LinearLayout(this);
+            col.setOrientation(android.widget.LinearLayout.VERTICAL);
+            android.widget.LinearLayout bar = new android.widget.LinearLayout(this);
+            bar.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+            bar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            bar.setBackgroundColor(Color.parseColor("#1e1712"));
+            bar.setPadding(dp(4), dp(4), dp(12), dp(4));
+            android.widget.TextView close = new android.widget.TextView(this);
+            close.setText("✕"); close.setTextSize(22); close.setTextColor(Color.parseColor("#e8dcc8"));
+            close.setPadding(dp(14), dp(8), dp(14), dp(8)); close.setOnClickListener(v -> closeBrowser());
+            browserTitle = new android.widget.TextView(this);
+            browserTitle.setTextSize(16); browserTitle.setTextColor(Color.parseColor("#e8dcc8")); browserTitle.setSingleLine(true);
+            browserTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            android.widget.TextView hint = new android.widget.TextView(this);
+            hint.setText("Les livres téléchargés vont sur ton étagère"); hint.setTextSize(11); hint.setTextColor(Color.parseColor("#b9a888"));
+            android.widget.LinearLayout titles = new android.widget.LinearLayout(this);
+            titles.setOrientation(android.widget.LinearLayout.VERTICAL);
+            titles.addView(browserTitle); titles.addView(hint);
+            bar.addView(close);
+            bar.addView(titles, new android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            browser = new WebView(this);
+            WebSettings bs = browser.getSettings();
+            bs.setJavaScriptEnabled(true); bs.setDomStorageEnabled(true); bs.setLoadWithOverviewMode(true); bs.setUseWideViewPort(true);
+            bs.setBuiltInZoomControls(true); bs.setDisplayZoomControls(false);
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(browser, true);
+            browser.setWebViewClient(new WebViewClient() {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    String sc = request.getUrl().getScheme();
+                    if ("http".equals(sc) || "https".equals(sc)) return false;
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, request.getUrl())); } catch (Exception ignored) { }
+                    return true;
+                }
+            });
+            browser.setDownloadListener((url, ua, cd, mime, len) -> downloadBook(url, ua, cd, mime, false));
+            col.addView(bar, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            col.addView(browser, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+            browserBox.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            ((FrameLayout) web.getParent()).addView(browserBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        browserTitle.setText(title == null || title.isEmpty() ? "Catalogue" : title);
+        browserBox.setVisibility(android.view.View.VISIBLE);
+        browser.loadUrl(url);
+    }
+
+    private void closeBrowser() {
+        if (browserBox == null) return;
+        browserBox.setVisibility(android.view.View.GONE);
+        browser.stopLoading(); browser.loadUrl("about:blank"); browser.clearHistory();
+    }
+
+    private static String extFor(String mime) {
+        if (mime == null) return null;
+        String m = mime.toLowerCase(Locale.ROOT);
+        if (m.contains("epub")) return ".epub";
+        if (m.contains("pdf")) return ".pdf";
+        if (m.contains("mobipocket") || m.contains("amazon.ebook")) return ".mobi";
+        if (m.contains("fictionbook")) return ".fb2";
+        if (m.contains("opendocument.text")) return ".odt";
+        if (m.contains("wordprocessingml")) return ".docx";
+        if (m.contains("msword")) return ".doc";
+        if (m.contains("rtf")) return ".rtf";
+        if (m.startsWith("text/plain")) return ".txt";
+        return null;
+    }
+
+    /** Télécharge un livre (catalogue ou lien collé) avec les témoins du site, puis l'envoie à l'étagère. */
+    private void downloadBook(String url, String ua, String cd, String mime, boolean pageOk) {
+        new Thread(() -> {
+            JSONObject res = new JSONObject();
+            java.net.HttpURLConnection c = null;
+            try {
+                String guess = android.webkit.URLUtil.guessFileName(url, cd, mime);
+                js("__webBookStart", guess);
+                String cur = url;
+                for (int hop = 0; ; hop++) { // suit aussi les redirections http → https
+                    c = (java.net.HttpURLConnection) new java.net.URL(cur).openConnection();
+                    c.setInstanceFollowRedirects(false);
+                    c.setConnectTimeout(20000); c.setReadTimeout(60000);
+                    String ck = android.webkit.CookieManager.getInstance().getCookie(cur);
+                    if (ck != null) c.setRequestProperty("Cookie", ck);
+                    c.setRequestProperty("User-Agent", ua != null && !ua.isEmpty() ? ua : web.getSettings().getUserAgentString());
+                    int code = c.getResponseCode();
+                    if (code >= 300 && code < 400 && c.getHeaderField("Location") != null && hop < 8) { cur = new java.net.URL(new java.net.URL(cur), c.getHeaderField("Location")).toString(); c.disconnect(); continue; }
+                    if (code >= 400) throw new IOException("Le site a refusé le téléchargement (" + code + ")");
+                    break;
+                }
+                String cd2 = cd != null && !cd.isEmpty() ? cd : c.getHeaderField("Content-Disposition");
+                String mime2 = c.getContentType() != null ? c.getContentType() : mime;
+                String name = android.webkit.URLUtil.guessFileName(cur, cd2, mime2);
+                if (!isBook(name)) {
+                    String ext = extFor(mime2);
+                    boolean html = mime2 != null && (mime2.toLowerCase(Locale.ROOT).startsWith("text/html") || mime2.toLowerCase(Locale.ROOT).contains("xhtml"));
+                    if (ext == null && html && pageOk) ext = ".html"; // un article : il deviendra un livre à lire ou écouter
+                    if (ext == null && html) throw new IOException("Ce lien mène à une page web, pas à un livre. Ouvre-le dans un catalogue et touche « Télécharger ».");
+                    if (ext == null) throw new IOException("Ce fichier n'est pas un livre que l'application sait lire.");
+                    name = name.replaceAll("\\.[A-Za-z0-9]{1,5}$", "") + ext;
+                }
+                File dir = webDir(); dir.mkdirs();
+                String ext = name.substring(name.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+                File out = new File(dir, "w" + System.currentTimeMillis() + ext);
+                try (InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
+                    byte[] buf = new byte[1 << 16]; int r; long tot = 0;
+                    while ((r = in.read(buf)) > 0) { fo.write(buf, 0, r); tot += r; if (tot > 600L * 1024 * 1024) throw new IOException("Fichier trop gros"); }
+                }
+                res.put("file", out.getName()); res.put("name", name);
+                runOnUiThread(this::closeBrowser);
+            } catch (Exception e) {
+                String m = e.getMessage();
+                try { res.put("error", m != null && (m.startsWith("Ce ") || m.startsWith("Le site") || m.startsWith("Fichier")) ? m : "Téléchargement impossible. Vérifie la connexion Internet."); } catch (Exception ignored) { }
+            } finally { if (c != null) c.disconnect(); }
+            js("__webBook", res.toString());
+        }).start();
+    }
+
+    class WebBridge {
+        @JavascriptInterface public void open(String url, String title) { runOnUiThread(() -> openBrowser(url, title)); }
+        @JavascriptInterface public void external(String url) {
+            runOnUiThread(() -> { try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) { } });
+        }
+        @JavascriptInterface public void fetch(String url) { downloadBook(url, null, null, null, true); }
+        @JavascriptInterface public void done(String name) { if (name != null && name.matches("w\\d+\\.[a-z0-9]{1,6}")) new File(webDir(), name).delete(); }
     }
 
     // ---------- Ouvrir avec une autre application, envoyer à une IA, résumé Claude ----------
@@ -928,6 +1174,18 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (askingPhone) { askingPhone = false; js("__phoneAccess", phoneAccess() ? "1" : "0"); }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 4250) { askingPhone = false; js("__phoneAccess", phoneAccess() ? "1" : "0"); }
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FOLDER_REQUEST) {
             String out = "";
@@ -976,6 +1234,10 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (browserBox != null && browserBox.getVisibility() == android.view.View.VISIBLE) {
+            if (browser.canGoBack()) browser.goBack(); else closeBrowser();
+            return;
+        }
         web.evaluateJavascript("(window.__androidBack && window.__androidBack()) ? 'yes' : 'no'", value -> {
             if (value != null && value.contains("yes")) return;
             finish();
