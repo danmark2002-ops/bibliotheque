@@ -1088,6 +1088,7 @@ const ICONS = {
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
   prof: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
   cast: '<path d="M2 16.1A5 5 0 0 1 5.9 20"/><path d="M2 12.05A9 9 0 0 1 9.95 20"/><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 20h.01"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
@@ -2058,15 +2059,23 @@ const Prof = {
     let nano = false; try { nano = await this.ensureNano(say); } catch {}
     return (this.engine = nano ? 'nano' : 'online');
   },
-  async ai(prompt, say) {
+  async ai(prompt, say, urgent) {
     const eng = await this.pickEngine(say);
     if (eng === 'nano') return nanoAskRetry(`${this.persona}\n${prompt}`, say);
-    return onlineAsk(this.persona, prompt);
+    return onlineAsk(this.persona, prompt, urgent);
   },
   file: (id) => `prof/${id}.json`,
   info(id) { try { const s = AndroidAuto.readText(this.file(id)); if (!s) return null; const j = JSON.parse(s); return { done: !!j.done, n: j.n || 0, made: (j.parts || []).length, parts: j.parts || [] }; } catch { return null; } },
   who: (b) => `« ${b.title} »${b.author ? ' de ' + b.author : ''}`,
-  persona: 'Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.',
+  persona: `Tu es le Professeur bizarroïde : un professeur survolté, passionné et excentrique, qui vibre littéralement pour les idées des livres. Tu parles à voix haute à un auditeur qui conduit, comme un conteur sur scène.
+Ton style à l'oral :
+- Des phrases courtes et rythmées, qui alternent avec quelques phrases plus longues.
+- Beaucoup d'exclamations sincères et d'interjections : « Ah ! », « Oh là là ! », « Tenez-vous bien ! », « Et là… boum ! », « Fascinant, non ? ».
+- Des questions lancées à l'auditeur, puis tu y réponds toi-même.
+- Des images frappantes, des comparaisons de la vie de tous les jours, un brin d'humour et d'autodérision.
+- Des pauses dramatiques avec « … » avant une idée clé.
+- Tu tutoies l'auditeur et tu lui parles comme à un ami curieux.
+Tu restes fidèle aux idées de l'auteur : tu les présentes telles qu'il les formule, sans les juger ni les ramener à un autre cadre.`,
   clean(t) {
     return t.replace(/\r/g, '').replace(/^\s*#+.*$/gm, '').replace(/^\s*\*\*[^*\n]{1,80}\*\*\s*$/gm, '').replace(/^\s*[-*•]\s+/gm, '').replace(/^\s*\d+[.)]\s+/gm, '')
       .replace(/\*\*?|__|`/g, '').replace(/\[page \d+\]/g, '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
@@ -2086,7 +2095,7 @@ const Prof = {
   prompt(b, chunk, i, n, prev) {
     const where = n > 1 ? `la partie ${i + 1} sur ${n} du livre ${this.who(b)}` : `le livre ${this.who(b)}`;
     return `Explique ${where}, à partir de l'extrait ci-dessous.
-- Explique les idées et les concepts avec tes propres mots, simplement et avec enthousiasme : exemples concrets, images frappantes, exclamations, questions que tu poses à l'auditeur.
+- Explique les idées et les concepts avec tes propres mots, avec énormément d'énergie et d'émotion : exemples concrets, images frappantes, exclamations, questions à l'auditeur, suspense.
 - Ne lis pas l'extrait et ne le recopie pas.
 - Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
 - Écris seulement ce qui sera dit à voix haute, en paragraphes : pas de titres, pas de listes, pas de symboles.
@@ -2106,6 +2115,8 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
     return st === 'available';
   },
   busy: {},
+  stopped: {},
+  stop(b) { if (this.busy[b.id]) this.stopped[b.id] = true; AndroidAuto.profStop ? AndroidAuto.profStop() : AndroidAuto.profPause(); toast('Cours arrêté. Le Professeur reprendra où il était.'); },
   async prepare(b, restart, autoplay = true) {
     if (this.busy[b.id]) return toast('Le cours est déjà en préparation');
     this.busy[b.id] = true;
@@ -2119,7 +2130,8 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       if (actions) return;
       actions = h('div', { class: 'prof-row', style: { marginTop: '10px' } },
         h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause'),
-        h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'));
+        h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'),
+        h('button', { class: 'btn', onclick: () => this.stop(b) }, icon('stop'), 'Arrêt'));
       box.append(actions);
     };
     try {
@@ -2130,6 +2142,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
       for (let i = work.parts.length; i < chunks.length; i++) {
+        if (this.stopped[b.id]) { delete this.stopped[b.id]; box.remove(); return; }
         say(i ? `Le Professeur parle · il prépare la partie ${i + 1} sur ${chunks.length}, qui suivra toute seule` : `Le Professeur se prépare… il commencera tout seul dans environ 30 secondes${eng === 'online' ? ' (Gemini)' : ''}`); bar(i / chunks.length);
         if (i) listenBtn();
         const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
@@ -2158,7 +2171,8 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
   async ask(b, q, out) {
     const info = this.info(b.id); if (!info || !info.made) { out.textContent = 'Le Professeur se prépare encore : pose ta question dès qu\'il aura commencé.'; return; }
     const p = this.where(b.id, info);
-    AndroidAuto.profPause();
+    const hmm = ['Ah ! Excellente question… laisse-moi réfléchir une seconde !', 'Oh, j\'adore cette question ! Une petite seconde…', 'Hmm… voilà qui mérite réflexion ! Un instant…'];
+    if (AndroidAuto.profThink) AndroidAuto.profThink(hmm[Math.floor(Math.random() * hmm.length)]); else AndroidAuto.profPause();
     out.textContent = 'Le Professeur réfléchit…';
     try {
       const ctx = [info.parts[p - 1], info.parts[p]].filter(Boolean).join('\n\n');
@@ -2166,16 +2180,29 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
 Voici ce que tu étais en train d'expliquer :
 ${ctx}
 ${b.summary?.text ? '\nRésumé du livre entier :\n' + b.summary.text.slice(0, 2500) + '\n' : ''}
-Réponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.
+Réponds en 3 à 6 phrases, avec beaucoup d'entrain, comme à voix haute : pas de listes ni de symboles.
 Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.
 Termine en annonçant, en quelques mots, que tu reprends le cours.
 
-Question : ${q}`, (m) => { out.textContent = m; }));
+Question : ${q}`, (m) => { out.textContent = m; }, true));
       out.textContent = r;
       AndroidAuto.profAnswer(b.id, r);
     } catch (e) { out.textContent = e.message; }
   },
   // Touche « Professeur » : le cours démarre (ou se prépare puis démarre tout seul), et la préparation continue s'il en manque
+  voicePicker() {
+    let vs = []; try { vs = JSON.parse(AndroidAuto.profVoices?.() || '[]'); } catch {}
+    if (vs.length < 2) return null;
+    const cur = store.get('profVoice', '');
+    const sel = h('select', {}, h('option', { value: '' }, 'Automatique (la meilleure)'), vs.map((v) => h('option', { value: v.name, selected: v.name === cur }, v.label)));
+    const sample = 'Ah ! Bonjour, bonjour ! Je suis le Professeur bizarroïde… et aujourd\'hui, tiens-toi bien, on part à l\'aventure !';
+    const apply = () => { store.set('profVoice', sel.value); AndroidAuto.profSetVoice(sel.value, sample); };
+    sel.onchange = apply;
+    return h('details', { class: 'more' }, h('summary', {}, 'Voix du Professeur'),
+      h('div', { style: { marginTop: '10px' } },
+        h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Choisis la voix qui te plaît : il la fait entendre aussitôt.'),
+        h('div', { class: 'prof-row' }, sel, h('button', { class: 'btn', onclick: apply }, icon('play'), 'Écouter'))));
+  },
   hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
   // la clé Gemini gratuite, demandée une seule fois
   askKey(then) {
@@ -2205,7 +2232,11 @@ Question : ${q}`, (m) => { out.textContent = m; }));
     const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
     const out = h('div', { class: 'prof-answer', style: { display: 'none' } });
     const send = () => { const v = q.value.trim(); if (!v) return toast('Écris ou dicte ta question'); out.style.display = ''; this.ask(b, v, out); q.value = ''; };
-    const mic = window.AndroidAuto.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => { window.__heard = (t) => { window.__heard = null; if (t) { q.value = t; send(); } }; AndroidAuto.listen(); } }, icon('mic')) : null;
+    const mic = window.AndroidAuto.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => {
+      AndroidAuto.profPause(); // sinon la dictée entend la voix du Professeur au lieu de la tienne
+      window.__heard = (t) => { window.__heard = null; if (t) { q.value = t; send(); } };
+      setTimeout(() => AndroidAuto.listen(), 450);
+    } }, icon('mic')) : null;
     const ready = info && info.made;
     if (!store.get('profMic', 0)) { store.set('profMic', 1); try { AndroidAI.askMic?.(); } catch {} }
     const close = sheet('Le Professeur bizarroïde', h('div', {},
@@ -2218,7 +2249,8 @@ Question : ${q}`, (m) => { out.textContent = m; }));
           : 'Il commence tout seul dans environ 30 secondes, puis enchaîne les parties suivantes au fur et à mesure. Garde l\'application ouverte pendant la préparation (Internet requis).'),
         h('div', { class: 'prof-row' },
           h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause'),
-          h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'))),
+          h('button', { class: 'btn', onclick: () => this.go(b) }, icon('play'), 'Reprendre'),
+          h('button', { class: 'btn', onclick: () => { close(); this.stop(b); } }, icon('stop'), 'Arrêt'))),
       h('div', { class: 'aiopt' },
         h('h4', {}, 'Poser une question'),
         h('p', {}, 'Le cours se met en pause, le Professeur te répond à voix haute, puis il reprend où il était.'),
@@ -2226,6 +2258,7 @@ Question : ${q}`, (m) => { out.textContent = m; }));
         out),
       ready && info.done ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
         h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); AndroidAuto.profPause(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null,
+      this.voicePicker(),
       this.engine === 'online' ? h('details', { class: 'more' }, h('summary', {}, 'Clé Gemini'),
         h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.askKey(); } }, icon('refresh'), 'Changer la clé'))) : null), { wide: true });
   },
@@ -2316,11 +2349,11 @@ function nanoAsk(prompt) {
   return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
 }
 // Gemini en ligne, avec la clé gratuite de la personne : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
-function onlineAsk(system, prompt) {
+function onlineAsk(system, prompt, urgent) {
   const id = 'o' + (++nanoSeq);
   const wait = (window.__aiWait ||= {});
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
-  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generateOnline(id, system || '', prompt); });
+  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); (urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {

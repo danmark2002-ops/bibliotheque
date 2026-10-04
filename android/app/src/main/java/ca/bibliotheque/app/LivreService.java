@@ -123,7 +123,7 @@ public class LivreService extends MediaBrowserService {
             int r = tts.setLanguage(Locale.CANADA_FRENCH);
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
             tts.setAudioAttributes(attrs);
-            try { defaultVoice = tts.getVoice(); profVoice = bestVoice(); } catch (Exception ignored) { }
+            try { defaultVoice = tts.getVoice(); profVoice = chosenVoice(); } catch (Exception ignored) { }
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
                 @Override public void onDone(String id) { main.post(() -> spoken(id)); }
@@ -171,6 +171,17 @@ public class LivreService extends MediaBrowserService {
             else start("prof:" + id);
         } else if ("pause".equals(cmd)) {
             if (playing) pause();
+        } else if ("stop".equals(cmd)) {
+            stopAll();
+        } else if ("think".equals(cmd)) {
+            // une question arrive : on se tait tout de suite, puis on annonce qu'on réfléchit
+            if (playing) { playing = false; token++; if (tts != null) tts.stop(); save(); updateState(); }
+            String t = intent.getStringExtra("text");
+            if (t != null && !t.isEmpty()) say(t, "wait");
+        } else if ("voice".equals(cmd)) {
+            profVoice = chosenVoice();
+            String t = intent.getStringExtra("text");
+            if (t != null && !t.isEmpty()) { if (playing) { playing = false; token++; tts.stop(); updateState(); } say(t, "wait"); }
         } else if ("answer".equals(cmd) && id != null) {
             String text = intent.getStringExtra("text");
             if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
@@ -178,6 +189,25 @@ public class LivreService extends MediaBrowserService {
             if (("prof:" + id).equals(bookId)) play(); else start("prof:" + id);
         }
         return START_NOT_STICKY;
+    }
+
+    /** Bouton « Arrêt » : la voix se tait, la notification disparaît. */
+    private void stopAll() {
+        asking = false; waitingMore = false; inter.clear(); interIdx = 0;
+        if (ears != null) try { ears.cancel(); } catch (Exception ignored) { }
+        if (playing) pause(); else { token++; if (tts != null) tts.stop(); save(); }
+        try { stopForeground(STOP_FOREGROUND_REMOVE); } catch (Exception ignored) { }
+        session.setPlaybackState(new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
+            .setState(PlaybackState.STATE_STOPPED, posMs(), 0f).build());
+    }
+
+    /** La voix choisie dans le Professeur, sinon la meilleure voix française installée. */
+    private android.speech.tts.Voice chosenVoice() {
+        String name = getSharedPreferences("ia", MODE_PRIVATE).getString("voice", "");
+        if (!name.isEmpty() && tts != null && tts.getVoices() != null)
+            for (android.speech.tts.Voice v : tts.getVoices()) if (name.equals(v.getName())) return v;
+        return bestVoice();
     }
 
     private void setInter(String text) {
@@ -482,12 +512,15 @@ public class LivreService extends MediaBrowserService {
     /** Une voix moins monotone : l'intonation et le débit suivent le sens de chaque phrase. */
     private void expressive(String x, int n) {
         String s = x.trim();
-        float pitch = 1.07f + (((n * 37) % 7) - 3) * 0.012f, r = rate;
-        if (s.endsWith("!") || s.endsWith("! »")) { pitch = 1.18f; r = rate * 1.07f; }
-        else if (s.endsWith("?") || s.endsWith("? »")) { pitch = 1.14f; r = rate * 0.98f; }
-        if (s.matches("(?i)^(ah|oh|eh|ha|hé|voilà|imaginez|imagine|attention|tenez|tiens|écoutez|écoute|alors|et voilà|incroyable|fascinant)(?=[\\s,!.…]).*")) pitch += 0.05f;
-        if (s.length() > 180 || s.contains(":")) r *= 0.94f;
-        tts.setPitch(Math.max(0.9f, Math.min(1.3f, pitch)));
+        // un professeur qui vit : la voix monte, accélère, ralentit, ne garde jamais le même ton deux phrases de suite
+        float pitch = 1.12f + (((n * 37) % 7) - 3) * 0.022f, r = rate * (1.06f + (((n * 53) % 5) - 2) * 0.03f);
+        if (s.endsWith("!") || s.endsWith("! »") || s.endsWith("!»")) { pitch = 1.27f + ((n % 3) * 0.02f); r = rate * 1.14f; }
+        else if (s.endsWith("?") || s.endsWith("? »") || s.endsWith("?»")) { pitch = 1.22f; r = rate * 1.0f; }
+        else if (s.endsWith("…") || s.endsWith("...")) { pitch = 1.04f; r = rate * 0.9f; }
+        if (s.length() < 25) r *= 1.05f;
+        if (s.matches("(?i)^(ah|oh|eh|ha|hé|ho|wow|bam|boum|voilà|imaginez|imagine|attention|tenez|tiens|écoutez|écoute|alors|et voilà|incroyable|fascinant|génial|extraordinaire)(?=[\\s,!.…]).*")) pitch += 0.08f;
+        if (s.length() > 180 || s.contains(":")) r *= 0.93f;
+        tts.setPitch(Math.max(0.9f, Math.min(1.42f, pitch)));
         tts.setSpeechRate(Math.max(0.5f, Math.min(2.5f, r)));
     }
 
@@ -583,11 +616,11 @@ public class LivreService extends MediaBrowserService {
                 JSONArray parts = new JSONObject(read(new File(dir(), "prof/" + id + ".json"))).optJSONArray("parts");
                 StringBuilder ctx = new StringBuilder();
                 if (parts != null) for (int k = Math.max(0, part - 1); k <= Math.min(part, parts.length() - 1); k++) ctx.append(parts.optString(k)).append("\n\n");
-                answer = IaGratuite.ask(this, PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
+                answer = IaGratuite.ask(LivreService.this, PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
                     + "Voici ce que tu étais en train d'expliquer :\n" + ctx
                     + "\nRéponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n"
                     + "Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.\n"
-                    + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q);
+                    + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q, true);
                 answer = answer.replaceAll("(?m)^\\s*#+.*$", "").replaceAll("(?m)^\\s*[-*•]\\s+", "").replaceAll("\\*\\*?|__|`", "");
             } catch (Exception e) {
                 answer = e instanceof IaGratuite.Fatal ? e.getMessage() + " Je reprends le cours !"

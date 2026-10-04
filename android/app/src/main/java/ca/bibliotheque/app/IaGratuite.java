@@ -34,18 +34,21 @@ final class IaGratuite {
     /** Une erreur à montrer telle quelle : inutile de réessayer. */
     static final class Fatal extends Exception { Fatal(String m) { super(m); } }
 
-    static String ask(Context c, String system, String prompt) throws Exception {
+    static String ask(Context c, String system, String prompt) throws Exception { return ask(c, system, prompt, false); }
+
+    /** urgent : une question de l'auditeur, qui passe devant la préparation du cours. */
+    static String ask(Context c, String system, String prompt, boolean urgent) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
         Exception err = null;
         for (int t = 0; t < 4; t++) {
             try {
-                String r = once(k, system, prompt);
+                String r = once(k, system, prompt, urgent);
                 if (r != null && !r.trim().isEmpty()) return r.trim();
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
             catch (Exception e) { err = e; }
-            Thread.sleep(5000L * (t + 1));
+            Thread.sleep((urgent ? 2000L : 5000L) * (t + 1));
         }
         throw new Exception("Gemini ne répond pas (" + (err == null ? "?" : err.getMessage()) + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
     }
@@ -58,21 +61,21 @@ final class IaGratuite {
         }
     }
 
-    private static String once(String key, String system, String prompt) throws Exception {
+    private static String once(String key, String system, String prompt, boolean urgent) throws Exception {
         JSONObject body = new JSONObject();
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
         body.put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", prompt)))));
         body.put("generationConfig", new JSONObject().put("temperature", 0.9).put("maxOutputTokens", 4096));
         while (true) {
-            pace();
+            if (!urgent) pace();
             String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
             String[] res = http(url, key, body.toString());
             int code = Integer.parseInt(res[0]);
             if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Vérifie-la dans le Professeur (Autres options → Changer la clé).");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Vérifie-la dans le Professeur (Autres options → Changer la clé).");
-            if (code == 429) { Thread.sleep(20000); throw new Exception("quota gratuit momentanément atteint"); }
+            if (code == 429) { Thread.sleep(urgent ? 4000 : 20000); throw new Exception("quota gratuit momentanément atteint"); }
             if (code >= 400) throw new Exception("erreur " + code);
             JSONObject j = new JSONObject(res[1]);
             JSONArray cands = j.optJSONArray("candidates");

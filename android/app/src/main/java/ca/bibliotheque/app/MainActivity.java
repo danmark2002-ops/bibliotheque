@@ -512,6 +512,40 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void profPause() { prof("pause", null, null); }
 
+        /** Bouton « Arrêt » : la voix se tait et la notification disparaît. */
+        @JavascriptInterface
+        public void profStop() { prof("stop", null, null); }
+
+        /** Une question arrive : le Professeur se tait tout de suite et dit qu'il réfléchit. */
+        @JavascriptInterface
+        public void profThink(String text) { prof("think", null, text); }
+
+        /** Les voix françaises installées : [{name, label}] */
+        @JavascriptInterface
+        public String profVoices() {
+            JSONArray a = new JSONArray();
+            try {
+                java.util.List<android.speech.tts.Voice> vs = new ArrayList<>(tts.getVoices());
+                vs.sort((x, y) -> x.getName().compareTo(y.getName()));
+                int n = 0;
+                for (android.speech.tts.Voice v : vs) {
+                    if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
+                    if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                    String country = v.getLocale().getCountry();
+                    String where = "CA".equals(country) ? "Québec" : "FR".equals(country) ? "France" : "BE".equals(country) ? "Belgique" : "CH".equals(country) ? "Suisse" : country;
+                    a.put(new JSONObject().put("name", v.getName()).put("label", "Voix " + (++n) + " · " + where + (v.isNetworkConnectionRequired() ? " · en ligne" : "")));
+                }
+            } catch (Exception ignored) { }
+            return a.toString();
+        }
+
+        /** Choisit la voix du Professeur et la fait entendre. */
+        @JavascriptInterface
+        public void profSetVoice(String name, String sample) {
+            getSharedPreferences("ia", MODE_PRIVATE).edit().putString("voice", name == null ? "" : name).apply();
+            prof("voice", null, sample);
+        }
+
         /** Réponse à une question : dite à voix haute, puis le cours reprend. */
         @JavascriptInterface
         public void profAnswer(String id, String text) { prof("answer", id, text); }
@@ -586,10 +620,16 @@ public class MainActivity extends Activity {
 
         /** Une demande à l'IA gratuite en ligne (sans clé). Réponse : window.__aiResult({id, text} ou {id, error}) */
         @JavascriptInterface
-        public void generateOnline(String id, String system, String prompt) {
+        public void generateOnline(String id, String system, String prompt) { online(id, system, prompt, false); }
+
+        /** Une question de l'auditeur : elle passe devant la préparation du cours. */
+        @JavascriptInterface
+        public void generateUrgent(String id, String system, String prompt) { online(id, system, prompt, true); }
+
+        private void online(String id, String system, String prompt, boolean urgent) {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
-                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt)); }
+                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent)); }
                 catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
                 js("__aiResult", res.toString());
             }).start();
