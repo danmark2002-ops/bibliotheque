@@ -1256,16 +1256,21 @@ const Video = {
   on: () => !!(window.AndroidVideo && window.AndroidAI?.generateOnline && window.LocalAPI),
   exists: (id) => { try { return !!AndroidVideo.exists(id); } catch { return false; } },
   jobs: {},
-  prompt(b, text, words) {
+  prompt(b, text, words, summary) {
     const target = Math.max(600, Math.min(2200, Math.round(words * 0.06)));
     const scenes = Math.max(5, Math.min(18, Math.round(target / 130)));
     return `Tu prépares le « condensé vidéo » du livre « ${b.title} »${b.author ? ' de ' + b.author : ''}.
 Ce n'est ni un résumé ni le livre entier : c'est un condensé qui va droit au but et transmet les grands messages du livre, avec force et clarté.
+${summary ? `Voici le résumé détaillé du livre. Il sert de colonne vertébrale : CHAQUE grand message, concept et idée clé de ce résumé doit se retrouver dans le condensé, développé avec les arguments, exemples et explications précises tirés du livre. Le condensé doit être plus riche et plus pertinent que ce résumé, jamais moins.
+<resume>
+${summary}
+</resume>
+` : ''}Construis d'abord mentalement le plan des grands messages, puis écris les scènes : chacune porte UNE idée forte, expliquée clairement, avec son « pourquoi » et ce que l'auditeur doit en retenir. Évite le remplissage et les généralités.
 Écris environ ${target} mots de narration au total, répartis en ${scenes} scènes environ, dans l'ordre du livre.
 Pour chaque scène :
 - "phrase" : une phrase choc que TU formules (jamais recopiée du livre), 15 mots au plus, qui dit le message de la scène.
 - "narration" : le texte dit à voix haute, vivant et passionné (exclamations, questions à l'auditeur, images frappantes), en tutoyant l'auditeur, sans supposer où il se trouve. Pas de listes ni de symboles.
-- "images" : 2 recherches d'images courtes en ANGLAIS (2 à 4 mots, des choses concrètes et photographiables, ex. "ancient library books", "night sky stars"), pertinentes pour la scène.
+- "images" : 3 recherches d'images courtes en ANGLAIS (2 à 4 mots), propres à CETTE scène : des choses concrètes et photographiables tirées de son contenu précis (lieux, objets, personnes au travail, phénomènes, époques). Varie d'une scène à l'autre et évite les images passe-partout (cerveau, livres, ciel étoilé, galaxie, ampoule, points d'interrogation).
 Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
 Dans les textes, n'utilise jamais de guillemets droits ("). Pour citer, utilise les guillemets français « ».
 Réponds UNIQUEMENT avec du JSON valide, sans texte autour, de la forme :
@@ -1303,9 +1308,21 @@ ${text}
       const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
       if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
-      say('Gemini écrit le condensé… (environ une minute)');
+      // 1) le résumé détaillé (celui du livre s'il a déjà été fait par une IA), 2) le scénario construit dessus
+      let summary = b.summary?.text && b.summary.model && b.summary.model !== 'auto' ? b.summary.text : '';
+      const book = condense(t.text, 300000);
+      if (!summary) {
+        say('Gemini lit le livre et en dégage les grands messages… (environ une minute)');
+        try {
+          summary = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${book}\n</livre>`));
+          // le résumé sert aussi dans la Bibliothèque
+          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: 'gemini', truncated: t.truncated } }, 'PATCH'); } catch {} }
+        } catch { summary = ''; }
+      }
+      if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
+      say('Gemini écrit le scénario du condensé… (environ une minute)');
       const words = t.text.split(/\s+/).length;
-      const raw = await onlineAsk('', this.prompt(b, condense(t.text, 300000), words), false, true);
+      const raw = await onlineAsk('', this.prompt(b, book, words, summary), false, true);
       let script;
       try { script = this.parse(raw); }
       catch {

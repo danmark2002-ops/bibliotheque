@@ -90,18 +90,22 @@ final class VideoMaker {
 
             // 2. images
             Set<String> used = new HashSet<>();
+            // images déjà vues dans les vidéos précédentes : on les évite tant qu'il y a d'autres choix
+            Set<String> seenBefore = loadHistory(ctx);
             for (int i = 0; i < scenes.size(); i++) {
                 check();
                 p.on("images", (double) i / scenes.size(), "Recherche des images… scène " + (i + 1) + " sur " + scenes.size());
                 Scene s = scenes.get(i);
                 List<File> got = new ArrayList<>();
-                for (String q : s.queries) {
-                    if (got.size() >= 2) break;
-                    for (String url : searchImages(q)) {
+                List<String> cands = new ArrayList<>();
+                for (String q : s.queries) for (String u : searchImages(q)) if (!cands.contains(u)) cands.add(u);
+                for (int pass = 0; pass < 2 && got.size() < 2; pass++) {
+                    for (String url : cands) {
                         if (got.size() >= 2) break;
-                        if (used.contains(url)) continue;
+                        if (used.contains(url) || (pass == 0 && seenBefore.contains(key(url)))) continue;
                         File f = new File(work, "img-" + i + "-" + got.size() + ".jpg");
                         if (downloadImage(url, f)) { used.add(url); got.add(f); }
+                        else used.add(url);
                     }
                 }
                 if (!got.isEmpty()) s.img1 = got.get(0);
@@ -121,6 +125,7 @@ final class VideoMaker {
             File fin = out(ctx, id);
             if (fin.exists()) fin.delete();
             if (!tmp.renameTo(fin)) throw new Exception("Enregistrement de la vidéo impossible.");
+            saveHistory(ctx, used);
             p.on("done", 1, "Vidéo prête");
         } finally {
             deleteAll(work);
@@ -164,10 +169,36 @@ final class VideoMaker {
     }
 
     /** Adresses d'images pour une recherche : Wikimedia Commons d'abord, Openverse ensuite. */
-    static List<String> searchImages(String q) {
-        List<String> out = new ArrayList<>();
+    // ---- mémoire des images déjà utilisées (les 2000 dernières)
+    private static File historyFile(Context c) { return new File(dir(c), "images-utilisees.txt"); }
+
+    /** Même image, même si la taille demandée change dans l'adresse. */
+    private static String key(String url) { return url.replaceAll("/\\d+px-", "/").replaceAll("[?#].*$", ""); }
+
+    private static Set<String> loadHistory(Context c) {
+        Set<String> h = new HashSet<>();
+        try { for (String l : new String(java.nio.file.Files.readAllBytes(historyFile(c).toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) h.add(l.trim()); } catch (Exception ignored) { }
+        return h;
+    }
+
+    private static void saveHistory(Context c, Set<String> used) {
         try {
-            String url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=12"
+            List<String> lines = new ArrayList<>();
+            File f = historyFile(c);
+            if (f.exists()) for (String l : new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) lines.add(l.trim());
+            for (String u : used) { String k = key(u); if (!lines.contains(k)) lines.add(k); }
+            if (lines.size() > 2000) lines = lines.subList(lines.size() - 2000, lines.size());
+            try (FileOutputStream o = new FileOutputStream(f)) { o.write(String.join("\n", lines).getBytes("UTF-8")); }
+        } catch (Exception ignored) { }
+    }
+
+    /** Adresses d'images pour une recherche, variées d'une vidéo à l'autre : Wikimedia Commons et Openverse mélangés. */
+    static List<String> searchImages(String q) {
+        List<String> commons = new ArrayList<>(), open = new ArrayList<>();
+        java.util.Random rnd = new java.util.Random();
+        List<String> out = commons;
+        try {
+            String url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=30"
                 + "&gsrsearch=" + URLEncoder.encode(q + " filetype:bitmap", "UTF-8")
                 + "&prop=imageinfo&iiprop=url%7Cmime%7Csize&iiurlwidth=1280";
             JSONObject pages = new JSONObject(get(url)).optJSONObject("query");
@@ -188,9 +219,10 @@ final class VideoMaker {
                 }
             }
         } catch (Exception ignored) { }
-        if (out.size() < 2) {
+        {
+            out = open;
             try {
-                String url = "https://api.openverse.org/v1/images/?page_size=10&mature=false&aspect_ratio=wide&q=" + URLEncoder.encode(q, "UTF-8");
+                String url = "https://api.openverse.org/v1/images/?page_size=20&mature=false&aspect_ratio=wide&page=" + (1 + rnd.nextInt(2)) + "&q=" + URLEncoder.encode(q, "UTF-8");
                 JSONArray res = new JSONObject(get(url)).optJSONArray("results");
                 if (res != null) for (int i = 0; i < res.length(); i++) {
                     JSONObject r = res.getJSONObject(i);
@@ -200,7 +232,15 @@ final class VideoMaker {
                 }
             } catch (Exception ignored) { }
         }
-        return out;
+        // un peu de hasard parmi les résultats pertinents, puis on alterne les deux sources
+        java.util.Collections.shuffle(commons, rnd);
+        java.util.Collections.shuffle(open, rnd);
+        List<String> mix = new ArrayList<>();
+        for (int i = 0; i < Math.max(commons.size(), open.size()); i++) {
+            if (i < commons.size()) mix.add(commons.get(i));
+            if (i < open.size()) mix.add(open.get(i));
+        }
+        return mix;
     }
 
     /** Télécharge, recadre au format de l'écran (16:9) et enregistre en JPEG. */
