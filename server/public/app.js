@@ -35,6 +35,7 @@ const ICONS = {
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
   prof: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
   cast: '<path d="M2 16.1A5 5 0 0 1 5.9 20"/><path d="M2 12.05A9 9 0 0 1 9.95 20"/><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 20h.01"/>',
+  tvplay: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M10 8.2v5.6l4.6-2.8z" fill="currentColor"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/>',
   film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
@@ -427,6 +428,7 @@ function renderLibrary(opts = {}) {
     owner && !local ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     TV.canCast() ? h('button', { class: 'btn icon', title: 'Caster sur la télé', 'aria-label': 'Caster sur la télé', onclick: () => TV.cast() }, icon('cast')) : null,
+    Tele.on() ? h('button', { class: 'btn icon', title: 'Vidéo sur la télé', 'aria-label': 'Vidéo sur la télé', onclick: () => Tele.open() }, icon('tvplay')) : null,
     h('button', { class: 'btn icon', title: 'Réglages', onclick: openSettings }, icon('gear')),
   );
   const count = S.nav.k === 'authors' ? `${new Set(live.map(authorOf)).size} auteurs` : `${books.length} livre${books.length > 1 ? 's' : ''}`;
@@ -1332,11 +1334,54 @@ ${text}
           ready ? h('button', { class: 'btn primary', onclick: () => { if (!AndroidVideo.play(b.id)) toast('Aucun lecteur vidéo trouvé sur le téléphone.'); } }, icon('play'), 'Regarder') : null,
           ready ? h('button', { class: 'btn', onclick: () => { const r = AndroidVideo.save(b.id, b.title); toast(r || 'Vidéo enregistrée dans ta Galerie (Films › Bibliotheque)'); } }, icon('download'), 'Télécharger') : null,
           ready ? h('button', { class: 'btn', onclick: () => AndroidVideo.share(b.id, b.title) }, icon('share'), 'Partager') : null,
+          ready && Tele.on() ? h('button', { class: 'btn', onclick: () => { close(); Tele.open(b.id); } }, icon('tvplay'), 'Sur la télé') : null,
           !ready && !busy ? h('button', { class: 'btn primary', onclick: () => { close(); this.create(b); } }, icon('film'), 'Créer la vidéo') : null)),
       ready ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
         h('div', { class: 'prof-row', style: { marginTop: '10px' } },
           h('button', { class: 'btn', onclick: () => { close(); this.create(b); } }, icon('refresh'), 'Refaire la vidéo'),
           h('button', { class: 'btn', onclick: () => { AndroidVideo.remove(b.id); close(); toast('Vidéo supprimée'); } }, icon('trash'), 'Supprimer'))) : null), { wide: true });
+  },
+};
+
+// ---------- Vidéo sur la télé en un clic (Google Cast) ----------
+const Tele = {
+  on: () => !!(window.AndroidTele && !TV.on),
+  videos() { let ids = []; try { ids = JSON.parse(AndroidTele.videos() || '[]'); } catch {} return ids.map((id) => S.books.find((b) => b.id === id)).filter(Boolean); },
+  open(pickId) {
+    const vids = this.videos();
+    if (!vids.length) return toast('Aucune vidéo pour l\'instant : crée-en une (appui long sur un livre › Vidéo).');
+    const sel = h('select', {}, vids.map((b) => h('option', { value: b.id, selected: b.id === pickId }, b.title)));
+    const list = h('div', { class: 'libs' }, h('p', { class: 'muted' }, 'Recherche des télés…'));
+    const status = h('p', { class: 'muted', style: { margin: '10px 0 0' } });
+    const controls = h('div', { class: 'prof-row', style: { marginTop: '10px', display: 'none' } },
+      h('button', { class: 'btn', onclick: () => AndroidTele.seek(-30) }, '−30 s'),
+      h('button', { class: 'btn', onclick: () => AndroidTele.pause() }, icon('pause'), 'Pause'),
+      h('button', { class: 'btn', onclick: () => AndroidTele.play() }, icon('play'), 'Lecture'),
+      h('button', { class: 'btn', onclick: () => AndroidTele.seek(30) }, '+30 s'),
+      h('button', { class: 'btn', onclick: () => AndroidTele.stop() }, icon('stop'), 'Arrêter'));
+    window.__teleDevices = (j) => {
+      const r = JSON.parse(j);
+      if (r.error) return list.replaceChildren(h('p', { class: 'muted' }, r.error));
+      list.replaceChildren(...(r.devices.length ? r.devices.map((d) => h('button', { class: 'librow', onclick: () => {
+        const b = S.books.find((x) => x.id === sel.value);
+        AndroidTele.cast(d.id, sel.value, b ? b.title : 'Bibliothèque');
+      } }, h('span', { class: 'libsw', style: { '--sw': '#3e5566' } }), h('span', {}, h('b', {}, d.name), h('small', {}, d.desc || 'Google Cast'))))
+        : [h('p', { class: 'muted' }, 'Aucune télé Google Cast trouvée pour l\'instant. Vérifie que la télé est allumée et que le téléphone est sur le même Wi-Fi.')]));
+    };
+    window.__teleState = (j) => {
+      const r = JSON.parse(j);
+      status.textContent = r.msg; status.style.color = r.state === 'error' ? 'var(--danger)' : '';
+      controls.style.display = ['playing', 'loading'].includes(r.state) ? '' : 'none';
+    };
+    const close = sheet('Vidéo sur la télé', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'La télé lit la vidéo directement, par le Wi-Fi ; ton téléphone sert de télécommande. Fonctionne avec Chromecast, Google TV et les télés « Chromecast intégré ».'),
+      h('label', { class: 'field' }, 'Vidéo', sel),
+      h('div', { class: 'field' }, 'Choisis la télé'),
+      list, status, controls), { wide: true });
+    AndroidTele.startScan();
+    // la recherche s'arrête quand la fenêtre se ferme
+    const watch = setInterval(() => { if (!$('.scrim')) { clearInterval(watch); AndroidTele.stopScan(); } }, 1000);
+    return close;
   },
 };
 

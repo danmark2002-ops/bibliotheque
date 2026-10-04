@@ -669,3 +669,7 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .tv :focus { outline: 3px solid var(--brass); outline-offset: 3px; }
 .tv .book:focus { transform: translateY(-10px); outline: none; }
 .tv .book:focus .cover { box-shadow: 0 0 0 4px var(--brass), 10px 16px 22px -6px rgba(0,0,0,.6); }
+
+/* Vidéo sur la télé : liste des appareils Google Cast */
+button.librow { width: 100%; padding: 10px 12px; gap: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+button.librow small { display: block; color: var(--ink-3); font-size: 13px; }

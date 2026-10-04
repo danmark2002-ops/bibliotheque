@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new AutoBridge(), "AndroidAuto");
         web.addJavascriptInterface(new CastBridge(), "AndroidCast");
         web.addJavascriptInterface(new VideoBridge(), "AndroidVideo");
+        web.addJavascriptInterface(new TeleBridge(), "AndroidTele");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -518,6 +519,26 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void remove(String id) { VideoMaker.out(MainActivity.this, id).delete(); }
+    }
+
+    // ---------- Envoyer une vidéo sur la télé (Google Cast) ----------
+    private TeleCast tele;
+    private TeleCast tele() { if (tele == null) tele = new TeleCast(this, this::js); return tele; }
+
+    class TeleBridge {
+        @JavascriptInterface public void startScan() { runOnUiThread(() -> tele().startScan()); }
+        @JavascriptInterface public void stopScan() { runOnUiThread(() -> tele().stopScan()); }
+        @JavascriptInterface public void cast(String routeId, String bookId, String title) { runOnUiThread(() -> tele().cast(routeId, VideoMaker.out(MainActivity.this, bookId), title)); }
+        @JavascriptInterface public void play() { runOnUiThread(() -> tele().play()); }
+        @JavascriptInterface public void pause() { runOnUiThread(() -> tele().pause()); }
+        @JavascriptInterface public void seek(int sec) { runOnUiThread(() -> tele().seek(sec * 1000L)); }
+        @JavascriptInterface public void stop() { runOnUiThread(() -> tele().stop()); }
+        @JavascriptInterface public String videos() {
+            JSONArray a = new JSONArray();
+            File[] fs = VideoMaker.dir(MainActivity.this).listFiles();
+            if (fs != null) for (File f : fs) { String n = f.getName(); if (n.startsWith("video-") && n.endsWith(".mp4") && !n.endsWith(".tmp.mp4")) a.put(n.substring(6, n.length() - 4)); }
+            return a.toString();
+        }
     }
 
     private static void copy(InputStream in, java.io.OutputStream out) throws IOException {

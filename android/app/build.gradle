@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 26
         targetSdk 34
-        versionCode 30
-        versionName '3.9'
+        versionCode 31
+        versionName '4.0'
     }
 
     signingConfigs {
@@ -39,4 +39,7 @@ android {
 dependencies {
     // IA intégrée au téléphone (Gemini Nano, via AICore) : gratuite, sans Internet, sans compte
     implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
+    // Google Cast : envoyer une vidéo du Professeur sur la télé en un clic
+    implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
 }
