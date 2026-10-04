@@ -2001,13 +2001,15 @@ async function openWith(b, mode = 'view', prompt = '') {
 window.__openDone = (msg) => { if (msg && msg !== 'ok') toast(msg); };
 
 // ================= Résumé par une IA =================
+// Les phrases clés ne sont pas des citations : l'IA les formule pour dire ce que le livre veut dire et nous apprend
+const KEYS_RULE = `des phrases choc que TU formules toi-même (jamais des phrases recopiées du livre), qui disent ce que le livre veut dire et ce qu'il nous apprend. Leur nombre suit la longueur du livre : 3 pour un texte court, jusqu'à 7 pour un long livre, ou une phrase par chapitre si c'est plus pertinent. Chaque phrase va droit au but (15 mots au plus) et résume une partie du livre ou une leçon du livre entier.`;
 const SUMMARY_PROMPT = `Fais un résumé bien construit, en français, du livre ci-joint.
 Structure :
 1. L'essentiel : l'idée centrale en 3 ou 4 phrases.
 2. Le déroulement : les grandes parties ou chapitres, dans l'ordre, avec leurs idées clés.
 3. Les concepts et arguments importants, expliqués simplement.
 4. Ce qu'il faut retenir : 5 à 8 points.
-5. Phrases clés : 5 à 7 phrases ultra concises (12 mots au plus chacune) qui, ensemble, disent tout le livre.
+5. Phrases clés : ${KEYS_RULE} Présente-les en liste, sous le titre « Phrases clés ».
 Reste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Environ 800 à 1200 mots, titres courts, sans préambule.`;
 const CLAUDE_MODEL = 'claude-sonnet-5-5';
 const claudeKey = () => store.get('claudeKey', '');
@@ -2042,7 +2044,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini' ? 'Gemini' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -2058,7 +2060,9 @@ function summaryChoices(b) {
     h('div', { class: 'aiopt' },
       h('h4', {}, 'Résumé gratuit'),
       h('p', {}, window.AndroidAI
-        ? 'Fait sur ton téléphone, sans Internet ni compte. Sur les téléphones récents (Samsung S24/S25, Pixel 9…), c\'est l\'IA de Google intégrée (Gemini Nano) qui l\'écrit. Sinon, un résumé automatique choisit les passages clés du livre.'
+        ? (Prof.hasKey()
+          ? 'Gratuit. Écrit par l\'IA intégrée au téléphone si elle existe, sinon par Gemini avec ta clé gratuite, avec des phrases clés qui disent ce que le livre nous apprend.'
+          : 'Fait sur ton téléphone, sans Internet ni compte. Avec l\'IA intégrée de Google (Gemini Nano) si le téléphone l\'a ; sinon, un résumé automatique choisit les passages clés du livre. Ajoute ta clé Gemini gratuite (dans le Professeur) pour un vrai résumé rédigé.')
         : 'Un résumé automatique choisit les passages clés du livre, directement sur l\'appareil.'),
       h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')),
     h('div', { class: 'aiopt' },
@@ -2230,6 +2234,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
         h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Choisis la voix qui te plaît : il la fait entendre aussitôt.'),
         h('div', { class: 'prof-row' }, sel, h('button', { class: 'btn', onclick: apply }, icon('play'), 'Écouter'))));
   },
+  clean0: (t) => String(t || '').replace(/\r/g, '').replace(/^```\w*\n?|```$/g, '').trim(),
   hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
   // la clé Gemini gratuite, demandée une seule fois
   askKey(then) {
@@ -2427,7 +2432,7 @@ async function nanoSummary(b, text, say) {
   say('IA du téléphone : phrases clés…');
   let keys = '';
   try {
-    keys = await nanoAskRetry(`Voici le résumé du livre ${who}.\nÉcris 5 à 7 phrases clés ultra concises, de 12 mots au plus chacune, qui disent ensemble tout le livre. Une phrase par ligne, chaque ligne commence par « - ». Rien d'autre.\n\n${fin}`, say);
+    keys = await nanoAskRetry(`Voici le résumé du livre ${who}.\nÉcris les phrases clés du livre : ${KEYS_RULE}\nUne phrase par ligne, chaque ligne commence par « - ». Rien d'autre.\n\n${fin}`, say);
     keys = keys.split('\n').map((x) => x.trim()).filter((x) => /^[-•*]\s+\S/.test(x)).map((x) => '- ' + x.replace(/^[-•*]\s+/, '')).slice(0, 8).join('\n');
   } catch {}
   store.set(key, null);
@@ -2450,6 +2455,13 @@ async function makeFreeSummary(b) {
         try { await nanoDownload((bytes) => say(`Téléchargement de l'IA du téléphone… ${Math.round(bytes / 1e6)} Mo`)); st = 'available'; } catch (e) { st = 'unavailable'; }
       }
       if (st === 'available') { text = await nanoSummary(b, t.text, say); model = 'gemini-nano'; }
+    }
+    if (!text && window.AndroidAI?.generateOnline && Prof.hasKey()) {
+      say('Gemini rédige le résumé… (environ une minute)');
+      try {
+        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 400000)}\n</livre>`));
+        model = 'gemini';
+      } catch (e) { say('Gemini indisponible (' + e.message + ') : résumé automatique…'); text = null; }
     }
     if (!text) { say('Résumé automatique…'); await new Promise((r) => setTimeout(r, 30)); text = autoSummary(t.text, b.title); }
     const summary = { text, date: Date.now(), model, truncated: t.truncated };

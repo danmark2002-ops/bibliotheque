@@ -69,7 +69,7 @@ final class IaGratuite {
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
         body.put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", prompt)))));
-        body.put("generationConfig", new JSONObject().put("temperature", 0.9).put("maxOutputTokens", 4096));
+        body.put("generationConfig", new JSONObject().put("temperature", 0.9).put("maxOutputTokens", 8192));
         while (true) {
             if (!urgent) pace();
             String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
@@ -101,7 +101,7 @@ final class IaGratuite {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(15000);
-            c.setReadTimeout(90000);
+            c.setReadTimeout(180000);
             c.setRequestMethod("POST");
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
