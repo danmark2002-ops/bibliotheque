@@ -176,7 +176,7 @@ function perRow() { const w = Math.min(window.innerWidth, 1180); return w < 400 
 function coverEl(b) {
   const c = h('div', { class: 'cover', style: { '--c': b.color || '#555' } });
   if (((b.kind === 'pdf' && !window.LocalAPI) || b.coverUrl) && b.status === 'ready') { // vraie couverture (PDF, EPUB…) ; sinon on en dessine une
-    const img = h('img', { src: b.coverUrl || `/api/books/${b.id}/cover.jpg`, alt: '', loading: 'lazy', draggable: 'false' });
+    const img = h('img', { src: b.coverUrl || `/api/books/${b.id}/cover.jpg`, alt: '', loading: 'lazy', decoding: 'async', draggable: 'false' });
     img.onerror = () => img.replaceWith(genCover(b));
     c.append(img);
   } else c.append(genCover(b));

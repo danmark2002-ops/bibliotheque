@@ -953,3 +953,24 @@ svg.rot-r { transform: rotate(-90deg); }
 .reader.print-mode[data-theme="nuit"] .prose.reflow, .reader.print-mode[data-theme="nuit"] .prose.reflow .hd { color: #d6d6d6; }
 .reader.print-mode[data-theme="nuit"] .page.reflow .folio { color: #999; }
 .reader.print-mode[data-theme="nuit"] .curl-flap > div { background: #2a2a2a; }
+
+/* ---------- Défilement fluide sur téléphone ----------
+   Les effets coûteux (flou d'arrière-plan, livres qui se soulèvent au toucher) sont recalculés à chaque image pendant le défilement :
+   sur écran tactile on les remplace par des équivalents fixes, et les rayons hors de l'écran ne sont pas dessinés. */
+.shelf { content-visibility: auto; contain-intrinsic-size: auto 300px; padding-bottom: 48px !important; margin-bottom: -48px; } /* marge pour les petites icônes sous la planche */
+.cover { contain: paint; }
+@media (hover: none), (pointer: coarse) {
+  .btn, .hero, .brow { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .btn { background: rgba(255,255,255,.07); }
+  .btn.primary { background: linear-gradient(180deg, var(--brass), var(--brass-2)); }
+  .hero { background: linear-gradient(120deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); }
+  .brow { background: rgba(255,255,255,.05); }
+  .book, .cover { transition: none; }
+  .case { box-shadow: inset 0 0 0 7px var(--side), inset 0 0 0 8px rgba(0,0,0,.25); }
+  .case::before { content: ''; position: absolute; left: 7px; right: 7px; top: 7px; height: 70px; background: linear-gradient(180deg, rgba(0,0,0,.45), transparent); pointer-events: none; z-index: 0; border-radius: 4px 4px 0 0; }
+  .plank { box-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .plank::after { height: 18px; background: linear-gradient(180deg, rgba(0,0,0,.55), transparent); }
+  .cover { box-shadow: 3px 4px 6px -2px rgba(0,0,0,.55); }
+  .book:hover, .book:focus-visible, .book:active { transform: none; }
+  .book:hover .cover, .book:focus-visible .cover { transform: none; box-shadow: 4px 6px 12px -3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4); }
+}
