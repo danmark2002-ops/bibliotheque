@@ -795,8 +795,101 @@ window.LocalAPI = (() => {
 
   // Demande au navigateur de garder les données (évite l'effacement automatique)
   try { navigator.storage?.persist?.(); } catch {}
+
+  // ---------- Correcteur du texte reconnu (OCR) ----------
+  // Sur la photo, les mots sont bien écrits : ce sont les confusions de la reconnaissance qu'on répare
+  // (rn/m, cl/d, li/h, l/I/1, 0/o, accents perdus, lettre manquante ou en trop, mots collés ou coupés).
+  // Seuls les mots absents du dictionnaire sont touchés ; les noms propres et les mots rares répétés dans le livre sont respectés.
+  const Spell = {
+    p: null, words: null, rank: null,
+    load() {
+      if (this.p) return this.p;
+      const base = location.host === 'appassets.local' ? '/dict/' : 'dict/';
+      this.p = Promise.all([fetch(base + 'fr-words.txt').then((r) => (r.ok ? r.text() : '')), fetch(base + 'fr-freq.txt').then((r) => (r.ok ? r.text() : ''))])
+        .then(([w, f]) => {
+          if (!w) return false;
+          this.words = new Set(w.split('\n')); this.rank = new Map(); this.extra = new Set();
+          // formes sans accents des vrais mots (« tres » pour « très ») : la liste de fréquence en contient, ce ne sont pas des mots valides
+          const strip = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); const bare = new Set();
+          for (const x of this.words) { const y = strip(x); if (y !== x) bare.add(y); }
+          f.split('\n').forEach((x, i) => { x = x.trim(); if (x && !this.rank.has(x)) { this.rank.set(x, i); if (i < 25000 && /^[\p{Ll}'-]+$/u.test(x) && !x.split(/[-']/).some((y) => bare.has(y) && !this.words.has(y)) && !this.words.has(x)) { this.words.add(x); this.extra.add(x); } } });
+          for (const x of bare) if (!this.words.has(x)) this.rank.delete(x);
+          for (const x of ["aujourd'hui", "quelqu'un", "presqu'île", "prud'homme", 'ok', 'etc']) this.words.add(x);
+          return true;
+        }).catch(() => false);
+      return this.p;
+    },
+    ok(w) { return this.words.has(w) || this.words.has(w.toLowerCase()); },
+    r(w) { const v = this.rank.get(w); return v == null ? 60000 : v; },
+    ALPHA: 'abcdefghijklmnopqrstuvwxyzéèêàâùûîïôçëüœ',
+    CONF: [['rn', 'm'], ['m', 'rn'], ['cl', 'd'], ['d', 'cl'], ['li', 'h'], ['h', 'li'], ['ii', 'u'], ['vv', 'w'], ['1', 'l'], ['l', 'i'], ['i', 'l'], ['I', 'l'], ['0', 'o'], ['5', 's'], ['c', 'e'], ['e', 'c'], ['n', 'u'], ['u', 'n'], ['t', 'f'], ['f', 't'], ['é', 'e'], ['e', 'é'], ['e', 'è'], ['e', 'ê'], ['a', 'à'], ['a', 'â'], ['u', 'ù'], ['u', 'û'], ['i', 'î'], ['i', 'ï'], ['o', 'ô'], ['c', 'ç'], ['è', 'é'], ['é', 'è'], ['ê', 'é']],
+    // candidats : confusions de lecture (coût 1), puis une lettre manquante, en trop, changée ou inversée (coût 2)
+    best(w, strict) {
+      const seen = new Map(); const add = (c, cost) => { if (c && c !== w && this.words.has(c) && (!seen.has(c) || seen.get(c) > cost)) seen.set(c, cost); };
+      for (const [a, b] of this.CONF) { let i = w.indexOf(a); while (i >= 0) { const c = w.slice(0, i) + b + w.slice(i + a.length); add(c, 1);
+        for (const [a2, b2] of this.CONF) { const j = c.indexOf(a2, i + b.length); if (j >= 0) add(c.slice(0, j) + b2 + c.slice(j + a2.length), 1.6); }
+        i = w.indexOf(a, i + 1); } }
+      if (!strict && w.length >= 4) {
+        for (let i = 0; i < w.length; i++) {
+          if (w[i] === w[i - 1] || w[i] === w[i + 1] || /[il1|'.,·]/.test(w[i])) add(w.slice(0, i) + w.slice(i + 1), 2); // lettre en trop : doublée ou trait parasite
+          if (i < w.length - 1) add(w.slice(0, i) + w[i + 1] + w[i] + w.slice(i + 2), 2);
+        }
+        for (let i = 0; i <= w.length; i++) for (const ch of this.ALPHA) add(w.slice(0, i) + ch + w.slice(i), 2);
+      }
+      let pick = null, sc = Infinity;
+      for (const [c, cost] of seen) { const v = cost * 100000 + this.r(c); if (v < sc) { sc = v; pick = c; } }
+      if (pick && seen.get(pick) >= 2 && this.extra.has(pick)) return null; // mot étranger ou familier : pas pour une correction incertaine
+      if (pick && seen.get(pick) >= 2 && (w.length < 4 || (this.r(pick) >= 30000 && w.length < 7))) return null; // trop incertain : on laisse le mot tel quel
+      return pick;
+    },
+    // mot collé : « dela » → « de la »
+    split(w) {
+      let pick = null, sc = Infinity;
+      for (let i = 1; i < w.length; i++) { const a = w.slice(0, i), b = w.slice(i); if (this.rank.has(a) && this.rank.has(b) && (a.length > 1 || /^[aày]$/.test(a)) && b.length > 1) { const v = Math.max(this.r(a), this.r(b)); if (v < sc) { sc = v; pick = a + ' ' + b; } } }
+      return sc < 3000 ? pick : null;
+    },
+    caseLike(src, c) { if (src === src.toUpperCase() && src.length > 1) return c.toUpperCase(); if (src[0] === src[0].toUpperCase() && src[0] !== src[0].toLowerCase()) return c[0].toUpperCase() + c.slice(1); return c; },
+    fixWord(tok, counts, start) {
+      const m = tok.match(/^((?:[cdjlmnst]|qu|jusqu|lorsqu|puisqu|quoiqu)['’])?(.+)$/i); const pre = m[1] || '', core = m[2];
+      if (core.length < 2 || /\d/.test(core) && !/^[\p{L}01|5]+$/u.test(core)) return tok;
+      const low = core.toLowerCase().replace(/’/g, "'");
+      if (this.ok(low) || low.split('-').every((x) => x && this.ok(x))) return tok;
+      if (core === core.toUpperCase() && /\p{L}{2}/u.test(core) && core.length <= 5) return tok; // sigle
+      const cap = /^\p{Lu}/u.test(core);
+      if ((counts.get(low) || 0) >= 3) return tok; // mot rare répété dans le livre : sans doute un vrai mot (nom, jargon)
+      if (core.includes('-')) return pre + core.split('-').map((x, i) => (x ? this.fixWord(x, counts, start && i === 0) : x)).join('-');
+      const proper = cap && !start;
+      const sp = !proper && low.length >= 4 ? this.split(low) : null;
+      if (sp && sp.split(' ').every((x) => this.r(x) < 150)) return pre + this.caseLike(core, sp); // « dela » → « de la »
+      let c = this.best(low, proper);
+      if (!c && !proper && low.length >= 4) c = this.split(low);
+      return c ? pre + this.caseLike(core, c) : tok;
+    },
+    fixText(text) {
+      const counts = new Map();
+      for (const w of text.toLowerCase().match(/[\p{L}][\p{L}'’-]*/gu) || []) counts.set(w, (counts.get(w) || 0) + 1);
+      return text.split(/\n{2,}/).map((para) => {
+        // mot coupé en deux par la reconnaissance : « informa tion » → « information »
+        para = para.replace(/(\p{L}{2,}) (?=(\p{Ll}{2,})(?!\p{L}))/gu, (all, a, b) => (!this.ok(a.toLowerCase()) || !this.ok(b)) && this.ok((a + b).toLowerCase()) && !this.rank.has(b) ? a : all);
+        let start = true;
+        return para.replace(/([\p{L}0-9|][\p{L}0-9|'’-]*[\p{L}])|([.!?…»:]+)/gu, (tok, word, punct) => {
+          if (punct) { start = true; return tok; }
+          const out = this.fixWord(word, counts, start); start = false; return out;
+        }).replace(/(^|[\s(«])a (?=(propos|cause|partir|travers|peu près|côté|nouveau|la fois|moins|condition|mesure|savoir|chaque|jamais|jour|nous|vous|eux|elle|lui|moi|toi)(?!\p{L}))/gu, '$1à ')
+          .replace(/(^|[\s(«])A (?=(propos|cause|partir|travers|peu près|côté|nouveau|la fois|moins|condition|mesure|savoir|chaque|jamais)(?!\p{L}))/gu, '$1À ');
+      }).join('\n\n');
+    },
+  };
+  const fixedCache = new Map();
   async function paragraphs(id, opts = {}) {
-    if (opts.ocr) return bookify((await ocrGet(id)).join('\n\n'));
+    if (opts.ocr) {
+      const pages = await ocrGet(id); const key = id + ':' + pages.length + ':' + pages.join('').length;
+      if (fixedCache.has(key)) return fixedCache.get(key);
+      let out = bookify(pages.join('\n\n'));
+      if (await Spell.load()) { try { out = Spell.fixText(out.join('\n\n')).split('\n\n'); } catch {} }
+      fixedCache.set(key, out); if (fixedCache.size > 3) fixedCache.delete(fixedCache.keys().next().value);
+      return out;
+    }
     const rec = await get('blob', id);
     return (rec?.pages || []).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
   }
@@ -950,5 +1043,5 @@ window.LocalAPI = (() => {
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { Spell, freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();

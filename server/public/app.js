@@ -2777,7 +2777,7 @@ class Reader {
     this.lbl = h('span', {});
     this.left = h('span', {});
     this.audioBtn = h('button', { class: 'rbtn', title: 'Lecture audio', onclick: () => this.toggleAudio() }, icon('headphones'));
-    this.print = b.kind === 'ocr'; // livre converti : page blanche imprimée, comme la photo
+    this.print = b.kind === 'ocr'; this.dens = this.print ? Number(store.get('dens:' + b.id, 1)) || 1 : 1; // livre converti : page blanche imprimée, comme la photo
     this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : '') + (this.print ? ' print-mode' : ''), 'data-theme': this.theme },
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
@@ -2877,11 +2877,12 @@ class Reader {
     const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
     if (this.print) { // feuille blanche posée sur fond noir, proportions d'une vraie page
       const avail = Math.max(240, sh - top - bot - 16), sheetW = Math.min(sw, 720);
-      const sheetH = Math.min(avail, Math.round(sheetW * 1.45)), st = top + 8 + Math.round((avail - sheetH) / 2);
+      const sheetH = Math.min(avail, Math.round(sheetW * 1.8)), st = top + 8 + Math.round((avail - sheetH) / 2);
       this.PX = Math.round(sheetW * 0.08); this.PT = Math.round(sheetH * 0.06); this.PB = Math.round(sheetH * 0.07) + 14;
       this.W = Math.max(200, sheetW - this.PX * 2); this.H = Math.max(160, sheetH - this.PT - this.PB);
       for (const [k, v] of [['--st', st], ['--sh', sheetH], ['--sw', sheetW], ['--pt', this.PT], ['--pb', this.PB], ['--px', this.PX]]) this.stage.style.setProperty(k, v + 'px');
-      return `${this.b.id}|print|${this.W}x${this.H}|${this.fs}`;
+      this.el.style.setProperty('--dens', this.dens || 1);
+      return `${this.b.id}|print|${this.W}x${this.H}|${this.fs}|${this.dens || 1}`;
     }
     this.PT = top + 38; this.PB = bot + 40; this.PX = sw < 520 ? 24 : 32; // place pour le titre courant en haut et le numéro de page en bas
     this.W = Math.max(220, Math.min(680, sw - this.PX * 2)); this.H = Math.max(200, sh - this.PT - this.PB);
@@ -2935,6 +2936,12 @@ class Reader {
     }
     if (cur.length) pages.push(cur);
     meas.remove();
+    // livre converti : jamais plus de 4 pages texte par page photo (le texte se resserre au besoin)
+    const cap = 4 * Math.max(1, this.origPages || 0);
+    if (this.print && this.origPages && pages.length > cap && (this.dens || 1) > 0.7) {
+      this.dens = Math.max(0.7, (this.dens || 1) * Math.sqrt(cap / pages.length) * 0.96); store.set('dens:' + this.b.id, this.dens);
+      return this.paginate();
+    }
     if (!pages.length) pages.push([{ h: false, text: '', cont: false, pos: 0 }]);
     this.pages = pages; this.pageStarts = pages.map((p) => p[0].pos);
     Reader.cache.set(key, { pages: this.pages, starts: this.pageStarts }); if (Reader.cache.size > 6) Reader.cache.delete(Reader.cache.keys().next().value);

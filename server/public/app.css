@@ -941,7 +941,7 @@ svg.rot-r { transform: rotate(-90deg); }
 .reader.print-mode .r-top, .reader.print-mode .r-bottom { border-color: rgba(255,255,255,.06); }
 .reader.print-mode .stage { background: #000; }
 .reader.print-mode .page.reflow { top: var(--st, 0); bottom: auto; height: var(--sh, 100%); width: var(--sw, 100%); left: calc(50% - var(--sw, 100%) / 2); right: auto; box-sizing: border-box; background: #fff; color: #161616; justify-content: flex-start; }
-.reader.print-mode .prose.reflow { font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; font-size: calc(var(--fs, 18px) * .86); line-height: 1.42; color: #161616; text-align: justify; }
+.reader.print-mode .prose.reflow { font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; font-size: calc(var(--fs, 18px) * .86 * var(--dens, 1)); line-height: calc(1.2 + .22 * var(--dens, 1)); color: #161616; text-align: justify; }
 .reader.print-mode .prose.reflow p { margin: 0 0 .8em; text-indent: 0; }
 .reader.print-mode .prose.reflow .hd, .reader.print-mode .prose.reflow .hd.caps { text-align: left; font: italic 700 1.02em/1.35 Georgia, 'Noto Serif', serif; letter-spacing: 0; margin: 1.1em 0 .45em; color: #111; }
 .reader.print-mode .prose.reflow .hd:first-child { margin-top: 0; }
