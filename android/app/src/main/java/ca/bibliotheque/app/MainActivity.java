@@ -589,11 +589,18 @@ public class MainActivity extends Activity {
         public void generateOnline(String id, String system, String prompt) {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
-                try { res.put("id", id); res.put("text", IaGratuite.ask(system, prompt)); }
+                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt)); }
                 catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
                 js("__aiResult", res.toString());
             }).start();
         }
+
+        /** Clé Gemini gratuite de la personne : gardée seulement sur ce téléphone. */
+        @JavascriptInterface
+        public void setGeminiKey(String k) { IaGratuite.setKey(MainActivity.this, k); }
+
+        @JavascriptInterface
+        public boolean hasGeminiKey() { return !IaGratuite.key(MainActivity.this).isEmpty(); }
 
         /** Le micro, pour poser des questions au Professeur dans l'auto (demandé une seule fois). */
         @JavascriptInterface

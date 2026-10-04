@@ -998,7 +998,7 @@ function summaryChoices(b) {
 // avec une voix plus vivante. On peut l'interrompre pour lui poser une question.
 const Prof = {
   on: () => !!(window.AndroidAI && window.AndroidAuto && window.LocalAPI && AndroidAuto.profPlay && AndroidAI.generateOnline),
-  // Gemini Nano si le téléphone le permet, sinon l'IA gratuite en ligne
+  // Gemini Nano si le téléphone le permet, sinon Gemini en ligne avec la clé gratuite de la personne
   engine: null,
   async pickEngine(say) {
     if (this.engine) return this.engine;
@@ -1077,7 +1077,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
       for (let i = work.parts.length; i < chunks.length; i++) {
-        say(i ? `Le Professeur parle · il prépare la partie ${i + 1} sur ${chunks.length}, qui suivra toute seule` : `Le Professeur se prépare… il commencera tout seul dans environ 30 secondes${eng === 'online' ? ' (IA gratuite en ligne)' : ''}`); bar(i / chunks.length);
+        say(i ? `Le Professeur parle · il prépare la partie ${i + 1} sur ${chunks.length}, qui suivra toute seule` : `Le Professeur se prépare… il commencera tout seul dans environ 30 secondes${eng === 'online' ? ' (Gemini)' : ''}`); bar(i / chunks.length);
         if (i) listenBtn();
         const prev = i ? (sentences(work.parts[i - 1]).slice(-2).join(' ')) : '';
         const r = this.clean(await this.ai(this.prompt(b, chunks[i], i, chunks.length, prev), say));
@@ -1123,13 +1123,31 @@ Question : ${q}`, (m) => { out.textContent = m; }));
     } catch (e) { out.textContent = e.message; }
   },
   // Touche « Professeur » : le cours démarre (ou se prépare puis démarre tout seul), et la préparation continue s'il en manque
-  go(b) {
+  hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
+  // la clé Gemini gratuite, demandée une seule fois
+  askKey(then) {
+    const inp = h('input', { type: 'password', placeholder: 'AIza…', autocomplete: 'off' });
+    const close = sheet('Clé Gemini gratuite', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Le Professeur utilise Gemini de Google. Colle ici ta clé gratuite (aistudio.google.com → Clés API). Elle reste seulement sur ce téléphone.'),
+      h('label', { class: 'field' }, 'Clé', inp),
+      h('div', { class: 'actions', style: { marginTop: '14px' } },
+        h('button', { class: 'btn primary', onclick: () => {
+          const k = inp.value.trim();
+          if (!/^AIza[\w-]{20,}$/.test(k)) return toast('Colle une clé qui commence par AIza');
+          AndroidAI.setGeminiKey(k); close(); toast('Clé enregistrée'); then && then();
+        } }, icon('prof'), 'Enregistrer'))));
+    setTimeout(() => inp.focus(), 50);
+  },
+  async go(b) {
+    const eng = await this.pickEngine(() => {});
+    if (eng === 'online' && !this.hasKey()) { this.askKey(() => this.open(b)); return false; }
     const info = this.info(b.id);
     if (info?.made) AndroidAuto.profPlay(b.id);
     if (!info?.done && !this.busy[b.id]) this.prepare(b, false, !info?.made);
+    return true;
   },
-  open(b) {
-    this.go(b);
+  async open(b) {
+    if ((await this.go(b)) === false) return;
     const info = this.info(b.id);
     const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
     const out = h('div', { class: 'prof-answer', style: { display: 'none' } });
@@ -1144,7 +1162,7 @@ Question : ${q}`, (m) => { out.textContent = m; }));
         h('p', {}, ready
           ? (info.done ? 'Le cours est complet. ' : 'Les parties suivantes se préparent pendant qu\'il parle et s\'enchaînent toutes seules : garde l\'application ouverte jusqu\'à la fin de la préparation. ')
             + 'Dans Android Auto, le cours est dans la bibliothèque du livre, avec 🎓 devant le titre.'
-          : 'Il commence tout seul dans environ 30 secondes, puis enchaîne les parties suivantes au fur et à mesure. Garde l\'application ouverte pendant la préparation (Internet requis sans l\'IA intégrée au téléphone).'),
+          : 'Il commence tout seul dans environ 30 secondes, puis enchaîne les parties suivantes au fur et à mesure. Garde l\'application ouverte pendant la préparation (Internet requis).'),
         h('div', { class: 'prof-row' },
           h('button', { class: 'btn', onclick: () => AndroidAuto.profPause() }, icon('pause'), 'Pause'),
           h('button', { class: 'btn', onclick: () => AndroidAuto.profPlay(b.id) }, icon('play'), 'Reprendre'))),
@@ -1154,7 +1172,9 @@ Question : ${q}`, (m) => { out.textContent = m; }));
         h('div', { class: 'prof-ask' }, q, mic, h('button', { class: 'btn primary', onclick: send }, 'Demander')),
         out),
       ready && info.done ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
-        h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); AndroidAuto.profPause(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null), { wide: true });
+        h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); AndroidAuto.profPause(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null,
+      this.engine === 'online' ? h('details', { class: 'more' }, h('summary', {}, 'Clé Gemini'),
+        h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.askKey(); } }, icon('refresh'), 'Changer la clé'))) : null), { wide: true });
   },
 };
 
@@ -1242,7 +1262,7 @@ function nanoAsk(prompt) {
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
   return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
 }
-// IA gratuite en ligne, sans clé (Pollinations) : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
+// Gemini en ligne, avec la clé gratuite de la personne : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
 function onlineAsk(system, prompt) {
   const id = 'o' + (++nanoSeq);
   const wait = (window.__aiWait ||= {});

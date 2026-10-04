@@ -583,14 +583,15 @@ public class LivreService extends MediaBrowserService {
                 JSONArray parts = new JSONObject(read(new File(dir(), "prof/" + id + ".json"))).optJSONArray("parts");
                 StringBuilder ctx = new StringBuilder();
                 if (parts != null) for (int k = Math.max(0, part - 1); k <= Math.min(part, parts.length() - 1); k++) ctx.append(parts.optString(k)).append("\n\n");
-                answer = IaGratuite.ask(PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
+                answer = IaGratuite.ask(this, PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
                     + "Voici ce que tu étais en train d'expliquer :\n" + ctx
                     + "\nRéponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n"
                     + "Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.\n"
                     + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q);
                 answer = answer.replaceAll("(?m)^\\s*#+.*$", "").replaceAll("(?m)^\\s*[-*•]\\s+", "").replaceAll("\\*\\*?|__|`", "");
             } catch (Exception e) {
-                answer = "Oh là là, je n'arrive pas à joindre mon cerveau en ligne pour l'instant. Vérifie la connexion Internet du téléphone. Je reprends le cours !";
+                answer = e instanceof IaGratuite.Fatal ? e.getMessage() + " Je reprends le cours !"
+                    : "Oh là là, je n'arrive pas à joindre mon cerveau en ligne pour l'instant. Vérifie la connexion Internet du téléphone. Je reprends le cours !";
             }
             final String a = answer;
             main.post(() -> { if (!asking) return; asking = false; setInter(a); play(); });
