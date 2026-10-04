@@ -1,0 +1,35 @@
+name: Dictionnaire français
+
+on:
+  push:
+    paths:
+      - '.github/workflows/dict.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dict:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Télécharger les listes de mots
+        run: |
+          mkdir -p /tmp/d && cd /tmp/d
+          curl -fsSL https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/fr/fr_50k.txt -o freq.txt || true
+          npm pack an-array-of-french-words --silent && tar -xzf an-array-of-french-words-*.tgz && ls package
+          node -e "
+            const fs=require('fs');
+            let words=[]; try{ words=require('/tmp/d/package/index.json'); }catch(e){ const f=fs.readdirSync('/tmp/d/package').find(x=>x.endsWith('.json')&&x!=='package.json'); words=JSON.parse(fs.readFileSync('/tmp/d/package/'+f,'utf8')); }
+            const freq=fs.existsSync('freq.txt')?fs.readFileSync('freq.txt','utf8').split('\n').map(l=>l.split(' ')[0]).filter(Boolean):[];
+            fs.writeFileSync('fr-freq.txt',freq.join('\n'));
+            fs.writeFileSync('fr-words.txt',words.join('\n'));
+            console.log(freq.length, words.length);
+          "
+          ls -la
+      - name: Publier sur la branche dict-data
+        run: |
+          cd /tmp/d && git init -q && git checkout -q -b dict-data
+          git add fr-freq.txt fr-words.txt
+          git -c user.name=bot -c user.email=bot@example.com commit -qm "Dictionnaire"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" dict-data
