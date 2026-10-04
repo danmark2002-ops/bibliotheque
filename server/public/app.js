@@ -2211,6 +2211,20 @@ const Voice = {
     return { rate: Math.max(0.4, Math.min(2.6, r)), pitch: Math.max(0.7, Math.min(1.45, p)) };
   },
 };
+// ---- Pages juridiques (droits d'auteur, ISBN, dépôt légal…) : la voix les saute, l'affichage ne change pas ----
+// Prudence : seulement au début ou à la fin du livre, et seulement quand plusieurs indices s'accumulent.
+const LEGAL = [/©|\(c\)\s*\d{4}|copyright/i, /\bISBN\b|\bISSN\b|\bEAN\b/i, /tous droits (de [^.]{0,40})?réservés|all rights reserved/i, /dépôt légal|legal deposit/i,
+  /code de la propriété intellectuelle|loi sur le droit d'auteur|copyright act/i, /marque déposée|trademark/i, /catalogage avant publication|données de catalogage|cataloguing in publication|bibliothèque et archives (nationales|canada)/i,
+  /achevé d'imprimer|imprimé (au|en|aux) |printed in/i, /reproduction[^.]{0,80}(interdite|strictement)|toute reproduction/i, /publié en accord avec|traduit de l'anglais par|titre original\s*:/i,
+  /conception graphique|mise en page\s*:|couverture\s*:|illustration de (la )?couverture/i, /éditions [A-ZÉ][\w-]+,?\s*(19|20)\d\d|(19|20)\d\d pour (la|l')/i, /www\.[a-z0-9-]+\.[a-z]{2,}/i,
+  /usage privé du client|contrefaçon|droit de prêt|tatouage numérique|filigrane/i];
+const Legal = {
+  on: () => store.get('skipLegal', true),
+  score(t) { return LEGAL.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0); },
+  edge(page, total) { return page <= Math.max(12, Math.ceil(total * 0.06)) || page > total - Math.max(4, Math.ceil(total * 0.03)); },
+  skipPage(text, page, total) { if (!this.on() || !this.edge(page, total)) return false; const sc = this.score(text); return sc >= 4 || (sc >= 3 && text.length < 2500) || (sc >= 2 && text.length < 600); },
+  skipSentence(s, page, total) { if (!this.on() || !this.edge(page, total)) return false; return /©|\bISBN\b|tous droits réservés|dépôt légal|all rights reserved/i.test(s) || this.score(s) >= 2; },
+};
 // ---- Vitesse de lecture : trois choix clairs, puis un réglage fin par petits pas ----
 const SPEEDS = [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4, 1.5, 1.75];
 const SPEED_CAT = [['Lent', 0.85], ['Normal', 1], ['Rapide', 1.15]];
@@ -2316,6 +2330,8 @@ function openVoices() {
     vs.length ? list : h('p', { class: 'muted' }, 'Aucune voix française n\'est installée sur le téléphone.'),
     TTS.native() ? h('div', { class: 'addfind', style: { marginTop: '14px' }, onclick: () => AndroidTTS.openSettings?.() },
       icon('download'), h('span', {}, h('b', {}, 'Plus de voix'), h('small', {}, 'Réglages Android › Synthèse vocale › Moteur Google › Installer des données vocales (Français Canada ou France)')), chevR()) : null,
+    h('label', { class: 'check', style: { marginTop: '14px' } }, h('input', { type: 'checkbox', checked: Legal.on(), onchange: (e) => store.set('skipLegal', e.target.checked) }),
+      h('span', {}, 'Sauter les pages de droits d\'auteur et mentions légales (ISBN, dépôt légal…)')),
     h('div', { class: 'addfind', style: { marginTop: '10px' }, onclick: () => { close(); openPron(); } },
       icon('dict'), h('span', {}, h('b', {}, 'Prononciation'), h('small', {}, 'Noms d\'ici, mots anglais : apprends-lui comment les dire')), chevR()),
     h('p', { class: 'hint', style: { marginTop: '12px' } }, 'Touche un ton ou une voix pour l\'entendre. Le choix sert à toute la lecture audio.')), { wide: true });
@@ -2988,6 +3004,10 @@ class Reader {
   async play() {
     if (!this.player) return;
     if (this.b.kind === 'pdf') this.sents = sentences(await this.getText(this.page));
+    if (this.sents.length && this.page < this.total && Legal.skipPage(this.sents.join(' '), this.page, this.total)) { // page de droits d'auteur : on passe
+      this.cap.textContent = 'Page de droits d\'auteur et mentions légales : passée.'; this.playing = true; this.setPlayUi(); this.sIdx = 0;
+      setTimeout(() => this.playing && this.go(this.page + 1, 1), 700); return;
+    }
     if (!this.sents.length) { this.cap.textContent = 'Cette page ne contient pas de texte lisible (image ou scan).'; if (this.page < this.total) { this.playing = true; this.setPlayUi(); setTimeout(() => this.playing && this.go(this.page + 1, 1), 1500); } return; }
     if (this.sIdx >= this.sents.length) this.sIdx = 0;
     if (!this.playing) post('/api/track', { book: this.b.id, type: 'audio', page: this.page }).catch(() => {});
@@ -3000,6 +3020,8 @@ class Reader {
   }
   speakCurrent() {
     const token = (this.tok = (this.tok || 0) + 1);
+    while (this.sIdx < this.sents.length && Legal.skipSentence(this.sents[this.sIdx], this.page, this.total)) this.sIdx++; // mention légale isolée
+    if (this.sIdx >= this.sents.length) { if (this.page < this.total) { this.sIdx = 0; this.go(this.page + 1, 1); } else this.pause(); return; }
     const s = this.sents[this.sIdx];
     this.highlight();
     const t0 = Date.now();
