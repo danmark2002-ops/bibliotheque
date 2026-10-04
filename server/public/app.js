@@ -2438,6 +2438,15 @@ function sentences(text) {
 // ================= Lecteur =================
 async function openBook(b, fromEl, opts = {}) {
   if (b.bait && !opts.anyway) return baitSheet(b, fromEl, opts);
+  if (b.ocrRedo && Ocr.on() && !opts.anyway) { // ancienne conversion de mauvaise qualité, effacée : on propose de la refaire
+    const close = sheet('Refaire la conversion en texte', h('div', {},
+      h('p', {}, 'La première conversion de ce livre a repris un vieux texte caché dans le PDF, de très mauvaise qualité. Elle a été retirée.'),
+      h('p', { class: 'muted' }, 'La nouvelle conversion lit vraiment chaque page photographiée : le texte sera beaucoup plus propre.'),
+      h('div', { class: 'actions', style: { justifyContent: 'space-between', marginTop: '16px' } },
+        h('button', { class: 'btn', onclick: () => { close(); openBook(b, fromEl, { ...opts, anyway: true }); } }, 'Lire en photos'),
+        h('button', { class: 'btn primary', onclick: () => { close(); Ocr.run(b, b.progress?.page || 1); openBook(b, fromEl, { ...opts, anyway: true }); } }, icon('type'), 'Refaire la conversion'))));
+    return;
+  }
   if (b.kind === 'audio') { await flyOpen(b, fromEl); return new AudioBook(b).mount(); }
   if (PAGED(b.kind) && b.ocr === 'done' && store.get('view:' + b.id, 'text') === 'text' && window.LocalAPI) b = { ...b, kind: 'ocr', base: b.kind }; // livre converti : lu en texte
   await flyOpen(b, fromEl);
@@ -2546,7 +2555,7 @@ const Ocr = {
         ctl.set((done / total) * 100, `Page ${n} sur ${total} · ${Math.floor((done / total) * 100)} %`);
         let txt = '';
         try {
-          if (b.kind === 'pdf') { const t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; if (t.replace(/\s/g, '').length > 120) txt = t; } // la page a déjà du vrai texte
+          if (b.kind === 'pdf') { const t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; if (t.replace(/\s/g, '').length > 120 && LocalAPI.textQuality(t) >= 0.93) txt = t; } // la page a déjà un texte propre ; sinon (vieux texte caché abîmé) : vraie reconnaissance
           if (!txt) { const c = await LocalAPI.pageCanvasAt(b.id, n, 2200); txt = this.order(await this.recognize(c)); }
         } catch { fails++; }
         pages[n - 1] = txt; done++;

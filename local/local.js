@@ -538,8 +538,8 @@ window.LocalAPI = (() => {
   // ---------- Texte reconnu sur les pages photographiées (OCR) ----------
   async function ocrGet(id) { return (await get('blob', 'ocr:' + id))?.pages || []; }
   async function ocrSave(id, pages, done) {
-    await put('blob', { pages }, 'ocr:' + id);
-    const m = await get('meta', id); if (m) { m.ocr = done ? 'done' : 'partial'; await put('meta', m); }
+    await put('blob', { pages, v: 2 }, 'ocr:' + id);
+    const m = await get('meta', id); if (m) { m.ocr = done ? 'done' : 'partial'; m.ocrV = 2; delete m.ocrRedo; await put('meta', m); }
   }
   async function ocrForget(id) { await del('blob', 'ocr:' + id); const m = await get('meta', id); if (m) { delete m.ocr; await put('meta', m); } }
   const audioUrls = new Map();
@@ -573,10 +573,10 @@ window.LocalAPI = (() => {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
       tracks: m.tracks, chapters: m.chapters, dur: m.dur, ocr: m.ocr || '',
-      bait: !!m.bait, fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      bait: !!m.bait, ocrRedo: !!m.ocrRedo, fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
-  const BAD_TITLE = /^(untitled|sans titre|document\d*|pdf|adobe .*|microsoft (word|powerpoint) - .*|.*photoshop.*|.*indesign.*|.*acrobat.*|.*\.(docx?|pdf|indd|qxd|psd|tiff?|jpe?g))$/i;
+  const BAD_TITLE = /^(.*external file.*|\W*\d*@.*|untitled|sans titre|document\d*|pdf|adobe .*|microsoft (word|powerpoint) - .*|.*photoshop.*|.*indesign.*|.*acrobat.*|.*\.(docx?|pdf|indd|qxd|psd|tiff?|jpe?g))$/i;
   const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
     '.epub': 'epub', '.mobi': 'mobi', '.azw': 'mobi', '.azw3': 'mobi', '.prc': 'mobi', '.odt': 'odt', '.rtf': 'rtf', '.fb2': 'fb2', '.doc': 'doc',
     '.html': 'html', '.htm': 'html', '.xhtml': 'html',
@@ -681,7 +681,7 @@ window.LocalAPI = (() => {
       if (!meta || n < 1 || n > meta.pages) throw new Error('Page introuvable');
       if (meta.kind === 'pdf' || meta.kind === 'images') { // page photographiée : le texte reconnu, s'il existe
         let tx = meta.kind === 'pdf' ? await pdfText(meta.id, n) : '';
-        if (tx.trim().length < 20 && meta.ocr) tx = (await ocrGet(meta.id))[n - 1] || tx;
+        if (meta.ocr && (tx.trim().length < 20 || textQuality(tx) < 0.9)) tx = (await ocrGet(meta.id))[n - 1] || tx; // texte caché abîmé : le texte reconnu
         return { page: n, text: tx };
       }
       return { page: n, text: ((await get('blob', meta.id))?.pages || [])[n - 1] || '' };
@@ -802,6 +802,16 @@ window.LocalAPI = (() => {
       return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
     });
   }
+  // ---------- Qualité d'un texte : un vieux texte caché de numérisation est souvent illisible ----------
+  // (lettres espacées « s e p t e m b r e », caractères �, mots sans voyelles, majuscules au milieu des mots)
+  function textQuality(s) {
+    const words = String(s || '').split(/\s+/).filter(Boolean); if (words.length < 12) return words.length ? 0.5 : 0;
+    const bad = (s.match(/[�\\{}|<>@~^_]/g) || []).length;
+    const single = words.filter((w) => /^\p{L}$/u.test(w) && !/^[aàyôAÀY]$/.test(w)).length;
+    const noVowel = words.filter((w) => w.length > 2 && /^\p{L}+$/u.test(w) && !/[aeiouyàâäéèêëîïôöùûüœæ]/i.test(w) && w !== w.toUpperCase()).length;
+    const mixed = words.filter((w) => /\p{Ll}\p{Lu}/u.test(w) && !/^(Mc|Mac|iP|eB)/.test(w)).length;
+    return Math.max(0, 1 - (bad * 2 + single + noVowel + mixed) / words.length);
+  }
   // ---------- Texte reconnu (OCR) remis en forme de livre ----------
   // Les blocs reconnus coupent souvent un paragraphe en morceaux : on les recolle, on repère les titres en majuscules,
   // on corrige les confusions de lettres les plus sûres.
@@ -841,6 +851,11 @@ window.LocalAPI = (() => {
     const metas = await all('meta'); const live = metas.filter((m) => !m.trashed && !String(m.id).startsWith('ocr:'));
     const progs = new Map((await all('prog')).map((p) => [p.book, p]));
     let renamed = 0, merged = 0;
+    for (const m of live) if (m.ocr && m.ocrV !== 2) { // ancienne conversion : elle a pu reprendre le texte caché abîmé du PDF
+      const pages = await ocrGet(m.id); const sample = pages.filter(Boolean).slice(0, 12).join(' ');
+      m.ocrV = 2; if (textQuality(sample) < 0.9) { await del('blob', 'ocr:' + m.id); delete m.ocr; m.ocrRedo = true; }
+      await put('meta', m);
+    }
     let baits = 0;
     for (const m of live) if (m.kind === 'pdf' && m.pages <= 6 && m.baitChecked !== 2) { m.bait = await isBait(m); m.baitChecked = 2; await put('meta', m); if (m.bait) baits++; }
     for (const m of live) if ((BAD_TITLE.test(String(m.title).trim()) || String(m.title).replace(/[^\p{L}]/gu, '').length < 3) && m.fname) { const t2 = m.fname.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(); if (t2 && !BAD_TITLE.test(t2)) { m.title = t2; await put('meta', m); renamed++; } }
@@ -893,5 +908,5 @@ window.LocalAPI = (() => {
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { handle, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();
