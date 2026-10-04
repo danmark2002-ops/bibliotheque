@@ -27,7 +27,17 @@ jobs:
 
       - name: Compiler
         working-directory: android
-        run: gradle assembleRelease --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon 2>&1 | tee ../build.log
+
+      - name: Journal d'erreurs (branche build-log)
+        if: failure()
+        run: |
+          git config user.name "build-bot"; git config user.email "build-bot@users.noreply.github.com"
+          tail -c 60000 build.log > /tmp/build.log
+          git checkout --orphan build-log && git rm -rqf . && cp /tmp/build.log build.log
+          git add build.log && git commit -qm "Journal de compilation ${{ github.run_number }}" && git push -f origin build-log
 
       - name: Renommer
         run: cp android/app/build/outputs/apk/release/app-release.apk Bibliotheque.apk
