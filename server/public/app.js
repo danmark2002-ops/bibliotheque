@@ -75,7 +75,8 @@ const ICONS = {
 };
 const chevR = () => { const s = icon('chev'); s.classList.add('rot-r'); return s; };
 const icon = (n) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); s.innerHTML = ICONS[n]; return s; };
-const KIND = { pdf: 'PDF', docx: 'DOCX', txt: 'TXT', epub: 'EPUB', mobi: 'Kindle', doc: 'DOC', odt: 'ODT', rtf: 'RTF', fb2: 'FB2', html: 'Page web', audio: 'Livre audio' };
+const PAGED = (k) => k === 'pdf' || k === 'images'; // livres faits de pages-images (PDF, BD, photos)
+const KIND = { pdf: 'PDF', docx: 'DOCX', txt: 'TXT', epub: 'EPUB', mobi: 'Kindle', doc: 'DOC', odt: 'ODT', rtf: 'RTF', fb2: 'FB2', html: 'Page web', audio: 'Livre audio', images: 'Images' };
 const PALETTE = ['#7a2e2e', '#1f4e5f', '#3b5d3a', '#5b3a6b', '#8a5a1c', '#2c3e66', '#6b2d4f', '#355c55', '#7d4b2a', '#3d3d5c', '#24343f', '#8c3b2a'];
 const fmtDate = (t) => t ? new Date(t).toLocaleString('fr-CA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 function ago(t) {
@@ -232,7 +233,7 @@ const NAV = {
   reading: ['Lecture en cours', 'reading'], all: ['Tous les livres', 'book'], fav: ['Favoris', 'star'],
   alire: ['À lire', 'clock'], lu: ['Déjà lu', 'checks'], authors: ['Auteurs', 'person'], trash: ['Poubelle', 'trash'],
 };
-const FMT = { pdf: 'PDF', audio: 'Livres audio', epub: 'EPUB', mobi: 'Kindle', docx: 'Word', doc: 'Word ancien', odt: 'OpenDocument', rtf: 'RTF', fb2: 'FictionBook', html: 'Page web', txt: 'Texte' };
+const FMT = { pdf: 'PDF', images: 'BD et photos', audio: 'Livres audio', epub: 'EPUB', mobi: 'Kindle', docx: 'Word', doc: 'Word ancien', odt: 'OpenDocument', rtf: 'RTF', fb2: 'FictionBook', html: 'Page web', txt: 'Texte' };
 const SORTS = { recent: 'Ajout récent', last: 'Dernière lecture', title: 'Titre', author: 'Auteur' };
 S.nav = store.get('nav', { k: 'all' }); S.sort = store.get('sort', 'recent'); S.cols = [];
 const authorOf = (b) => (b.author || '').trim() || 'Auteur inconnu';
@@ -296,8 +297,28 @@ function tinyIcons(b) {
     ic(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
     ic('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
     ic('checks', 'Déjà lu', b.state === 'lu', () => toggleState(b, 'lu')),
-    ic('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)),
-    ic('dots', 'Plus : ouvrir avec, résumé IA…', false, () => editBook(b)));
+    libs().find((l) => l.id === (b.lib || 'main'))?.web // dans « Livres du web », ranger passe devant les collections
+      ? (() => { const x = ic('move', 'Ranger dans une autre bibliothèque', false, () => moveDialog(b)); x.classList.add('hot'); return x; })()
+      : ic('collection', 'Collections', (b.cols || []).length > 0, () => collectionsDialog(b)),
+    (() => { const x = ic('dots', 'Options : résumé IA, Professeur, vidéo, ranger…', false, () => editBook(b)); x.classList.add('more'); return x; })());
+}
+// Bulle de découverte, une seule fois : le menu d'options d'un livre est le cœur de l'application
+function coachOptions() {
+  $('.coach')?.remove();
+  if (store.get('tipOpts', false) || !window.LocalAPI || S.me?.role !== 'owner' || $('.reader') || $('.scrim')) return;
+  const first = $('.case .book, .blist .brow'); if (!first) return;
+  const r = first.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+  const done = () => { store.set('tipOpts', true); tip.remove(); };
+  const tip = h('div', { class: 'coach', role: 'dialog' },
+    h('b', {}, 'Plus d\'options pour chaque livre'),
+    h('p', {}, 'Appuie longuement sur un livre, ou touche ', h('span', { class: 'coachdots' }, icon('dots')), ' en dessous : Résumé IA, Professeur, Vidéo, Ranger dans une bibliothèque, Ouvrir avec…'),
+    h('div', { class: 'coachact' }, h('button', { class: 'btn', onclick: () => { done(); editBook(S.books.find((x) => first.getAttribute('aria-label')?.startsWith(x.title)) || S.books.find((x) => !x.trashed)); } }, 'Voir'), h('button', { class: 'btn primary', onclick: done }, 'Compris')));
+  document.body.append(tip);
+  const w = Math.min(320, innerWidth - 24), left = Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2));
+  const below = r.bottom + 70 + 170 < innerHeight;
+  Object.assign(tip.style, { width: w + 'px', left: left + 'px', top: (below ? r.bottom + 64 + scrollY : r.top - 12 + scrollY) + 'px', transform: below ? 'none' : 'translateY(-100%)' });
+  tip.style.setProperty('--ax', (r.left + r.width / 2 - left) + 'px'); tip.classList.add(below ? 'down' : 'up');
+  first.classList.add('coached');
 }
 // Boutons rapides de la vue liste
 function quickBar(b, { labels } = {}) {
@@ -448,7 +469,7 @@ function renderLibrary(opts = {}) {
     body = asList ? h('div', {}, groups.map(([g, bs]) => [g ? h('h3', { class: 'group-h' }, g, h('em', {}, bs.length)) : null, listEl(bs)]).flat()) : caseFor(groups, owner);
     if (local && curLib()?.web && live.length && S.nav.k !== 'trash') {
       const note = h('div', { class: 'webnote' }, icon('globe'),
-        h('span', {}, 'Les livres téléchargés arrivent ici. Touche ', h('b', {}, 'Ranger'), ' (le dossier avec une flèche, sous le livre) pour le mettre dans une autre bibliothèque.'),
+        h('span', {}, 'Les livres téléchargés arrivent ici. Touche le dossier doré sous un livre pour le ', h('b', {}, 'ranger'), ' dans une autre bibliothèque.'),
         h('button', { class: 'btn', onclick: () => moveDialog(live) }, icon('move'), 'Tout ranger…'));
       body.prepend(note);
     }
@@ -504,7 +525,7 @@ function renderLibrary(opts = {}) {
     current ? heroEl(current) : null,
     toolbar,
     body,
-    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : (local ? 'Sous chaque livre : favori, à lire, déjà lu, collections, ranger. Appui long pour modifier.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
+    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
   ));
   // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
   if (document.activeElement && document.activeElement.classList.contains('search')) opts.keepSearch = true; // toute mise à jour pendant la frappe épargne le champ
@@ -515,6 +536,7 @@ function renderLibrary(opts = {}) {
     [...ow.children].forEach((c) => { if (c !== ot) c.remove(); });
     ot.before(...before); ot.after(...after);
   } else $('#app').replaceChildren(room);
+  setTimeout(coachOptions, 900);
   // hors de #app : les messages d'envoi survivent au rafraîchissement de l'étagère
   if (!$('#uploads')) document.body.append(h('div', { class: 'uploads', id: 'uploads' }));
   if (!$('#dz')) document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
@@ -545,7 +567,7 @@ window.addEventListener('resize', () => {
 });
 
 // ================= Ajout de livres =================
-const BOOK_ACCEPT = '.mp3,.m4b,.m4a,.aac,.ogg,.opus,.flac,audio/*,.pdf,.epub,.mobi,.azw,.azw3,.prc,.docx,.doc,.odt,.rtf,.fb2,.html,.htm,.xhtml,.txt,.md,.markdown,.text,application/pdf,application/epub+zip,text/plain,text/html,application/rtf,application/msword,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const BOOK_ACCEPT = '.cbz,.fbz,.zip,.jpg,.jpeg,.png,.webp,image/*,.mp3,.m4b,.m4a,.aac,.ogg,.opus,.flac,audio/*,.pdf,.epub,.mobi,.azw,.azw3,.prc,.docx,.doc,.odt,.rtf,.fb2,.html,.htm,.xhtml,.txt,.md,.markdown,.text,application/pdf,application/epub+zip,text/plain,text/html,application/rtf,application/msword,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 function pickFiles() {
   const inp = h('input', { type: 'file', accept: window.LocalAPI ? BOOK_ACCEPT : '.pdf,.txt,.md,application/pdf,text/plain', multiple: true });
   inp.style.display = 'none'; document.body.append(inp);
@@ -554,6 +576,14 @@ function pickFiles() {
 }
 async function uploadFiles(files, { lib: target } = {}) {
   const added = [];
+  const pics = window.LocalAPI ? files.filter((f) => IMAGE_EXT.test(f.name)) : [];
+  if (pics.length) { // des photos de pages choisies ensemble = un livre
+    files = files.filter((f) => !pics.includes(f));
+    const box = h('div', { class: 'up' }, h('b', {}, `Livre en photos · ${pics.length} page${pics.length > 1 ? 's' : ''}`), h('span', { class: 'muted' }, 'Préparation…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+    $('#uploads')?.append(box);
+    try { const m = await LocalAPI.uploadImages(pics, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? 'main' : curLib().id) }); added.push(m); box.remove(); toast(`« ${m.title} » est sur l'étagère · touche ⋮ puis « Convertir en texte » pour le lire en texte`); }
+    catch (e) { $('span', box).textContent = e.message; setTimeout(() => box.remove(), 6000); }
+  }
   const aud = window.LocalAPI ? files.filter((f) => AUDIO_EXT.test(f.name)) : [];
   if (aud.length > 1) { // plusieurs pistes choisies ensemble = un seul livre audio
     files = files.filter((f) => !aud.includes(f));
@@ -852,7 +882,8 @@ function pickWebFolder() {
     inp.click();
   });
 }
-const BOOK_EXT = /\.(pdf|epub|mobi|azw3?|prc|docx?|odt|rtf|fb2|html?|xhtml|txt|md|markdown|text|mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$/i;
+const BOOK_EXT = /\.(pdf|epub|mobi|azw3?|prc|docx?|odt|rtf|fb2|fbz|cbz|html?|xhtml|txt|md|markdown|text|mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$|\.fb2\.zip$/i;
+const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
 const AUDIO_EXT = /\.(mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$/i;
 function nameLibAfter(libId, folderName, force) {
   const l = libs(); const lib = l.find((x) => x.id === libId); if (!lib || !folderName) return;
@@ -1211,6 +1242,7 @@ function sheet(title, body, { wide } = {}) {
   return close;
 }
 function editBook(b) {
+  if (!store.get('tipOpts', false)) { store.set('tipOpts', true); $('.coach')?.remove(); } // la personne a trouvé le menu
   const title = h('input', { value: b.title, maxlength: 200 });
   const author = h('input', { value: b.author || '', maxlength: 120, placeholder: 'Auteur' });
   let color = b.color;
@@ -1221,8 +1253,11 @@ function editBook(b) {
   const qb = local ? quickBar(b, { labels: true }) : null;
   if (qb) $$('button', qb).forEach((x) => x.addEventListener('click', () => close(), { capture: true })); // ferme la fenêtre avant l'action
   const actRow = local && !b.trashed ? h('div', { class: 'bookacts' },
-    h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon(b.kind === 'audio' ? 'headphones' : 'book'), h('span', {}, b.kind === 'audio' ? 'Écouter' : 'Lire')),
+    window.__reader?.b?.id === b.id ? null : h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon(b.kind === 'audio' ? 'headphones' : 'book'), h('span', {}, b.kind === 'audio' ? 'Écouter' : 'Lire')),
     h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
+    PAGED(b.kind) && Ocr.on() ? (b.ocr === 'done'
+      ? h('button', { class: 'bact on', onclick: () => { close(); const v = store.get('view:' + b.id, 'text') === 'text' ? 'photo' : 'text'; store.set('view:' + b.id, v); if (window.__reader?.b?.id === b.id) window.__reader.switchView(v); else toast(v === 'text' ? 'Le livre s\'ouvrira en texte' : 'Le livre s\'ouvrira en photos'); } }, icon('type'), h('span', {}, store.get('view:' + b.id, 'text') === 'text' ? 'Revenir aux photos' : 'Lire en texte'))
+      : h('button', { class: 'bact', onclick: () => { close(); Ocr.run(b, window.__reader?.b?.id === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null,
     b.kind !== 'audio' ? h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null,
     Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null,
     Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
@@ -2355,6 +2390,7 @@ function sentences(text) {
 // ================= Lecteur =================
 async function openBook(b, fromEl, opts = {}) {
   if (b.kind === 'audio') { await flyOpen(b, fromEl); return new AudioBook(b).mount(); }
+  if (PAGED(b.kind) && b.ocr === 'done' && store.get('view:' + b.id, 'text') === 'text' && window.LocalAPI) b = { ...b, kind: 'ocr', base: b.kind }; // livre converti : lu en texte
   await flyOpen(b, fromEl);
   const R = new Reader(b, opts);
   await R.mount();
@@ -2423,6 +2459,72 @@ function wordAt(text, idx) {
   let w = text.slice(a, b).replace(/^['’\-]+|['’\-]+$/g, '');
   w = w.replace(/^(?:l|d|j|m|n|s|t|c|qu|jusqu|lorsqu|puisqu)['’]/i, ''); // l'arbre → arbre
   return w.length > 1 ? w : null;
+}
+
+// ---- Convertir les photos en texte (pages photographiées) ----
+// Chaque page est reconnue sur le téléphone ; le livre peut ensuite se lire comme un texte (taille, voix, définitions).
+// Le bouton Texte / Photo, en haut du lecteur, ramène aux pages d'origine.
+const Ocr = {
+  on: () => !!window.AndroidOcr && !!window.LocalAPI?.ocrSave,
+  cb: {}, n: 0, jobs: {},
+  recognize(canvas) {
+    return new Promise((res, rej) => {
+      const id = 'o' + (++this.n); this.cb[id] = (r) => (r.error ? rej(new Error(r.error)) : res(r));
+      AndroidOcr.recognize(canvas.toDataURL('image/jpeg', 0.88).split(',')[1], id);
+      setTimeout(() => { if (this.cb[id]) { delete this.cb[id]; rej(new Error('Délai dépassé')); } }, 60000);
+    });
+  },
+  // Remet les blocs dans l'ordre de lecture : titres pleine largeur, puis colonne de gauche, puis de droite
+  order(r) {
+    const W = r.w || 1; const bl = (r.blocks || []).filter((b) => b.t && b.t.trim());
+    bl.sort((a, b) => (a.top ?? 0) - (b.top ?? 0));
+    const out = []; let band = [];
+    const flush = () => { const L = band.filter((b) => (b.l + b.r) / 2 < W / 2), R = band.filter((b) => (b.l + b.r) / 2 >= W / 2); out.push(...L, ...R); band = []; };
+    for (const b of bl) { if (b.r - b.l > W * 0.62) { flush(); out.push(b); } else band.push(b); }
+    flush();
+    return out.map((b) => b.t.replace(/-\n(?=\p{Ll})/gu, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n');
+  },
+  async run(b, from = 1) {
+    if (this.jobs[b.id]) return toast('La conversion est déjà en cours');
+    const total = b.pages; const pages = await LocalAPI.ocrGet(b.id); while (pages.length < total) pages.push(null);
+    const ctl = progressPanel(`Conversion en texte · ${b.title}`); this.jobs[b.id] = ctl;
+    const order = []; for (let i = 0; i < total; i++) order.push(((from - 1 + i) % total) + 1); // à partir de la page en cours
+    let done = pages.filter((x) => x !== null).length, fails = 0;
+    try {
+      for (const n of order) {
+        await ctl.wait(); if (ctl.cancelled) break;
+        if (pages[n - 1] !== null) continue;
+        ctl.set((done / total) * 100, `Page ${n} sur ${total} · ${Math.floor((done / total) * 100)} %`);
+        let txt = '';
+        try {
+          if (b.kind === 'pdf') { const t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; if (t.replace(/\s/g, '').length > 120) txt = t; } // la page a déjà du vrai texte
+          if (!txt) { const c = await LocalAPI.pageCanvasAt(b.id, n, 1700); txt = this.order(await this.recognize(c)); }
+        } catch { fails++; }
+        pages[n - 1] = txt; done++;
+        if (done % 4 === 0) await LocalAPI.ocrSave(b.id, pages.map((x) => x || ''), false);
+      }
+      const complete = pages.every((x) => x !== null);
+      await LocalAPI.ocrSave(b.id, pages.map((x) => x || ''), complete);
+      ctl.done(); await loadBooks();
+      if (complete) {
+        store.set('view:' + b.id, 'text');
+        toast(fails ? `Conversion terminée (${fails} page${fails > 1 ? 's' : ''} illisible${fails > 1 ? 's' : ''})` : 'Conversion terminée : le livre se lit maintenant en texte');
+        const r = window.__reader; if (r && r.b.id === b.id && r.b.kind !== 'ocr') r.switchView('text');
+      } else toast('Conversion arrêtée. Elle reprendra où elle en était.');
+    } catch (e) { ctl.done(); toast(e.message); }
+    finally { delete this.jobs[b.id]; if (!$('.reader')) renderLibrary(); }
+  },
+};
+window.__ocrDone = (j) => { let r; try { r = JSON.parse(j); } catch { return; } const f = Ocr.cb[r.id]; delete Ocr.cb[r.id]; if (f) f(r); };
+function progressPanel(title) { // même panneau que la recherche dans le téléphone : pourcentage, pause, annulation
+  const bar = h('i', { style: { width: '0%' } }), txt = h('span', {}, 'Préparation…');
+  const pauseBtn = h('button', { class: 'btn', onclick: () => { c.paused = !c.paused; pauseBtn.replaceChildren(icon(c.paused ? 'play' : 'pause'), c.paused ? 'Reprendre' : 'Pause'); el.classList.toggle('paused', c.paused); if (c.paused) txt.textContent = 'En pause · ' + txt.textContent; } }, icon('pause'), 'Pause');
+  const el = h('div', { class: 'scanpanel' }, h('b', {}, title), txt, h('div', { class: 'bar' }, bar),
+    h('div', { class: 'actions' }, pauseBtn, h('button', { class: 'btn danger', onclick: () => { c.cancelled = true; c.paused = false; } }, icon('close'), 'Arrêter')));
+  document.body.append(el);
+  const c = { paused: false, cancelled: false, set(pct, t) { bar.style.width = Math.max(0, Math.min(100, pct)) + '%'; if (t) txt.textContent = (c.paused ? 'En pause · ' : '') + t; },
+    wait: () => new Promise((res) => { const tick = () => (c.paused && !c.cancelled ? setTimeout(tick, 200) : res()); tick(); }), done() { el.remove(); } };
+  return c;
 }
 
 // ---- Pli de page, comme dans Google Livres ----
@@ -2599,7 +2701,7 @@ class AudioBook {
 class Reader {
   constructor(b, opts) {
     this.b = b; this.opts = opts;
-    this.reflow = b.kind !== 'pdf' && !!window.LocalAPI; // texte repaginé pour tenir à l'écran
+    this.reflow = !PAGED(b.kind) && !!window.LocalAPI; // texte repaginé pour tenir à l'écran
     this.total = b.pages; this.origPages = b.pages;
     this.page = Math.min(b.pages, Math.max(1, b.progress?.page || 1));
     this.theme = store.get('theme', 'sepia'); this.fs = store.get('fs', 19);
@@ -2617,13 +2719,15 @@ class Reader {
     this.lbl = h('span', {});
     this.left = h('span', {});
     this.audioBtn = h('button', { class: 'rbtn', title: 'Lecture audio', onclick: () => this.toggleAudio() }, icon('headphones'));
-    this.el = h('div', { class: 'reader' + (b.kind === 'pdf' ? ' pdf-mode' : ''), 'data-theme': this.theme },
+    this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : ''), 'data-theme': this.theme },
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
         Prof.on() ? h('button', { class: 'rbtn', title: 'Le Professeur bizarroïde', onclick: () => { if (this.player) this.closePlayer(); Prof.open(b); } }, icon('prof')) : null,
         TTS.supported() ? this.audioBtn : null,
-        h('button', { class: 'rbtn', title: 'Apparence', onclick: () => this.appearance() }, icon('type'))),
+        h('button', { class: 'rbtn', title: 'Apparence', onclick: () => this.appearance() }, icon('type')),
+        (b.kind === 'ocr' || (PAGED(b.kind) && b.ocr === 'done')) ? h('button', { class: 'viewchip', title: 'Changer de mode', onclick: () => this.switchView(b.kind === 'ocr' ? 'photo' : 'text') }, b.kind === 'ocr' ? 'Photo' : 'Texte') : null,
+        S.me.role === 'owner' && window.LocalAPI ? h('button', { class: 'rbtn', title: 'Options du livre', 'aria-label': 'Options du livre', onclick: () => this.bookMenu() }, icon('dots')) : null),
       this.stage,
       h('div', { class: 'tapzone l', onclick: () => this.go(this.page - 1, -1) }),
       h('div', { class: 'tapzone r', onclick: () => this.go(this.page + 1, 1) }),
@@ -2633,13 +2737,14 @@ class Reader {
     window.__reader = this;
     this.el.addEventListener('contextmenu', (e) => e.preventDefault());
     this.el.addEventListener('dragstart', (e) => e.preventDefault());
-    this.stage.addEventListener('click', (e) => { if (e.detail === 1) this.clickT = setTimeout(() => this.el.classList.toggle('immersive'), 250); });
-    this.stage.addEventListener('dblclick', () => { clearTimeout(this.clickT); this.toggleZoom(); });
+    this.stage.addEventListener('click', (e) => { if (e.detail === 1) this.clickT = setTimeout(() => this.el.classList.toggle('immersive'), 340); });
+    this.stage.addEventListener('dblclick', (e) => { clearTimeout(this.clickT); if (PAGED(this.b.kind) && !this.touchTap) this.zoomToggle(e.clientX, e.clientY); }); // souris
+    this.setupZoom();
     // Tourner la page au doigt : la page suit le doigt et se plie (voir Curl), puis termine ou revient selon le geste
     let sx = 0, sy = 0, tracking = false, drag = null, hist = [];
     const ignore = (t) => t.closest && t.closest('.r-top, .r-bottom, .player, .scrim, input, select');
     this.el.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1 || ignore(e.target) || this.zoom) { tracking = false; return; }
+      if (e.touches.length !== 1 || ignore(e.target) || this.zoom || this.zoomed() || this.pinch) { tracking = false; return; }
       this.finishTurn();
       tracking = true; drag = null; sx = e.touches[0].clientX; sy = e.touches[0].clientY; hist = [[sx, performance.now()]];
       clearTimeout(this.lpT); // appui long sur un mot : sa définition
@@ -2703,7 +2808,7 @@ class Reader {
       if (this.closed) return;
       this.page = this.startPage();
     }
-    post('/api/track', { book: b.id, type: 'open', page: this.page }).catch(() => {});
+    post('/api/track', { book: b.id, type: 'open', page: b.kind === 'ocr' ? Math.max(1, Math.round((this.page / this.total) * this.origPages)) : this.page }).catch(() => {});
     await this.render(0);
     if (this.opts.audio) this.toggleAudio(true);
   }
@@ -2722,7 +2827,7 @@ class Reader {
     this.curKey = key;
     const hit = Reader.cache.get(key);
     if (hit) { this.pages = hit.pages; this.pageStarts = hit.starts; return this.afterPaginate(); }
-    const paras = await LocalAPI.paragraphs(this.b.id);
+    const paras = await LocalAPI.paragraphs(this.b.id, { ocr: this.b.kind === 'ocr' });
     const Hh = this.H - 6;
     const meas = h('div', { class: 'prose reflow', style: { position: 'absolute', left: '-9999px', top: '0', visibility: 'hidden', width: this.W + 'px', height: Hh + 'px', overflow: 'hidden', '--fs': this.fs + 'px' } });
     this.el.append(meas);
@@ -2778,7 +2883,7 @@ class Reader {
   }
   startPage() {
     const pr = this.b.progress; if (!pr) return 1;
-    if (pr.pos != null) return this.pageOfPos(pr.pos);
+    if (pr.pos != null && this.b.kind !== 'ocr') return this.pageOfPos(pr.pos);
     return Math.min(this.total, Math.max(1, Math.round(((pr.page - 1) / Math.max(1, this.origPages)) * this.total) + 1));
   }
   async relayout() {
@@ -2823,7 +2928,7 @@ class Reader {
       const b = this.b, pg = h('div', { class: 'page ' + b.kind + (this.reflow ? ' reflow' : '') + (this.zoom ? ' zoom' : '') });
       e = { pg, ready: false };
       e.p = (async () => {
-        try { if (b.kind === 'pdf') await this.drawPdf(pg, n); else if (this.reflow) await this.drawReflow(pg, n); else await this.drawText(pg, n); }
+        try { if (PAGED(b.kind)) await this.drawPdf(pg, n); else if (this.reflow) await this.drawReflow(pg, n); else await this.drawText(pg, n); }
         catch (err) { pg.replaceChildren(h('div', { class: 'loading' }, err.message)); e.failed = true; }
         pg.append(h('div', { class: 'folio' }, `— ${n} —`));
         e.ready = true; return pg;
@@ -2868,12 +2973,15 @@ class Reader {
   setCurrent(n, e) {
     const b = this.b, pg = e.pg;
     if (!pg.isConnected) this.stage.append(pg);
+    if (this.cur && this.cur !== pg) this.resetZoom();
     this.cur = pg; this.tidy(); this.lookEl?.remove(); this.lookMark?.remove(); this.lookEl = this.lookMark = null;
     this.sents = pg._sents || [];
     if (e.failed) this.built.delete(n);
     if (n !== this.page) return;
     clearTimeout(this.trackT);
-    this.sendTrack = () => { this.sendTrack = null; return post('/api/track', { book: b.id, type: 'page', page: n, ...(this.reflow ? { pages: this.total, pos: this.pageStarts[n - 1] } : {}) }).catch(() => {}); };
+    this.sendTrack = () => { this.sendTrack = null; // en mode texte d'un livre photo, la position est rapportée en pages d'origine
+      if (b.kind === 'ocr') return post('/api/track', { book: b.id, type: 'page', page: Math.max(1, Math.round((n / this.total) * this.origPages)) }).catch(() => {});
+      return post('/api/track', { book: b.id, type: 'page', page: n, ...(this.reflow ? { pages: this.total, pos: this.pageStarts[n - 1] } : {}) }).catch(() => {}); };
     this.trackT = setTimeout(() => this.sendTrack && this.sendTrack(), 700);
     this.preload();
     if (this.playing) this.highlight();
@@ -2954,13 +3062,13 @@ class Reader {
     if (was) { this.stopSpeech(); this.sIdx = 0; }
     this.page = n; this.render(dir).then(() => { if (was) this.play(); });
   }
-  toggleZoom() { if (this.b.kind !== 'pdf') return; this.zoom = !this.zoom; this.el.classList.toggle('zooming', this.zoom); this.resetBuilt(); this.render(0); }
+  toggleZoom() { if (!PAGED(this.b.kind)) return; this.zoom = !this.zoom; this.el.classList.toggle('zooming', this.zoom); this.resetBuilt(); this.render(0); }
   appearance() {
     const themes = [['sepia', 'Sépia'], ['clair', 'Clair'], ['nuit', 'Nuit']];
     const seg = h('div', { class: 'seg' }, themes.map(([k, l]) => h('button', { class: k === this.theme ? 'sel' : '', onclick: (e) => { this.theme = k; store.set('theme', k); this.el.dataset.theme = k; $$('button', seg).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); } }, l)));
     const size = h('div', { class: 'seg' }, h('button', { onclick: () => this.setFs(-1) }, 'A−'), h('button', { onclick: () => this.setFs(1) }, 'A+'));
     sheet('Apparence', h('div', {}, h('div', { class: 'field' }, 'Fond', seg),
-      this.b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Taille du texte', size) : h('p', { class: 'muted' }, 'Touche deux fois une page pour zoomer.')));
+      !PAGED(this.b.kind) ? h('div', { class: 'field' }, 'Taille du texte', size) : h('p', { class: 'muted' }, 'Touche deux fois une page pour zoomer.')));
   }
   setFs(d) {
     this.fs = Math.max(14, Math.min(30, this.fs + d)); store.set('fs', this.fs);
@@ -2986,7 +3094,7 @@ class Reader {
     };
     if (!TTS.native()) { voiceSel = h('select', { 'aria-label': 'Voix', onchange: () => { this.voice = voiceSel.value; store.set('voice', this.voice); if (this.playing) { this.stopSpeech(); this.play(); } } }); fillVoices(); speechSynthesis.onvoiceschanged = fillVoices; }
     this.toneBtn = h('button', { class: 'chip', title: 'Voix et ton', onclick: () => openVoices() }, icon('voice'), ' ', Voice.toneOf(Voice.tone())[1]);
-    this.sleepBtn = Sleep.chip(() => this.pause(), { chapters: this.b.kind !== 'pdf', pages: true });
+    this.sleepBtn = Sleep.chip(() => this.pause(), { chapters: !PAGED(this.b.kind), pages: true });
     this.player = h('div', { class: 'player paused' }, this.cap,
       h('div', { class: 'ctl' },
         this.sleepBtn,
@@ -3003,12 +3111,14 @@ class Reader {
   closePlayer() { this.pause(); this.player?.remove(); this.player = null; this.audioBtn.classList.remove('on'); $$('.s.cur', this.el).forEach((x) => x.classList.remove('cur')); }
   async play() {
     if (!this.player) return;
-    if (this.b.kind === 'pdf') this.sents = sentences(await this.getText(this.page));
+    if (PAGED(this.b.kind)) this.sents = sentences(await this.getText(this.page));
     if (this.sents.length && this.page < this.total && Legal.skipPage(this.sents.join(' '), this.page, this.total)) { // page de droits d'auteur : on passe
       this.cap.textContent = 'Page de droits d\'auteur et mentions légales : passée.'; this.playing = true; this.setPlayUi(); this.sIdx = 0;
       setTimeout(() => this.playing && this.go(this.page + 1, 1), 700); return;
     }
-    if (!this.sents.length) { this.cap.textContent = 'Cette page ne contient pas de texte lisible (image ou scan).'; if (this.page < this.total) { this.playing = true; this.setPlayUi(); setTimeout(() => this.playing && this.go(this.page + 1, 1), 1500); } return; }
+    if (!this.sents.length) {
+      this.cap.replaceChildren('Cette page est une photo : il n\'y a pas de texte à lire. ', Ocr.on() ? h('button', { class: 'chip', onclick: () => { this.pause(); Ocr.run(S.books.find((x) => x.id === this.b.id) || this.b, this.page); } }, 'Convertir en texte') : '');
+      if (Ocr.on()) return; if (this.page < this.total) { this.playing = true; this.setPlayUi(); setTimeout(() => this.playing && this.go(this.page + 1, 1), 1500); } return; }
     if (this.sIdx >= this.sents.length) this.sIdx = 0;
     if (!this.playing) post('/api/track', { book: this.b.id, type: 'audio', page: this.page }).catch(() => {});
     this.playing = true; this.setPlayUi(); this.speakCurrent();
@@ -3052,16 +3162,114 @@ class Reader {
     const cur = $('.s.cur', root); if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   // ---- Appui long : définition du mot, traduction si la phrase est en anglais ----
+  // ---- Zoom fluide (PDF) : pincer, glisser à un doigt, toucher deux fois. Le mouvement est fait par la carte graphique ;
+  //      la page est redessinée plus nette quand les doigts se lèvent ----
+  zs() { return this.zst || (this.zst = { s: 1, x: 0, y: 0 }); }
+  zoomed() { return this.zs().s > 1.01; }
+  applyZoom(anim) {
+    const pg = this.cur; if (!pg) return; const z = this.zs();
+    pg.style.transition = anim ? 'transform .28s cubic-bezier(.2,.8,.2,1)' : 'none';
+    pg.style.transformOrigin = '0 0';
+    pg.style.transform = z.s > 1.001 ? `translate3d(${z.x}px, ${z.y}px, 0) scale(${z.s})` : '';
+    this.el.classList.toggle('zoomed', z.s > 1.01);
+    clearTimeout(this.sharpT); if (z.s > 1.25) this.sharpT = setTimeout(() => this.sharpen(), 280);
+  }
+  clampZoom() {
+    const z = this.zs(), pg = this.cur; if (!pg) return;
+    const W = this.stage.clientWidth, H = this.stage.clientHeight, L = pg.offsetLeft, T = pg.offsetTop, w = pg.offsetWidth * z.s, hh = pg.offsetHeight * z.s;
+    z.x = w <= W ? (W - w) / 2 - L : Math.min(-L, Math.max(W - w - L, z.x));
+    z.y = hh <= H ? (H - hh) / 2 - T : Math.min(-T, Math.max(H - hh - T, z.y));
+  }
+  zoomAt(s1, px, py, anim) { // garde sous le doigt le même point de la page
+    const z = this.zs(), pg = this.cur; if (!pg) return;
+    s1 = Math.max(1, Math.min(6, s1));
+    const L = pg.offsetLeft, T = pg.offsetTop, ux = (px - L - z.x) / z.s, uy = (py - T - z.y) / z.s;
+    z.s = s1; z.x = px - L - ux * s1; z.y = py - T - uy * s1;
+    if (s1 <= 1.001) { z.s = 1; z.x = 0; z.y = 0; } else this.clampZoom();
+    this.applyZoom(anim);
+  }
+  zoomToggle(cx, cy) { const r = this.stage.getBoundingClientRect(); if (this.zoomed()) this.zoomAt(1, 0, 0, true); else this.zoomAt(2.5, cx - r.left, cy - r.top, true); }
+  resetZoom() { const z = this.zs(); if (z.s === 1 && !this.cur?.style.transform) return; z.s = 1; z.x = 0; z.y = 0; if (this.cur) { this.cur.style.transform = ''; this.cur.style.transition = 'none'; } this.el.classList.remove('zoomed'); }
+  async sharpen() {
+    const pg = this.cur, z = this.zs(); if (!pg || !PAGED(this.b.kind) || !window.LocalAPI?.pageCanvasAt) return;
+    const c = $('.pdf-canvas', pg); if (!c) return;
+    const want = Math.min(3000, Math.round(c.clientWidth * Math.min(devicePixelRatio || 1, 3) * z.s));
+    if (c.width >= want * 0.92) return;
+    const n = this.page;
+    try {
+      const hi = await LocalAPI.pageCanvasAt(this.b.id, n, want);
+      if (n !== this.page || this.cur !== pg) return;
+      c.width = hi.width; c.height = hi.height; c.getContext('2d').drawImage(hi, 0, 0);
+    } catch {}
+  }
+  setupZoom() {
+    if (!PAGED(this.b.kind)) return;
+    let pinch = null, pan = null, tap = null, lastTap = null;
+    const pt = (t) => { const r = this.stage.getBoundingClientRect(); return { x: t.clientX - r.left, y: t.clientY - r.top }; };
+    this.el.addEventListener('touchstart', (e) => {
+      if (e.target.closest?.('.r-top, .r-bottom, .player, .scrim, .lookup')) return;
+      if (e.touches.length === 2) {
+        clearTimeout(this.lpT); this.cancelDrag(); this.finishTurn(); pan = null; tap = null;
+        const a = pt(e.touches[0]), b = pt(e.touches[1]), z = this.zs(), pg = this.cur; if (!pg) return;
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: z.s, ux: (m.x - pg.offsetLeft - z.x) / z.s, uy: (m.y - pg.offsetTop - z.y) / z.s }; this.pinch = true;
+      } else if (e.touches.length === 1) {
+        const p0 = pt(e.touches[0]); tap = { x: p0.x, y: p0.y, cx: e.touches[0].clientX, cy: e.touches[0].clientY, t: performance.now(), moved: false };
+        if (this.zoomed()) { const z = this.zs(); pan = { x: p0.x, y: p0.y, zx: z.x, zy: z.y }; }
+      }
+    }, { passive: true });
+    this.el.addEventListener('touchmove', (e) => {
+      if (pinch && e.touches.length === 2) {
+        const a = pt(e.touches[0]), b = pt(e.touches[1]), z = this.zs(), pg = this.cur; if (!pg) return;
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        let s1 = pinch.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0);
+        s1 = s1 < 1 ? 1 - (1 - s1) * 0.35 : Math.min(6.5, s1); // un peu d'élasticité sous 1
+        z.s = s1; z.x = m.x - pg.offsetLeft - pinch.ux * s1; z.y = m.y - pg.offsetTop - pinch.uy * s1;
+        this.applyZoom(false); return;
+      }
+      if (tap && e.touches.length === 1) { const p1 = pt(e.touches[0]); if (Math.hypot(p1.x - tap.x, p1.y - tap.y) > 10) { tap.moved = true; clearTimeout(this.lpT); } }
+      if (pan && e.touches.length === 1) { const p1 = pt(e.touches[0]), z = this.zs(); z.x = pan.zx + (p1.x - pan.x); z.y = pan.zy + (p1.y - pan.y); this.clampZoom(); this.applyZoom(false); }
+    }, { passive: true });
+    this.el.addEventListener('touchend', (e) => {
+      if (pinch && e.touches.length < 2) {
+        pinch = null; this.pinch = false; const z = this.zs();
+        if (z.s < 1.05) { z.s = 1; z.x = 0; z.y = 0; this.applyZoom(true); } else { if (z.s > 6) z.s = 6; this.clampZoom(); this.applyZoom(true); }
+        if (e.touches.length === 1 && this.zoomed()) { const p0 = pt(e.touches[0]); pan = { x: p0.x, y: p0.y, zx: z.x, zy: z.y }; }
+        tap = null; return;
+      }
+      if (e.touches.length === 0) {
+        pan = null;
+        if (tap && !tap.moved && performance.now() - tap.t < 260) { // double toucher : zoom à cet endroit, ou retour
+          if (lastTap && performance.now() - lastTap.t < 320 && Math.hypot(lastTap.x - tap.x, lastTap.y - tap.y) < 40) {
+            clearTimeout(this.clickT); lastTap = null; this.touchTap = true; setTimeout(() => { this.touchTap = false; }, 500);
+            this.zoomToggle(tap.cx, tap.cy);
+          } else lastTap = { ...tap, t: performance.now() };
+        }
+        tap = null;
+      }
+    }, { passive: true });
+  }
+  // Texte ⇄ Photo : rouvre le livre dans l'autre mode, à la même page
+  switchView(v) {
+    const orig = S.books.find((x) => x.id === this.b.id); if (!orig) return;
+    const frac = (this.page - 1) / Math.max(1, this.total - 1);
+    store.set('view:' + orig.id, v);
+    const page = Math.max(1, Math.round(frac * (orig.pages - 1)) + 1);
+    this.close(); orig.progress = { ...(orig.progress || {}), page, pos: null };
+    setTimeout(() => openBook(orig, null), 260);
+  }
+  bookMenu() { if (this.playing) this.pause(); editBook(S.books.find((x) => x.id === this.b.id) || this.b); }
   async lookupAt(x, y) {
     if (!this.cur || this.zoom) return;
+    const menu = () => { try { navigator.vibrate?.(12); } catch {} this.bookMenu(); }; // appui long hors d'un mot : les options du livre
     let word = null, sentence = '', box = null;
-    if (this.b.kind === 'pdf') {
+    if (PAGED(this.b.kind)) {
       const c = $('.pdf-canvas', this.cur); if (!c || !window.LocalAPI?.pageItems) return;
       const r = c.getBoundingClientRect(); const nx = (x - r.left) / r.width, ny = (y - r.top) / r.height;
-      if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
-      let items = []; try { items = await LocalAPI.pageItems(this.b.id, this.page); } catch { return; }
+      if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return menu();
+      let items = []; try { items = await LocalAPI.pageItems(this.b.id, this.page); } catch { return menu(); }
       const pad = 0.006; const it = items.find((i) => nx >= i.l - pad && nx <= i.l + i.w + pad && ny >= i.t - pad && ny <= i.t + i.h + pad);
-      if (!it) return toast('Aucun texte à cet endroit (page numérisée ?)');
+      if (!it) return menu();
       const ci = Math.max(0, Math.min(it.s.length - 1, Math.floor(((nx - it.l) / it.w) * it.s.length)));
       word = wordAt(it.s, ci);
       const pt = await this.getText(this.page); sentence = sentences(pt).find((s) => s.includes(it.s.trim().slice(0, 24))) || it.s;
@@ -3070,12 +3278,12 @@ class Reader {
       this.el.classList.add('looking');
       const rg = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
       this.el.classList.remove('looking');
-      const node = rg?.startContainer; if (!node || node.nodeType !== 3 || !this.cur.contains(node)) return;
+      const node = rg?.startContainer; if (!node || node.nodeType !== 3 || !this.cur.contains(node)) return menu();
       word = wordAt(node.data, rg.startOffset);
       sentence = node.parentElement?.closest('.s')?.textContent || node.data;
       try { const isW = (c) => /[\p{L}\p{M}'’\-]/u.test(c || ''); let a = rg.startOffset, b = a; while (a > 0 && isW(node.data[a - 1])) a--; while (b < node.data.length && isW(node.data[b])) b++; const wr = document.createRange(); wr.setStart(node, a); wr.setEnd(node, b); box = wr.getBoundingClientRect(); } catch {}
     }
-    if (!word) return;
+    if (!word) return menu();
     try { navigator.vibrate?.(12); } catch {}
     this.showLookup(word, sentence, box);
   }
@@ -3099,7 +3307,7 @@ class Reader {
       body, trBox,
       h('div', { class: 'lookacts' },
         en ? h('button', { class: 'btn', onclick: () => doTr(sentence, 'La phrase, en français') }, 'Traduire la phrase') : null,
-        en ? h('button', { class: 'btn', onclick: async () => doTr(this.reflow || this.b.kind !== 'pdf' ? (this.sents || []).join(' ') : await this.getText(this.page), 'La page, en français') }, 'Traduire la page') : null,
+        en ? h('button', { class: 'btn', onclick: async () => doTr(this.reflow || !PAGED(this.b.kind) ? (this.sents || []).join(' ') : await this.getText(this.page), 'La page, en français') }, 'Traduire la page') : null,
         h('button', { class: 'btn', onclick: () => { const u = 'https://fr.wiktionary.org/wiki/' + encodeURIComponent(word); window.AndroidWeb ? AndroidWeb.open(u, 'Wiktionnaire') : open(u, '_blank'); } }, icon('dict'), 'Wiktionnaire')));
     this.el.append(this.lookEl);
     const show = (res, w) => {
@@ -3126,7 +3334,7 @@ class Reader {
     if (n === this.page && this.sents.length) return this.sents;
     if (this.reflow) return (this.pages[n - 1] || []).flatMap((it) => sentences(it.text));
     const t = await this.getText(n);
-    if (this.b.kind === 'pdf') return sentences(t);
+    if (PAGED(this.b.kind)) return sentences(t);
     return t.split(/\n{2,}/).flatMap((para) => sentences(para.replace(/^#{1,3} /, '')));
   }
   // Avance ou recule d'une durée : estimée d'après le débit de la voix (environ 14,5 caractères par seconde à vitesse 1)

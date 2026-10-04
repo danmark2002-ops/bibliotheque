@@ -65,7 +65,7 @@ window.LocalAPI = (() => {
   async function renderPage(doc, n, width) {
     const page = await doc.getPage(n);
     const v1 = page.getViewport({ scale: 1 });
-    const scale = Math.min(3, width / v1.width);
+    const scale = Math.min(6, width / v1.width);
     const vp = page.getViewport({ scale });
     const c = document.createElement('canvas'); c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
     const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
@@ -486,6 +486,43 @@ window.LocalAPI = (() => {
     await put('meta', meta); onp(100);
     return meta;
   }
+  // ---------- Livres en images : bandes dessinées CBZ, photos de pages (plusieurs photos = un livre) ----------
+  const IMG_RE = /\.(jpe?g|png|webp|gif|bmp)$/i;
+  async function uploadImages(files, onp, extra = {}) {
+    const imgs = [];
+    for (const f of files) {
+      if (IMG_RE.test(f.name)) { imgs.push({ name: f.name, blob: f }); continue; }
+      onp(10, 'Ouverture de l\'archive…');
+      const read = await unzip(await f.arrayBuffer());
+      for (const n of read.names().filter((x) => IMG_RE.test(x) && !/(^|\/)(__MACOSX|\.)/.test(x))) {
+        const b = await read(n, true); imgs.push({ name: n, blob: new Blob([b], { type: imgType(b) }) });
+      }
+    }
+    if (!imgs.length) throw new Error('Aucune image de page dans ce fichier');
+    imgs.sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    onp(70, 'Création de la couverture…');
+    const id = rid(); const count = (await all('meta')).length;
+    const base = files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : (() => { let p = files[0].name; for (const f of files) while (p && !f.name.startsWith(p)) p = p.slice(0, -1); return p.replace(/[\s\-_.(\[]*\d*$/, '').trim() || 'Pages photographiées'; })();
+    const cover = await coverFrom(imgs[0].blob);
+    const meta = { id, title: base.replace(/_+/g, ' ').trim() || 'Sans titre', author: '', kind: 'images', pages: imgs.length, color: PALETTE[count % PALETTE.length], created: now(), position: -count,
+      fname: files[0].name, fsize: files.reduce((a, f) => a + f.size, 0), hasCover: !!cover, ...extra };
+    await put('blob', { images: imgs.map((x) => x.blob), file: files.length === 1 ? files[0] : null, cover }, id);
+    await put('meta', meta); onp(100);
+    return meta;
+  }
+  async function imageCanvas(id, n, width) {
+    const rec = await get('blob', id); const bl = rec?.images?.[n - 1]; if (!bl) throw new Error('Page introuvable');
+    const bmp = await createImageBitmap(bl); const w = Math.min(width, bmp.width * 2), hh = Math.round(w * (bmp.height / bmp.width));
+    const c = document.createElement('canvas'); c.width = w; c.height = hh; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, hh); g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, w, hh);
+    return c;
+  }
+  // ---------- Texte reconnu sur les pages photographiées (OCR) ----------
+  async function ocrGet(id) { return (await get('blob', 'ocr:' + id))?.pages || []; }
+  async function ocrSave(id, pages, done) {
+    await put('blob', { pages }, 'ocr:' + id);
+    const m = await get('meta', id); if (m) { m.ocr = done ? 'done' : 'partial'; await put('meta', m); }
+  }
+  async function ocrForget(id) { await del('blob', 'ocr:' + id); const m = await get('meta', id); if (m) { delete m.ocr; await put('meta', m); } }
   const audioUrls = new Map();
   async function audioOf(id) {
     const rec = await get('blob', id); const list = rec?.files || (rec?.file ? [rec.file] : []);
@@ -516,17 +553,25 @@ window.LocalAPI = (() => {
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
-      tracks: m.tracks, chapters: m.chapters, dur: m.dur,
+      tracks: m.tracks, chapters: m.chapters, dur: m.dur, ocr: m.ocr || '',
       fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
     '.epub': 'epub', '.mobi': 'mobi', '.azw': 'mobi', '.azw3': 'mobi', '.prc': 'mobi', '.odt': 'odt', '.rtf': 'rtf', '.fb2': 'fb2', '.doc': 'doc',
     '.html': 'html', '.htm': 'html', '.xhtml': 'html',
+    '.cbz': 'images', '.jpg': 'images', '.jpeg': 'images', '.png': 'images', '.webp': 'images', '.fbz': 'fb2',
     '.mp3': 'audio', '.m4b': 'audio', '.m4a': 'audio', '.aac': 'audio', '.ogg': 'audio', '.oga': 'audio', '.opus': 'audio', '.flac': 'audio', '.wav': 'audio' };
   async function upload(file, onp, extra = {}) {
     const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
     if (KIND_OF[ext] === 'audio') return uploadAudio([file], onp, extra);
+    if (KIND_OF[ext] === 'images' || (ext === '.zip' && !/\.fb2\.zip$/i.test(file.name))) return uploadImages([file], onp, extra);
+    if (/\.fb2\.zip$/i.test(file.name) || ext === '.fbz') { // FictionBook compressé : on sort le .fb2 de l'archive
+      const read = await unzip(await file.arrayBuffer()); const nm = read.names().find((n) => /\.fb2$/i.test(n));
+      if (!nm) throw new Error('Aucun livre FB2 dans cette archive');
+      const inner = new File([await read(nm, true)], nm.split('/').pop());
+      return upload(inner, onp, { ...extra, fname: file.name, fsize: file.size });
+    }
     const kind = KIND_OF[ext] || null;
     if (!kind) throw new Error('Formats acceptés : PDF, EPUB, Kindle (MOBI, AZW), Word, OpenDocument, RTF, HTML, FB2 et texte');
     const id = rid(); const count = (await all('meta')).length;
@@ -614,7 +659,11 @@ window.LocalAPI = (() => {
     if ((mm = path.match(/^\/api\/books\/([\w-]+)\/text\/(\d+)$/))) {
       const meta = await get('meta', mm[1]); const n = Number(mm[2]);
       if (!meta || n < 1 || n > meta.pages) throw new Error('Page introuvable');
-      if (meta.kind === 'pdf') return { page: n, text: await pdfText(meta.id, n) };
+      if (meta.kind === 'pdf' || meta.kind === 'images') { // page photographiée : le texte reconnu, s'il existe
+        let tx = meta.kind === 'pdf' ? await pdfText(meta.id, n) : '';
+        if (tx.trim().length < 20 && meta.ocr) tx = (await ocrGet(meta.id))[n - 1] || tx;
+        return { page: n, text: tx };
+      }
       return { page: n, text: ((await get('blob', meta.id))?.pages || [])[n - 1] || '' };
     }
     if ((mm = path.match(/^\/api\/books\/([\w-]+)$/))) {
@@ -675,14 +724,17 @@ window.LocalAPI = (() => {
     throw new Error('Non disponible en mode local');
   }
 
+  async function pageCanvasAt(id, n, width) { if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, width); const doc = await pdfDoc(id); return renderPage(doc, n, width); } // plus net pour le zoom
   async function pageCanvas(id, n) {
+    if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, Math.min(1800, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
     const doc = await pdfDoc(id);
     return renderPage(doc, n, Math.min(1800, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
   }
 
   // Demande au navigateur de garder les données (évite l'effacement automatique)
   try { navigator.storage?.persist?.(); } catch {}
-  async function paragraphs(id) {
+  async function paragraphs(id, opts = {}) {
+    if (opts.ocr) return (await ocrGet(id)).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
     const rec = await get('blob', id);
     return (rec?.pages || []).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
   }
@@ -707,6 +759,7 @@ window.LocalAPI = (() => {
     const meta = await get('meta', id); const rec = await get('blob', id); if (!meta || !rec) return null;
     const base = (meta.fname || meta.title).replace(/\.[^.]+$/, '');
     if (rec.files) return { files: rec.files, name: meta.title };
+    if (rec.images && !rec.file) return { files: rec.images.map((b, i) => new File([b], `${String(i + 1).padStart(3, '0')}.${(b.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`, { type: b.type })), name: meta.title };
     if (rec.file && !(asText && meta.kind !== 'pdf')) return { file: rec.file, name: meta.fname || rec.file.name || meta.title + '.' + (meta.kind === 'txt' ? 'txt' : meta.kind) };
     if (rec.pages) return { file: new Blob([rec.pages.join('\n\n').replace(/^# /gm, '')], { type: 'text/plain' }), name: base + '.txt', converted: meta.kind === 'docx' && !asText };
     return null;
@@ -729,5 +782,11 @@ window.LocalAPI = (() => {
       return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
     });
   }
-  return { handle, upload, uploadAudio, audioOf, pageCanvas, paragraphs, known, fileOf, fullText, pageItems };
+  async function isScanned(id) { // peu ou pas de texte dans les premières pages : livre photographié
+    const m = await get('meta', id); if (!m) return false; if (m.kind === 'images') return true; if (m.kind !== 'pdf') return false;
+    const ns = [1, 2, 3, Math.ceil(m.pages / 2), m.pages].filter((x, i, a) => x >= 1 && x <= m.pages && a.indexOf(x) === i);
+    let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
+    return empty >= Math.ceil(ns.length * 0.6);
+  }
+  return { handle, upload, uploadAudio, uploadImages, isScanned, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();

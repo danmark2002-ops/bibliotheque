@@ -88,6 +88,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new TeleBridge(), "AndroidTele");
         web.addJavascriptInterface(new ShareBridge(), "AndroidShare");
         web.addJavascriptInterface(new WebBridge(), "AndroidWeb");
+        web.addJavascriptInterface(new OcrBridge(), "AndroidOcr");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -346,7 +347,7 @@ public class MainActivity extends Activity {
 
     private static boolean isBook(String name) {
         String n = name.toLowerCase(Locale.ROOT);
-        return n.matches(".*\\.(pdf|epub|mobi|azw|azw3|prc|docx|doc|odt|rtf|fb2|html|htm|xhtml|txt|md|markdown|text|mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$");
+        return n.matches(".*\\.(pdf|epub|mobi|azw|azw3|prc|docx|doc|odt|rtf|fb2|fbz|fb2\\.zip|cbz|html|htm|xhtml|txt|md|markdown|text|mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$");
     }
 
     private static boolean isAudio(String name) {
@@ -743,6 +744,44 @@ public class MainActivity extends Activity {
             } finally { if (c != null) c.disconnect(); }
             js("__webBook", res.toString());
         }).start();
+    }
+
+    // ---------- Reconnaissance de texte (pages photographiées) : Google ML Kit, sur l'appareil ----------
+    class OcrBridge {
+        private com.google.mlkit.vision.text.TextRecognizer rec;
+
+        /** Image JPEG en base64 → window.__ocrDone({id, w, h, blocks:[{t, l, top, r, b}]}) */
+        @JavascriptInterface
+        public void recognize(String b64, String id) {
+            try {
+                byte[] d = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeByteArray(d, 0, d.length);
+                if (bmp == null) throw new IOException("image");
+                if (rec == null) rec = com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
+                final int w = bmp.getWidth(), hgt = bmp.getHeight();
+                rec.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0))
+                    .addOnSuccessListener(text -> {
+                        JSONObject r = new JSONObject();
+                        try {
+                            r.put("id", id); r.put("w", w); r.put("h", hgt);
+                            JSONArray bl = new JSONArray();
+                            for (com.google.mlkit.vision.text.Text.TextBlock b : text.getTextBlocks()) {
+                                StringBuilder sb = new StringBuilder();
+                                for (com.google.mlkit.vision.text.Text.Line ln : b.getLines()) { if (sb.length() > 0) sb.append('\n'); sb.append(ln.getText()); }
+                                android.graphics.Rect bx = b.getBoundingBox();
+                                JSONObject o = new JSONObject().put("t", sb.toString());
+                                if (bx != null) o.put("l", bx.left).put("top", bx.top).put("r", bx.right).put("b", bx.bottom);
+                                bl.put(o);
+                            }
+                            r.put("blocks", bl);
+                        } catch (Exception ignored) { }
+                        js("__ocrDone", r.toString());
+                    })
+                    .addOnFailureListener(e -> { try { js("__ocrDone", new JSONObject().put("id", id).put("error", "La reconnaissance a échoué").toString()); } catch (Exception ignored) { } });
+            } catch (Exception e) {
+                try { js("__ocrDone", new JSONObject().put("id", id).put("error", "Image illisible").toString()); } catch (Exception ignored) { }
+            }
+        }
     }
 
     class WebBridge {
