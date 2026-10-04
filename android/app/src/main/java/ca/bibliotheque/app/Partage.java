@@ -32,6 +32,14 @@ public class Partage extends ContentProvider {
         if (n.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         if (n.endsWith(".md")) return "text/markdown";
         if (n.endsWith(".mp4")) return "video/mp4";
+        if (n.endsWith(".biblio")) return "application/zip";
+        if (n.endsWith(".epub")) return "application/epub+zip";
+        if (n.matches(".*\\.(mobi|azw|azw3|prc)$")) return "application/x-mobipocket-ebook";
+        if (n.endsWith(".doc")) return "application/msword";
+        if (n.endsWith(".odt")) return "application/vnd.oasis.opendocument.text";
+        if (n.endsWith(".rtf")) return "application/rtf";
+        if (n.endsWith(".fb2")) return "application/x-fictionbook+xml";
+        if (n.matches(".*\\.(html|htm|xhtml)$")) return "text/html";
         return "text/plain";
     }
 

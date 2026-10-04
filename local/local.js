@@ -99,7 +99,7 @@ window.LocalAPI = (() => {
   async function unzip(buf) {
     const dv = new DataView(buf); let e = -1;
     for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
-    if (e < 0) throw new Error('Fichier Word invalide');
+    if (e < 0) throw new Error('Archive invalide ou abîmée');
     const n = dv.getUint16(e + 10, true); let off = dv.getUint32(e + 16, true); const files = new Map(); const td = new TextDecoder();
     for (let k = 0; k < n; k++) {
       if (dv.getUint32(off, true) !== 0x02014b50) break;
@@ -107,14 +107,21 @@ window.LocalAPI = (() => {
       files.set(td.decode(new Uint8Array(buf, off + 46, nlen)), { method: dv.getUint16(off + 10, true), csize: dv.getUint32(off + 20, true), lho: dv.getUint32(off + 42, true) });
       off += 46 + nlen + xlen + clen;
     }
-    return async (name) => {
-      const f = files.get(name); if (!f) return null;
+    const read = async (name, raw) => {
+      let f = files.get(name);
+      if (!f) { const low = name.toLowerCase(); for (const [k, v] of files) if (k.toLowerCase() === low) { f = v; break; } }
+      if (!f) return null;
       const start = f.lho + 30 + dv.getUint16(f.lho + 26, true) + dv.getUint16(f.lho + 28, true);
       const data = new Uint8Array(buf, start, f.csize);
-      if (f.method === 0) return td.decode(data);
-      if (typeof DecompressionStream === 'undefined') throw new Error('Ce navigateur est trop ancien pour lire les .docx');
-      return td.decode(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      let out = data;
+      if (f.method !== 0) {
+        if (typeof DecompressionStream === 'undefined') throw new Error('Ce navigateur est trop ancien pour lire ce fichier');
+        out = new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+      }
+      return raw ? out : td.decode(out);
     };
+    read.names = () => [...files.keys()];
+    return read;
   }
   const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   async function readDocx(file) {
@@ -162,6 +169,228 @@ window.LocalAPI = (() => {
     if ((t.match(/�/g) || []).length > 3) t = new TextDecoder('windows-1252').decode(buf);
     return t.replace(/^﻿/, '');
   }
+  // ---------- Autres formats : EPUB, MOBI/AZW, ODT, RTF, HTML, FB2, ancien Word (.doc) ----------
+  const clip = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const BLOCKS = new Set(['p', 'div', 'blockquote', 'pre', 'tr', 'dd', 'dt', 'section', 'article', 'figcaption', 'table', 'ul', 'ol', 'dl', 'center', 'aside', 'header', 'footer', 'main', 'hr', 'body', 'poem', 'stanza', 'v', 'epigraph', 'cite']);
+  // Transforme du HTML (ou du XML proche) en paragraphes ; les titres deviennent « # titre »
+  function htmlParas(root, out) {
+    let buf = '';
+    const flush = () => { const t = clip(buf); if (t) out.push(t); buf = ''; };
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c.nodeType === 3) { buf += c.nodeValue; continue; }
+        if (c.nodeType !== 1) continue;
+        const t = (c.localName || '').toLowerCase();
+        if (['script', 'style', 'head', 'title', 'binary', 'noscript', 'svg', 'math'].includes(t)) continue;
+        if (/^h[1-6]$/.test(t)) { flush(); const x = clip(c.textContent); if (x) out.push((Number(t[1]) <= 3 ? '# ' : '') + x); continue; }
+        if (t === 'br') { flush(); continue; }
+        if (t === 'li') { flush(); buf = '• '; walk(c); flush(); continue; }
+        if (BLOCKS.has(t)) { flush(); walk(c); flush(); continue; }
+        walk(c);
+      }
+    };
+    walk(root); flush();
+    return out;
+  }
+  // Décode du texte en respectant l'encodage annoncé (<?xml encoding=…?> ou <meta charset=…>)
+  function decodeBytes(bytes, fallback = 'utf-8') {
+    const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
+    const m = head.match(/encoding=["']([\w-]+)["']/i) || head.match(/charset=["']?([\w-]+)/i);
+    let enc = (m ? m[1] : fallback).toLowerCase();
+    try { new TextDecoder(enc); } catch { enc = 'utf-8'; }
+    let t = new TextDecoder(enc).decode(bytes);
+    if (enc === 'utf-8' && (t.match(/�/g) || []).length > 3) t = new TextDecoder('windows-1252').decode(bytes);
+    return t.replace(/^﻿/, '');
+  }
+  const parseHtml = (text) => new DOMParser().parseFromString(text, 'text/html');
+  const parseXml = (text) => { const d = new DOMParser().parseFromString(text, 'application/xml'); return d.getElementsByTagName('parsererror').length ? null : d; };
+  // Couverture : réduite comme celles des PDF
+  async function coverFrom(blob) {
+    try {
+      const bmp = await createImageBitmap(blob);
+      if (bmp.width < 40 || bmp.height < 40) return null;
+      const w = Math.min(520, bmp.width), hh = Math.round(w * (bmp.height / bmp.width));
+      const c = document.createElement('canvas'); c.width = w; c.height = hh;
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, hh); g.drawImage(bmp, 0, 0, w, hh);
+      return await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    } catch { return null; }
+  }
+  const imgType = (b) => b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' : b[0] === 0x89 && b[1] === 0x50 ? 'image/png' : b[0] === 0x47 && b[1] === 0x49 ? 'image/gif' : 'image/webp';
+  const DC = 'http://purl.org/dc/elements/1.1/';
+  const dcGet = (d, k) => clip(d.getElementsByTagNameNS(DC, k)[0]?.textContent || d.getElementsByTagName('dc:' + k)[0]?.textContent || '');
+
+  async function readEpub(file) {
+    const read = await unzip(await file.arrayBuffer());
+    const cont = parseXml((await read('META-INF/container.xml')) || '');
+    const opfPath = cont?.getElementsByTagName('rootfile')[0]?.getAttribute('full-path') || read.names().find((n) => /\.opf$/i.test(n));
+    if (!opfPath) throw new Error('Livre EPUB illisible');
+    const opf = parseXml((await read(opfPath)) || '');
+    if (!opf) throw new Error('Livre EPUB illisible');
+    const base = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+    const resolve = (href) => {
+      const parts = (base + decodeURIComponent(href.split('#')[0])).split('/'); const out = [];
+      for (const x of parts) { if (x === '..') out.pop(); else if (x && x !== '.') out.push(x); }
+      return out.join('/');
+    };
+    const items = new Map();
+    for (const it of opf.getElementsByTagName('item')) items.set(it.getAttribute('id'), { href: it.getAttribute('href') || '', type: it.getAttribute('media-type') || '', props: it.getAttribute('properties') || '' });
+    let spine = [...opf.getElementsByTagName('itemref')].filter((r) => r.getAttribute('linear') !== 'no').map((r) => items.get(r.getAttribute('idref'))).filter(Boolean);
+    if (!spine.length) spine = [...items.values()].filter((x) => /html/.test(x.type));
+    const paras = [];
+    for (const it of spine) {
+      const raw = await read(resolve(it.href), true); if (!raw) continue;
+      const d = parseHtml(decodeBytes(raw));
+      htmlParas(d.body || d.documentElement, paras);
+    }
+    const title = dcGet(opf, 'title'), author = dcGet(opf, 'creator');
+    // couverture : déclarée par « cover-image », par <meta name="cover">, ou une image nommée « cover »
+    let cov = [...items.values()].find((x) => /cover-image/.test(x.props));
+    if (!cov) { const id = [...opf.getElementsByTagName('meta')].find((m) => m.getAttribute('name') === 'cover')?.getAttribute('content'); if (id) cov = items.get(id); }
+    if (!cov) cov = [...items.values()].find((x) => /^image\//.test(x.type) && /cover|couverture/i.test(x.href));
+    let cover = null;
+    if (cov && /^image\//.test(cov.type)) { const b = await read(resolve(cov.href), true); if (b) cover = await coverFrom(new Blob([b], { type: cov.type })); }
+    return { paras, title, author, cover };
+  }
+
+  async function readOdt(file) {
+    const read = await unzip(await file.arrayBuffer());
+    const d = parseXml((await read('content.xml')) || '');
+    if (!d) throw new Error('Document OpenDocument illisible');
+    const paras = [];
+    const txt = (n) => { let t = ''; for (const c of n.childNodes) { if (c.nodeType === 3) t += c.nodeValue; else if (c.nodeType === 1) { const l = c.localName; if (l === 's') t += ' '.repeat(Number(c.getAttribute('text:c')) || 1); else if (l === 'tab') t += ' '; else if (l === 'line-break') t += ' '; else if (l !== 'note' && l !== 'annotation') t += txt(c); } } return t; };
+    const walk = (n, inList) => { for (const c of n.childNodes) {
+      if (c.nodeType !== 1) continue; const l = c.localName;
+      if (l === 'h') { const t = clip(txt(c)); if (t) paras.push('# ' + t); }
+      else if (l === 'p') { const t = clip(txt(c)); if (t) paras.push((inList ? '• ' : '') + t); }
+      else walk(c, inList || l === 'list-item');
+    } };
+    walk(d.getElementsByTagName('office:body')[0] || d.documentElement, false);
+    let title = '', author = '';
+    try { const m = parseXml((await read('meta.xml')) || ''); if (m) { title = dcGet(m, 'title'); author = dcGet(m, 'creator') || clip(m.getElementsByTagName('meta:initial-creator')[0]?.textContent); } } catch {}
+    return { paras, title, author };
+  }
+
+  function rtfText(s) {
+    const SKIP = new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object', 'header', 'footer', 'headerl', 'headerr', 'headerf', 'footerl', 'footerr', 'footerf', 'listtable', 'listoverridetable', 'rsidtbl', 'themedata', 'colorschememapping', 'datastore', 'xmlnstbl', 'latentstyles', 'generator', 'filetbl', 'revtbl', 'fldinst', 'bkmkstart', 'bkmkend', 'footnote']);
+    const cp = new TextDecoder('windows-1252');
+    let out = '', skip = false, uc = 1, pend = 0; const stack = [];
+    for (let i = 0; i < s.length;) {
+      const c = s[i];
+      if (c === '{') { stack.push([skip, uc]); i++; continue; }
+      if (c === '}') { [skip, uc] = stack.pop() || [false, 1]; i++; continue; }
+      if (c === '\r' || c === '\n') { i++; continue; }
+      if (c !== '\\') { if (pend) pend--; else if (!skip) out += c; i++; continue; }
+      const n = s[i + 1];
+      if (n === '\\' || n === '{' || n === '}') { if (!skip) out += n; i += 2; continue; }
+      if (n === "'") { if (pend) pend--; else if (!skip) out += cp.decode(Uint8Array.of(parseInt(s.substr(i + 2, 2), 16) || 32)); i += 4; continue; }
+      if (n === '*') { skip = true; i += 2; continue; }
+      if (n === '~') { if (!skip) out += ' '; i += 2; continue; }
+      const m = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(s.slice(i, i + 40));
+      if (!m) { i += 2; continue; }
+      i += m[0].length; const w = m[1], arg = m[2] !== undefined ? Number(m[2]) : null;
+      if (SKIP.has(w)) skip = true;
+      else if (skip) continue;
+      else if (w === 'par' || w === 'sect' || w === 'page') out += '\n\n';
+      else if (w === 'line') out += '\n';
+      else if (w === 'tab' || w === 'cell') out += ' ';
+      else if (w === 'emdash') out += '—'; else if (w === 'endash') out += '–';
+      else if (w === 'lquote') out += '‘'; else if (w === 'rquote') out += '’'; else if (w === 'ldblquote') out += '“'; else if (w === 'rdblquote') out += '”';
+      else if (w === 'uc') uc = arg ?? 1;
+      else if (w === 'u' && arg !== null) { out += String.fromCharCode(arg < 0 ? arg + 65536 : arg); pend = uc; }
+    }
+    return out;
+  }
+
+  function readFb2(text) {
+    const d = parseXml(text) || parseHtml(text);
+    const q = (n, sel) => n.getElementsByTagName(sel);
+    const paras = [];
+    const walk = (n) => { for (const c of n.childNodes) {
+      if (c.nodeType !== 1) continue; const l = c.localName;
+      if (l === 'title') { const t = clip(c.textContent); if (t) paras.push('# ' + t); }
+      else if (l === 'p' || l === 'v' || l === 'subtitle' || l === 'text-author') { const t = clip(c.textContent); if (t) paras.push(t); }
+      else if (l !== 'binary' && l !== 'description') walk(c);
+    } };
+    for (const b of q(d, 'body')) walk(b);
+    const ti = q(d, 'title-info')[0];
+    const title = clip(ti && q(ti, 'book-title')[0]?.textContent);
+    const a = ti && q(ti, 'author')[0];
+    const author = a ? clip(['first-name', 'middle-name', 'last-name'].map((k) => q(a, k)[0]?.textContent || '').join(' ')) : '';
+    let coverBlob = null;
+    const img = ti && q(ti, 'coverpage')[0]?.getElementsByTagName('*');
+    const ref = img && [...img].find((x) => x.localName === 'image');
+    const href = ref && [...ref.attributes].find((x) => /href$/.test(x.name))?.value;
+    if (href) {
+      const bin = [...q(d, 'binary')].find((x) => x.getAttribute('id') === href.replace(/^#/, ''));
+      if (bin) { try { const raw = atob(bin.textContent.replace(/\s+/g, '')); const u = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) u[i] = raw.charCodeAt(i); coverBlob = new Blob([u], { type: bin.getAttribute('content-type') || imgType(u) }); } catch {} }
+    }
+    return { paras, title, author, coverBlob };
+  }
+
+  async function readMobi(file) {
+    const buf = await file.arrayBuffer(), dv = new DataView(buf), u8 = new Uint8Array(buf);
+    const nrec = dv.getUint16(76), rec = (i) => dv.getUint32(78 + i * 8), end = (i) => (i + 1 < nrec ? rec(i + 1) : buf.byteLength);
+    const r0 = rec(0), comp = dv.getUint16(r0), ntext = dv.getUint16(r0 + 8), crypt = dv.getUint16(r0 + 12);
+    if (crypt) throw new Error('Ce livre Kindle est protégé (DRM) : impossible de le lire ailleurs que dans Kindle');
+    if (comp === 17480) throw new Error('Ce livre Kindle utilise une compression non prise en charge');
+    const isMobi = new TextDecoder('latin1').decode(u8.subarray(r0 + 16, r0 + 20)) === 'MOBI';
+    const hlen = isMobi ? dv.getUint32(r0 + 20) : 0, encoding = isMobi ? dv.getUint32(r0 + 28) : 1252;
+    const flags = isMobi && hlen >= 0xe4 ? dv.getUint16(r0 + 0xf2) : 0;
+    const trailing = (d) => {
+      let num = 0;
+      for (let f = flags >> 1; f; f >>= 1) if (f & 1) { let bit = 0, res = 0, sz = d.length - num; for (;;) { const v = d[sz - 1]; res |= (v & 0x7f) << bit; bit += 7; sz--; if (v & 0x80 || bit >= 28 || sz === 0) break; } num += res; }
+      if (flags & 1) num += (d[d.length - num - 1] & 3) + 1;
+      return num;
+    };
+    const palm = (d) => {
+      const out = []; let i = 0;
+      while (i < d.length) {
+        const c = d[i++];
+        if (c === 0 || (c >= 9 && c <= 0x7f)) out.push(c);
+        else if (c <= 8) { for (let k = 0; k < c && i < d.length; k++) out.push(d[i++]); }
+        else if (c <= 0xbf) { const v = (c << 8) | d[i++]; const dist = (v >> 3) & 0x7ff, n = (v & 7) + 3; for (let k = 0; k < n; k++) out.push(out[out.length - dist]); }
+        else out.push(0x20, c ^ 0x80);
+      }
+      return out;
+    };
+    const parts = []; let total = 0;
+    for (let i = 1; i <= ntext && i < nrec; i++) {
+      let d = u8.subarray(rec(i), end(i)); d = d.subarray(0, d.length - trailing(d));
+      const x = comp === 2 ? Uint8Array.from(palm(d)) : d; parts.push(x); total += x.length;
+    }
+    const all = new Uint8Array(total); let o = 0; for (const x of parts) { all.set(x, o); o += x.length; }
+    const html = new TextDecoder(encoding === 65001 ? 'utf-8' : 'windows-1252').decode(all).replace(/<mbp:pagebreak\s*\/?>/gi, '<p></p>');
+    const paras = htmlParas(parseHtml(html).body, []);
+    let title = '', author = '', cover = null;
+    if (isMobi) {
+      try { title = new TextDecoder(encoding === 65001 ? 'utf-8' : 'windows-1252').decode(u8.subarray(r0 + dv.getUint32(r0 + 84), r0 + dv.getUint32(r0 + 84) + dv.getUint32(r0 + 88))).trim(); } catch {}
+      try {
+        const firstImg = dv.getUint32(r0 + 0x6c);
+        if (dv.getUint32(r0 + 0x80) & 0x40) {
+          let p = r0 + 16 + hlen; const n = dv.getUint32(p + 8); p += 12;
+          for (let k = 0; k < n; k++) {
+            const t = dv.getUint32(p), l = dv.getUint32(p + 4), data = u8.subarray(p + 8, p + l);
+            if (t === 100 && !author) author = new TextDecoder().decode(data).trim();
+            if (t === 503) title = new TextDecoder().decode(data).trim() || title;
+            if (t === 201) { const ri = firstImg + new DataView(data.buffer, data.byteOffset, 4).getUint32(0); if (ri < nrec) { const b = u8.subarray(rec(ri), end(ri)); cover = await coverFrom(new Blob([b], { type: imgType(b) })); } }
+            p += l;
+          }
+        }
+      } catch {}
+    }
+    return { paras, title, author, cover };
+  }
+
+  // Ancien Word (.doc) : on récupère le texte lisible (la mise en forme est perdue)
+  function readDoc(bytes) {
+    const runs = (t) => (t.match(/[^\u0000-\u0008\u000e-\u001f�￿]{40,}/g) || []).filter((x) => /[a-zà-ÿ]{3,}\s+[a-zà-ÿ]{2,}/i.test(x) && (x.match(/[a-zà-ÿ ]/gi) || []).length > x.length * 0.7);
+    const a = runs(new TextDecoder('utf-16le').decode(bytes.subarray(0, bytes.length & ~1))), b = runs(new TextDecoder('windows-1252').decode(bytes));
+    const best = a.join('').length >= b.join('').length ? a : b;
+    const paras = best.join('\r').split(/[\r\u0007\u000b\n]+/).map(clip).filter((x) => x.length > 1);
+    if (paras.join(' ').length < 40) throw new Error('Texte introuvable dans ce document Word ancien : enregistre-le en .docx dans Word, puis ajoute-le.');
+    return { paras };
+  }
+
   const pageTextCache = new Map();
   async function pdfText(id, n) {
     const key = id + ':' + n; if (pageTextCache.has(key)) return pageTextCache.get(key);
@@ -183,16 +412,18 @@ window.LocalAPI = (() => {
   const coverUrls = new Map();
   function coverUrl(id, blob) { if (!blob) return null; if (!coverUrls.has(id)) coverUrls.set(id, URL.createObjectURL(blob)); return coverUrls.get(id); }
   async function bookOut(m) {
-    const p = await get('prog', m.id); const rec = m.kind === 'pdf' ? await get('blob', m.id) : null;
+    const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
       fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
+  const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
+    '.epub': 'epub', '.mobi': 'mobi', '.azw': 'mobi', '.azw3': 'mobi', '.prc': 'mobi', '.odt': 'odt', '.rtf': 'rtf', '.fb2': 'fb2', '.doc': 'doc',
+    '.html': 'html', '.htm': 'html', '.xhtml': 'html' };
   async function upload(file, onp, extra = {}) {
     const ext = (file.name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
-    if (ext === '.doc') throw new Error('Ancien format .doc : enregistre-le en .docx dans Word, puis ajoute-le.');
-    const kind = ext === '.pdf' ? 'pdf' : ext === '.docx' ? 'docx' : ['.txt', '.md', '.text'].includes(ext) ? 'txt' : null;
-    if (!kind) throw new Error('Formats acceptés : PDF, Word (.docx) ou texte (.txt)');
+    const kind = KIND_OF[ext] || null;
+    if (!kind) throw new Error('Formats acceptés : PDF, EPUB, Kindle (MOBI, AZW), Word, OpenDocument, RTF, HTML, FB2 et texte');
     const id = rid(); const count = (await all('meta')).length;
     const meta = { id, title: file.name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Sans titre', author: '', kind, pages: 0, color: PALETTE[count % PALETTE.length], created: now(), position: -count, fname: file.name, fsize: file.size, ...extra };
     onp(30, 'Lecture du fichier…');
@@ -223,12 +454,31 @@ window.LocalAPI = (() => {
       const pages = splitText(d.paras.join('\n\n'));
       meta.pages = pages.length;
       await put('blob', { pages, file }, id);
+    } else if (kind !== 'txt') {
+      onp(45, 'Lecture du livre…');
+      let d;
+      if (kind === 'epub') d = await readEpub(file);
+      else if (kind === 'mobi') d = await readMobi(file);
+      else if (kind === 'odt') d = await readOdt(file);
+      else if (kind === 'rtf') { const raw = await decodeText(file); const info = (k) => clip(rtfText('{' + ((raw.match(new RegExp('\\{\\\\' + k + '\\s([^}]*)\\}')) || [])[1] || '') + '}')); d = { paras: rtfText(raw).split(/\n{2,}/).map(clip).filter(Boolean), title: info('title'), author: info('author') }; }
+      else if (kind === 'fb2') { d = readFb2(decodeBytes(new Uint8Array(await file.arrayBuffer()))); if (d.coverBlob) d.cover = await coverFrom(d.coverBlob); }
+      else if (kind === 'doc') d = readDoc(new Uint8Array(await file.arrayBuffer()));
+      else { const doc = parseHtml(decodeBytes(new Uint8Array(await file.arrayBuffer()))); d = { paras: htmlParas(doc.body || doc.documentElement, []), title: clip(doc.title) }; }
+      if (!d.paras.length) throw new Error('Ce livre ne contient aucun texte lisible');
+      const bad = /untitled|sans titre|unknown|inconnu|microsoft word|calibre|\.(docx?|pdf|epub|html?)$|^document\d*$/i;
+      if (d.title && d.title.length > 1 && d.title.length < 150 && !bad.test(d.title)) meta.title = d.title;
+      if (d.author && !bad.test(d.author)) meta.author = d.author.slice(0, 120);
+      onp(75, 'Découpage en pages…');
+      const pages = splitText(d.paras.join('\n\n'));
+      meta.pages = pages.length;
+      await put('blob', d.cover ? { pages, file, cover: d.cover } : { pages, file }, id);
     } else {
       onp(60, 'Découpage en pages…');
       const pages = splitText(await decodeText(file));
       meta.pages = pages.length;
       await put('blob', { pages, file }, id);
     }
+    if (kind !== 'pdf') { const r = await get('blob', id); if (r?.cover) meta.hasCover = true; }
     await put('meta', meta);
     onp(100);
     return meta;
@@ -342,7 +592,7 @@ window.LocalAPI = (() => {
   async function fileOf(id, { asText } = {}) {
     const meta = await get('meta', id); const rec = await get('blob', id); if (!meta || !rec) return null;
     const base = (meta.fname || meta.title).replace(/\.[^.]+$/, '');
-    if (rec.file && !(asText && meta.kind !== 'pdf')) return { file: rec.file, name: meta.fname || meta.title + '.' + (meta.kind === 'pdf' ? 'pdf' : meta.kind === 'docx' ? 'docx' : 'txt') };
+    if (rec.file && !(asText && meta.kind !== 'pdf')) return { file: rec.file, name: meta.fname || rec.file.name || meta.title + '.' + (meta.kind === 'txt' ? 'txt' : meta.kind) };
     if (rec.pages) return { file: new Blob([rec.pages.join('\n\n').replace(/^# /gm, '')], { type: 'text/plain' }), name: base + '.txt', converted: meta.kind === 'docx' && !asText };
     return null;
   }

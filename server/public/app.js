@@ -107,6 +107,7 @@ async function boot() {
   if (!S.me.role) return renderAuth();
   await loadBooks();
   renderLibrary();
+  checkReceived(); // une bibliothèque partagée a peut-être ouvert l'application
 }
 async function loadBooks() { S.books = await api('/api/books'); await loadCols(); }
 
@@ -139,7 +140,7 @@ function renderAuth() {
 function perRow() { const w = Math.min(window.innerWidth, 1180); return w < 400 ? 3 : w < 640 ? 4 : w < 900 ? 5 : w < 1100 ? 6 : 7; }
 function coverEl(b) {
   const c = h('div', { class: 'cover', style: { '--c': b.color || '#555' } });
-  if (b.kind === 'pdf' && b.status === 'ready') {
+  if ((b.kind === 'pdf' || b.coverUrl) && b.status === 'ready') { // vraie couverture (PDF, EPUB…) ; sinon on en dessine une
     const img = h('img', { src: b.coverUrl || `/api/books/${b.id}/cover.jpg`, alt: '', loading: 'lazy', draggable: 'false' });
     img.onerror = () => img.replaceWith(genCover(b));
     c.append(img);
@@ -220,7 +221,7 @@ const NAV = {
   reading: ['Lecture en cours', 'reading'], all: ['Tous les livres', 'book'], fav: ['Favoris', 'star'],
   alire: ['À lire', 'clock'], lu: ['Déjà lu', 'checks'], authors: ['Auteurs', 'person'], trash: ['Poubelle', 'trash'],
 };
-const FMT = { pdf: 'PDF', docx: 'Word', txt: 'Texte' };
+const FMT = { pdf: 'PDF', epub: 'EPUB', mobi: 'Kindle', docx: 'Word', doc: 'Word ancien', odt: 'OpenDocument', rtf: 'RTF', fb2: 'FictionBook', html: 'Page web', txt: 'Texte' };
 const SORTS = { recent: 'Ajout récent', last: 'Dernière lecture', title: 'Titre', author: 'Auteur' };
 S.nav = store.get('nav', { k: 'all' }); S.sort = store.get('sort', 'recent'); S.cols = [];
 const authorOf = (b) => (b.author || '').trim() || 'Auteur inconnu';
@@ -425,6 +426,7 @@ function renderLibrary(opts = {}) {
     owner ? h('button', { class: 'btn primary', onclick: pickFiles }, icon('plus'), h('span', { class: 'lbl' }, 'Ajouter un livre')) : null,
     owner && local && S.lib !== 'all' ? h('button', { class: 'btn', title: 'Dossier source', onclick: () => openFolder() }, icon('folder'), h('span', { class: 'lbl' }, folderInfo() ? folderInfo().name : 'Dossier')) : null,
     owner && local && (folderInfo() || (S.lib === 'all' && libsWithFolder().length)) ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: S.lib === 'all' ? 'Actualiser tous les dossiers' : 'Actualiser le dossier', 'aria-label': 'Actualiser', onclick: () => refreshFolders() }, icon('refresh')) : null,
+    owner && local && window.AndroidShare ? h('button', { class: 'btn icon', title: 'Partager cette bibliothèque', 'aria-label': 'Partager cette bibliothèque', onclick: () => shareLibraryPick() }, icon('share')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     TV.canCast() ? h('button', { class: 'btn icon', title: 'Caster sur la télé', 'aria-label': 'Caster sur la télé', onclick: () => TV.cast() }, icon('cast')) : null,
@@ -498,8 +500,9 @@ window.addEventListener('resize', () => {
 });
 
 // ================= Ajout de livres =================
+const BOOK_ACCEPT = '.pdf,.epub,.mobi,.azw,.azw3,.prc,.docx,.doc,.odt,.rtf,.fb2,.html,.htm,.xhtml,.txt,.md,.markdown,.text,application/pdf,application/epub+zip,text/plain,text/html,application/rtf,application/msword,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 function pickFiles() {
-  const inp = h('input', { type: 'file', accept: '.pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain', multiple: true });
+  const inp = h('input', { type: 'file', accept: window.LocalAPI ? BOOK_ACCEPT : '.pdf,.txt,.md,application/pdf,text/plain', multiple: true });
   inp.style.display = 'none'; document.body.append(inp);
   inp.onchange = () => { uploadFiles([...inp.files]); inp.remove(); };
   inp.click();
@@ -569,7 +572,7 @@ function pickWebFolder() {
     inp.click();
   });
 }
-const BOOK_EXT = /\.(pdf|docx|txt|md)$/i;
+const BOOK_EXT = /\.(pdf|epub|mobi|azw3?|prc|docx?|odt|rtf|fb2|html?|xhtml|txt|md|markdown|text)$/i;
 function nameLibAfter(libId, folderName, force) {
   const l = libs(); const lib = l.find((x) => x.id === libId); if (!lib || !folderName) return;
   if (force || lib.name === 'Ma Bibliothèque' || lib.name === 'Nouvelle bibliothèque') { lib.name = folderName.slice(0, 60); saveLibs(l); if (lib.id === 'main') { try { localStorage.setItem('bib.libname', lib.name); } catch {} } }
@@ -673,7 +676,7 @@ function openFolder(libId = curLib()?.id) {
     f ? h('div', { class: 'srcbox' },
       h('div', { class: 'srcname' }, icon('folder'), h('span', {}, h('b', {}, f.name), h('small', {}, `Bibliothèque « ${lib.name} » · dernière recherche : ${last ? lastRead(last) : 'jamais'}`))),
       h('button', { class: 'btn primary', onclick: () => { close(); scanFolder(libId); } }, icon('refresh'), 'Actualiser'))
-      : h('p', { class: 'muted' }, `La bibliothèque « ${lib.name} » n'a pas encore de dossier. Choisis-en un : ses livres PDF, Word et texte y seront ajoutés, et « Actualiser » ira chercher les nouveaux.`),
+      : h('p', { class: 'muted' }, `La bibliothèque « ${lib.name} » n'a pas encore de dossier. Choisis-en un : ses livres (PDF, EPUB, Kindle, Word, texte…) y seront ajoutés, et « Actualiser » ira chercher les nouveaux.`),
     !f ? h('div', { class: 'actions', style: { marginBottom: '6px' } }, h('button', { class: 'btn primary', onclick: () => { close(); chooseFolder(libId); } }, icon('folder'), 'Choisir un dossier')) : null,
     f ? h('div', { class: 'addsrc' },
       h('p', {}, 'Un autre dossier devient une autre bibliothèque. Celle-ci reste telle quelle et tu passes de l\'une à l\'autre avec les onglets en haut.'),
@@ -685,6 +688,110 @@ function openFolder(libId = curLib()?.id) {
       h('div', { class: 'actions', style: { marginTop: '10px' } },
         h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer le dossier'),
         h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier'))) : null));
+}
+
+// ================= Partager une bibliothèque entière =================
+// Tous les livres d'une bibliothèque partent dans un seul fichier « .biblio » (avec son nom, son décor et les titres).
+// L'autre personne l'ouvre avec la même application : la bibliothèque s'ajoute chez elle, prête à lire.
+const fmtSize = (n) => n >= 1e9 ? (n / 1e9).toFixed(1).replace('.', ',') + ' Go' : n >= 1e6 ? Math.max(1, Math.round(n / 1e6)) + ' Mo' : Math.max(1, Math.round(n / 1e3)) + ' ko';
+const safeName = (x) => String(x || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Bibliotheque';
+function shareLibraryPick() {
+  if (S.lib !== 'all') return shareLibrary(S.lib);
+  const close = sheet('Partager une bibliothèque', h('div', { class: 'libs' }, libs().map((l) => h('div', { class: 'librow' },
+    h('button', { class: 'libpick', onclick: () => { close(); shareLibrary(l.id); } }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[l.decor] || '#555' } }), h('span', { class: 'libtxt' }, h('b', {}, l.name)))))));
+}
+function shareLibrary(id) {
+  const lib = libs().find((x) => x.id === id); if (!lib) return;
+  const books = S.books.filter((b) => !b.trashed && (b.lib || 'main') === id);
+  if (!books.length) return toast('Cette bibliothèque est vide');
+  const size = books.reduce((a, b) => a + (b.size || 0), 0);
+  const close = sheet('Partager « ' + lib.name + ' »', h('div', {},
+    h('p', {}, `${books.length} livre${books.length > 1 ? 's' : ''}${size ? ', environ ' + fmtSize(size) : ''}, réunis dans un seul fichier avec le nom et le décor de la bibliothèque.`),
+    h('p', { class: 'muted' }, 'Envoie-le par Quick Share, Google Drive, WhatsApp ou courriel. La personne l\'ouvre avec l\'application Bibliothèque, et tout s\'ajoute chez elle comme une nouvelle bibliothèque.'),
+    size > 25e6 ? h('p', { class: 'hint' }, 'Gros fichier : un courriel le refusera sûrement. Passe plutôt par Quick Share ou Google Drive.') : null,
+    h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
+      h('button', { class: 'btn', onclick: () => close() }, 'Annuler'),
+      h('button', { class: 'btn primary', onclick: () => { close(); packLibrary(lib, books); } }, icon('share'), 'Préparer et envoyer'))));
+}
+async function packLibrary(lib, books) {
+  const box = h('div', { class: 'up' }, h('b', {}, `Partage de « ${lib.name} »`), h('span', { class: 'muted' }, 'Préparation…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+  $('#uploads')?.append(box);
+  const say = (pct, msg) => { $('i', box).style.width = pct + '%'; $('span', box).textContent = msg; };
+  try {
+    const items = [], used = new Set();
+    for (const b of books) {
+      const f = await LocalAPI.fileOf(b.id); if (!f) continue;
+      let path = safeName(f.name); const dot = path.lastIndexOf('.'); let k = 2;
+      while (used.has(path.toLowerCase())) path = (dot > 0 ? f.name.slice(0, dot) : f.name) + ` (${k++})` + (dot > 0 ? f.name.slice(dot) : '');
+      used.add(path.toLowerCase()); items.push({ b, f, path });
+    }
+    if (!items.length) throw new Error('Aucun fichier à envoyer');
+    const manifest = { format: 1, app: 'Bibliotheque', name: lib.name, decor: lib.decor, date: Date.now(),
+      books: items.map(({ b, path }) => ({ path, title: b.title, author: b.author || '', state: '', fav: false })) };
+    if (!AndroidShare.begin(safeName(lib.name) + '.biblio', JSON.stringify(manifest))) throw new Error('Préparation du fichier impossible');
+    const total = items.reduce((a, x) => a + x.f.file.size, 0) || 1; let done = 0;
+    const CH = 768 * 1024;
+    for (let i = 0; i < items.length; i++) {
+      const { f, path } = items[i];
+      say(Math.round((done / total) * 100), `Livre ${i + 1} sur ${items.length} · ${path}`);
+      if (!AndroidShare.fileBegin(path)) throw new Error('Préparation du fichier impossible');
+      for (let o = 0; o < f.file.size; o += CH) {
+        if (!AndroidShare.append(await blobToB64(f.file.slice(o, o + CH)))) throw new Error('Espace insuffisant sur le téléphone');
+        done += Math.min(CH, f.file.size - o); say(Math.round((done / total) * 100), `Livre ${i + 1} sur ${items.length} · ${path}`);
+      }
+      AndroidShare.fileEnd();
+    }
+    say(100, 'Prêt : choisis comment l\'envoyer');
+    if (!AndroidShare.finish(lib.name)) throw new Error('Envoi impossible');
+    setTimeout(() => box.remove(), 2500);
+  } catch (e) {
+    try { AndroidShare.abort(); } catch {}
+    say(100, e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000);
+  }
+}
+// Réception : Android a déjà décompressé le fichier ; on propose d'ajouter la bibliothèque
+window.__biblioRecue = () => checkReceived();
+function checkReceived() {
+  if (!window.AndroidShare || !S.me?.role) return;
+  let r = null; try { r = JSON.parse(AndroidShare.takeReceived() || 'null'); } catch {}
+  if (!r) return;
+  if (r.error) return toast(r.error);
+  const m = r.manifest || {}, n = r.files.length;
+  if (!n) { AndroidShare.clearReceived(); return toast('Ce partage ne contient aucun livre'); }
+  const close = sheet('Bibliothèque reçue', h('div', {},
+    h('div', { class: 'srcname' }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[m.decor] || '#555' } }), h('span', {}, h('b', {}, m.name || 'Bibliothèque partagée'), h('small', {}, `${n} livre${n > 1 ? 's' : ''} · ${fmtSize(r.size || 0)}`))),
+    h('p', { class: 'muted' }, 'Elle s\'ajoute comme une nouvelle bibliothèque, avec son décor. Tes autres livres ne bougent pas.'),
+    h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
+      h('button', { class: 'btn', onclick: () => { AndroidShare.clearReceived(); close(); } }, 'Refuser'),
+      h('button', { class: 'btn primary', onclick: () => { close(); importReceived(r); } }, icon('plus'), 'Ajouter à mes livres'))));
+}
+async function importReceived(r) {
+  const m = r.manifest || {}, l = libs();
+  let name = String(m.name || 'Bibliothèque partagée').slice(0, 60), k = 2;
+  while (l.some((x) => x.name === name)) name = `${String(m.name || 'Bibliothèque partagée').slice(0, 54)} (${k++})`;
+  const decor = DECORS.some(([d]) => d === m.decor) ? m.decor : 'acajou';
+  const lib = { id: 'lib' + Date.now().toString(36), name, decor };
+  l.push(lib); saveLibs(l); switchLib(lib.id);
+  const info = new Map((m.books || []).map((b) => [b.path, b]));
+  let ok = 0, fail = 0;
+  for (let i = 0; i < r.files.length; i++) {
+    const f = r.files[i], fname = f.path.split('/').pop();
+    const box = h('div', { class: 'up' }, h('b', {}, fname), h('span', { class: 'muted' }, `${name} : livre ${i + 1} sur ${r.files.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+    $('#uploads')?.append(box);
+    try {
+      const resp = await fetch('/__recu?f=' + encodeURIComponent(f.file));
+      if (!resp.ok) throw new Error('Fichier illisible');
+      const file = new File([await resp.blob()], fname, { lastModified: m.date || Date.now() });
+      const meta = await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${r.files.length} · ${msg}`; }, { lib: lib.id, src: 'recu:' + f.path });
+      const b = info.get(f.path);
+      if (b && (b.title || b.author)) await post('/api/books/' + meta.id, { title: b.title || meta.title, author: b.author || '' }, 'PATCH');
+      box.remove(); ok++;
+      if (ok % 5 === 0) { await loadBooks(); renderLibrary(); }
+    } catch (err) { fail++; $('span', box).textContent = err.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
+  }
+  AndroidShare.clearReceived();
+  await loadBooks(); renderLibrary();
+  toast(`« ${name} » : ${ok} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
 }
 
 // Onglets des bibliothèques, sous le titre : on passe de l'une à l'autre d'un geste
@@ -727,6 +834,7 @@ function editLib(id) {
     h('label', { class: 'field' }, 'Nom', name),
     h('div', { class: 'field' }, 'Décor', seg),
     h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'))),
+    window.AndroidShare ? h('div', { class: 'field' }, 'Partage', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); shareLibrary(id); } }, icon('share'), 'Envoyer à quelqu\'un'))) : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       id !== 'main' ? h('button', { class: 'btn danger', onclick: async () => {
         const main = l.find((x) => x.id === 'main');
@@ -866,7 +974,7 @@ const AutoSync = {
     const prof = new Set(JSON.parse(AndroidAuto.list('prof') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
     const books = S.books.filter((b) => !b.trashed && b.status === 'ready').map((b) => ({
       id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
-      cover: done[b.id]?.c ? `covers/${b.id}.${b.kind === 'pdf' && b.coverUrl ? 'jpg' : 'png'}` : '',
+      cover: done[b.id]?.c ? `covers/${b.id}.${b.coverUrl ? 'jpg' : 'png'}` : '',
       last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1, prof: prof.has(b.id) }));
     AndroidAuto.writeText('catalog.json', JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1), updated: Date.now() }));
   },
@@ -905,7 +1013,7 @@ const AutoSync = {
   },
   async exportCover(b) {
     try {
-      if (b.kind === 'pdf' && b.coverUrl) { const blob = await (await fetch(b.coverUrl)).blob(); return AndroidAuto.writeB64(`covers/${b.id}.jpg`, await blobToB64(blob)); }
+      if (b.coverUrl) { const blob = await (await fetch(b.coverUrl)).blob(); return AndroidAuto.writeB64(`covers/${b.id}.jpg`, await blobToB64(blob)); }
       const c = document.createElement('canvas'); c.width = 400; c.height = 600; const g = c.getContext('2d');
       g.fillStyle = b.color || '#5b3a2a'; g.fillRect(0, 0, 400, 600);
       const gr = g.createLinearGradient(0, 0, 400, 600); gr.addColorStop(0, 'rgba(255,255,255,.18)'); gr.addColorStop(1, 'rgba(0,0,0,.35)'); g.fillStyle = gr; g.fillRect(0, 0, 400, 600);

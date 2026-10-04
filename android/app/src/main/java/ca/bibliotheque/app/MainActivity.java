@@ -48,6 +48,7 @@ public class MainActivity extends Activity {
     private static final int FOLDER_REQUEST = 4243;
     private static final int LISTEN_REQUEST = 4244;
     private static final String FOLDER_PATH = "/__dossier";
+    private static final String RECU_PATH = "/__recu";
 
     private WebView web;
     private ValueCallback<Uri[]> fileCallback;
@@ -84,6 +85,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new CastBridge(), "AndroidCast");
         web.addJavascriptInterface(new VideoBridge(), "AndroidVideo");
         web.addJavascriptInterface(new TeleBridge(), "AndroidTele");
+        web.addJavascriptInterface(new ShareBridge(), "AndroidShare");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -92,6 +94,7 @@ public class MainActivity extends Activity {
                 if (!HOST.equals(u.getHost())) return null; // polices Google, etc. : réseau normal
                 String path = u.getPath();
                 if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("lib"), u.getQueryParameter("id"));
+                if (RECU_PATH.equals(path)) return recuFile(u.getQueryParameter("f"));
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
                 try {
                     InputStream in = getAssets().open(path.substring(1));
@@ -121,7 +124,9 @@ public class MainActivity extends Activity {
                 i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
                     "application/pdf",
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "text/plain", "text/markdown", "application/octet-stream"});
+                    "text/plain", "text/markdown", "text/html", "application/xhtml+xml", "application/epub+zip",
+                    "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/msword", "application/rtf", "text/rtf",
+                    "application/vnd.oasis.opendocument.text", "application/x-fictionbook+xml", "application/octet-stream"});
                 i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 try {
                     startActivityForResult(i, FILE_REQUEST);
@@ -153,7 +158,13 @@ public class MainActivity extends Activity {
         });
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
-        else web.loadUrl(START);
+        else { web.loadUrl(START); handleIncoming(getIntent()); }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleIncoming(intent);
     }
 
     private static String mime(String path) {
@@ -234,7 +245,7 @@ public class MainActivity extends Activity {
 
     private static boolean isBook(String name) {
         String n = name.toLowerCase(Locale.ROOT);
-        return n.endsWith(".pdf") || n.endsWith(".docx") || n.endsWith(".txt") || n.endsWith(".md");
+        return n.matches(".*\\.(pdf|epub|mobi|azw|azw3|prc|docx|doc|odt|rtf|fb2|html|htm|xhtml|txt|md|markdown|text)$");
     }
 
     private void walk(ContentResolver cr, Uri tree, String parent, String rel, int depth, JSONArray out) throws Exception {
@@ -329,6 +340,136 @@ public class MainActivity extends Activity {
                 js("__folderScanned", res.toString());
             }).start();
         }
+    }
+
+    // ---------- Partager une bibliothèque entière (fichier .biblio = zip : bibliotheque.json + livres/…) ----------
+    private java.util.zip.ZipOutputStream zipOut;
+    private File zipFile;
+    private final Object recuLock = new Object();
+    private String recuJson = null;
+
+    private File recuDir() { return new File(getCacheDir(), "recu"); }
+    private static void wipe(File f) { File[] k = f.listFiles(); if (k != null) for (File x : k) wipe(x); f.delete(); }
+
+    private WebResourceResponse recuFile(String name) {
+        File f = name != null && name.matches("f\\d+\\.[a-z0-9]{1,6}") ? new File(recuDir(), name) : null;
+        try {
+            if (f == null || !f.exists()) throw new IOException();
+            return new WebResourceResponse("application/octet-stream", null, 200, "OK", new java.util.HashMap<>(), new java.io.FileInputStream(f));
+        } catch (IOException e) {
+            return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
+        }
+    }
+
+    /** Un fichier .biblio ouvert depuis WhatsApp, Drive, Quick Share, un gestionnaire de fichiers… */
+    private void handleIncoming(Intent intent) {
+        if (intent == null) return;
+        String a = intent.getAction();
+        Uri u = null;
+        if (Intent.ACTION_VIEW.equals(a)) u = intent.getData();
+        else if (Intent.ACTION_SEND.equals(a)) u = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        if (u == null) return;
+        setIntent(new Intent(Intent.ACTION_MAIN)); // pas de deuxième import si l'écran tourne
+        final Uri src = u;
+        new Thread(() -> {
+            JSONObject res = new JSONObject();
+            try {
+                File dir = recuDir(); wipe(dir); dir.mkdirs();
+                String manifest = null; long total = 0; JSONArray files = new JSONArray();
+                byte[] buf = new byte[1 << 16];
+                try (InputStream in = getContentResolver().openInputStream(src);
+                     java.util.zip.ZipInputStream z = new java.util.zip.ZipInputStream(new java.io.BufferedInputStream(in))) {
+                    java.util.zip.ZipEntry e;
+                    while ((e = z.getNextEntry()) != null) {
+                        String n = e.getName();
+                        if (e.isDirectory()) continue;
+                        if (n.equals("bibliotheque.json")) {
+                            java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); int r;
+                            while ((r = z.read(buf)) > 0) { bo.write(buf, 0, r); if (bo.size() > 4_000_000) throw new IOException("Fichier de partage invalide"); }
+                            manifest = bo.toString("UTF-8"); continue;
+                        }
+                        if (!n.startsWith("livres/") || n.contains("..") || n.contains("\\") || !isBook(n)) continue;
+                        String rel = n.substring(7), ext = rel.substring(rel.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+                        File out = new File(dir, "f" + files.length() + ext);
+                        try (java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) { int r; while ((r = z.read(buf)) > 0) fo.write(buf, 0, r); }
+                        total += out.length();
+                        JSONObject f = new JSONObject(); f.put("path", rel); f.put("file", out.getName()); f.put("size", out.length()); files.put(f);
+                    }
+                }
+                if (manifest == null) throw new IOException("Ce fichier n'est pas une bibliothèque partagée.");
+                res.put("manifest", new JSONObject(manifest)); res.put("files", files); res.put("size", total);
+            } catch (Exception e) {
+                wipe(recuDir());
+                try { String msg = e.getMessage() == null ? "" : e.getMessage();
+                    res.put("error", msg.startsWith("Ce fichier") || msg.startsWith("Fichier de partage") ? msg : "Ce fichier n'est pas une bibliothèque partagée, ou il est abîmé."); } catch (Exception ignored) { }
+            }
+            synchronized (recuLock) { recuJson = res.toString(); }
+            js("__biblioRecue", "");
+        }).start();
+    }
+
+    class ShareBridge {
+        @JavascriptInterface
+        public boolean begin(String fileName, String manifest) {
+            try {
+                abort();
+                File dir = new File(getCacheDir(), "partage");
+                if (dir.exists()) { File[] old = dir.listFiles(); if (old != null) for (File f : old) f.delete(); }
+                dir.mkdirs();
+                zipFile = new File(dir, fileName.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                zipOut = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(new java.io.FileOutputStream(zipFile), 1 << 16));
+                zipOut.setLevel(java.util.zip.Deflater.BEST_SPEED); // les PDF sont déjà compressés : on va vite
+                zipOut.putNextEntry(new java.util.zip.ZipEntry("bibliotheque.json"));
+                zipOut.write(manifest.getBytes("UTF-8"));
+                zipOut.closeEntry();
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean fileBegin(String path) {
+            try { zipOut.putNextEntry(new java.util.zip.ZipEntry("livres/" + path)); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean append(String b64) {
+            try { zipOut.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT)); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean fileEnd() {
+            try { zipOut.closeEntry(); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean finish(String title) {
+            try { zipOut.close(); } catch (Exception e) { return false; }
+            zipOut = null;
+            Uri uri = Partage.uriFor(zipFile.getName());
+            Intent i = new Intent(Intent.ACTION_SEND).setType("application/zip")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(Intent.EXTRA_SUBJECT, "Bibliothèque « " + title + " »")
+                .putExtra(Intent.EXTRA_TEXT, "Je te partage ma bibliothèque « " + title + " ». Ouvre le fichier avec l'application Bibliothèque pour l'ajouter à tes livres.")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.setClipData(android.content.ClipData.newRawUri(title, uri));
+            Intent chooser = Intent.createChooser(i, "Envoyer la bibliothèque");
+            chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, new android.content.ComponentName[]{ new android.content.ComponentName(MainActivity.this, MainActivity.class) });
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            runOnUiThread(() -> { try { startActivity(chooser); } catch (Exception ignored) { } });
+            return true;
+        }
+
+        @JavascriptInterface
+        public void abort() {
+            try { if (zipOut != null) zipOut.close(); } catch (Exception ignored) { }
+            zipOut = null;
+        }
+
+        @JavascriptInterface
+        public String takeReceived() { synchronized (recuLock) { String r = recuJson; recuJson = null; return r; } }
+
+        @JavascriptInterface
+        public void clearReceived() { wipe(recuDir()); }
     }
 
     // ---------- Ouvrir avec une autre application, envoyer à une IA, résumé Claude ----------
