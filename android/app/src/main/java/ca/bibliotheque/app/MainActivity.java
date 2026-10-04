@@ -80,6 +80,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new OpenBridge(), "AndroidOpen");
         web.addJavascriptInterface(new AiBridge(), "AndroidAI");
         web.addJavascriptInterface(new AutoBridge(), "AndroidAuto");
+        web.addJavascriptInterface(new CastBridge(), "AndroidCast");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -122,8 +123,10 @@ public class MainActivity extends Activity {
                 try {
                     startActivityForResult(i, FILE_REQUEST);
                 } catch (ActivityNotFoundException e) {
-                    fileCallback = null;
-                    return false;
+                    // téléviseurs : souvent pas de sélecteur de documents, mais un gestionnaire de fichiers peut répondre
+                    Intent g = new Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                    try { startActivityForResult(g, FILE_REQUEST); }
+                    catch (ActivityNotFoundException e2) { fileCallback = null; js("__noPicker", ""); return false; }
                 }
                 return true;
             }
@@ -292,7 +295,7 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                try { startActivityForResult(i, FOLDER_REQUEST); } catch (ActivityNotFoundException e) { js("__folderPicked", ""); }
+                try { startActivityForResult(i, FOLDER_REQUEST); } catch (ActivityNotFoundException e) { js("__noPicker", "folder"); js("__folderPicked", ""); }
             });
         }
 
@@ -421,6 +424,37 @@ public class MainActivity extends Activity {
         String js = "window.__autoCmd && window.__autoCmd('" + cmd.replaceAll("[^a-z]", "") + "', " + JSONObject.quote(arg == null ? "" : arg) + ")";
         a.runOnUiThread(() -> { if (a.web != null) a.web.evaluateJavascript(js, null); });
         return true;
+    }
+
+    /** Vrai sur un téléviseur (Android TV / Google TV). */
+    boolean isTv() {
+        android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
+        return (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION)
+            || getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
+    }
+
+    // ---------- Caster l'écran de l'application sur la télé ----------
+    class CastBridge {
+        @JavascriptInterface
+        public boolean isTv() { return MainActivity.this.isTv(); }
+
+        /** Ouvre la diffusion d'écran du téléphone : Smart View sur Samsung, sinon « Caster l'écran » d'Android. */
+        @JavascriptInterface
+        public void cast() {
+            runOnUiThread(() -> {
+                Intent[] tries = {
+                    new Intent().setClassName("com.samsung.android.smartmirroring", "com.samsung.android.smartmirroring.CastingDialog"),
+                    new Intent("com.samsung.android.smartmirroring.action.SMART_MIRRORING"),
+                    new Intent("android.settings.CAST_SETTINGS"),
+                    new Intent("android.settings.WIFI_DISPLAY_SETTINGS"),
+                };
+                for (Intent i : tries) {
+                    try { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); js("__castOpened", "ok"); return; }
+                    catch (Exception ignored) { }
+                }
+                js("__castOpened", "");
+            });
+        }
     }
 
     // ---------- Android Auto : l'application prépare les livres dans files/auto ----------

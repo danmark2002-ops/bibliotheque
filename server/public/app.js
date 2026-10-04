@@ -34,6 +34,7 @@ const ICONS = {
   type: '<path d="M4 18L9 6l5 12M5.8 14h6.4"/><path d="M15 18l3-7 3 7M15.8 16h4.4"/>',
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
   prof: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
+  cast: '<path d="M2 16.1A5 5 0 0 1 5.9 20"/><path d="M2 12.05A9 9 0 0 1 9.95 20"/><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 20h.01"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
   logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4M6 12h10"/>',
@@ -419,6 +420,7 @@ function renderLibrary() {
     owner && local && (folderInfo() || (S.lib === 'all' && libsWithFolder().length)) ? h('button', { class: 'btn icon refresh' + (FOLDER.busy ? ' spin' : ''), title: S.lib === 'all' ? 'Actualiser tous les dossiers' : 'Actualiser le dossier', 'aria-label': 'Actualiser', onclick: () => refreshFolders() }, icon('refresh')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openShare, title: 'Partager' }, icon('share'), h('span', { class: 'lbl' }, 'Partager')) : null,
     owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
+    TV.canCast() ? h('button', { class: 'btn icon', title: 'Caster sur la télé', 'aria-label': 'Caster sur la télé', onclick: () => TV.cast() }, icon('cast')) : null,
     h('button', { class: 'btn icon', title: 'Réglages', onclick: openSettings }, icon('gear')),
   );
   const count = S.nav.k === 'authors' ? `${new Set(live.map(authorOf)).size} auteurs` : `${books.length} livre${books.length > 1 ? 's' : ''}`;
@@ -1898,5 +1900,79 @@ window.__autoCmd = (cmd, arg) => {
 };
 // Bouton retour Android
 window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); const s = $('.scrim'); if (s) { s.remove(); return true; } return false; };
+
+// ================= Télé : diffusion d'écran (Cast) et navigation à la télécommande =================
+const TV = {
+  on: false,
+  canCast: () => !!(window.AndroidCast && !TV.on),
+  cast() {
+    window.__castOpened = (r) => { window.__castOpened = null; if (!r) toast('Ouvre « Smart View » (ou « Caster ») dans le volet rapide du téléphone, puis choisis ta télé.'); };
+    AndroidCast.cast();
+  },
+  init() {
+    try { this.on = !!(window.AndroidCast && AndroidCast.isTv()); } catch { this.on = false; }
+    window.__noPicker = (what) => toast(what === 'folder'
+      ? 'Cette télé n\'a pas de sélecteur de dossiers. Installe un gestionnaire de fichiers (ex. X-plore) depuis le Play Store de la télé.'
+      : 'Cette télé n\'a pas de sélecteur de fichiers. Installe un gestionnaire de fichiers (ex. X-plore) depuis le Play Store de la télé.');
+    if (!this.on) return;
+    document.documentElement.classList.add('tv');
+    document.addEventListener('keydown', (e) => this.key(e), true);
+    document.addEventListener('keyup', (e) => this.keyUp(e), true);
+    setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) this.first(); }, 800);
+  },
+  focusables(root) {
+    return [...root.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
+      .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
+  },
+  scope() { const sh = [...document.querySelectorAll('.scrim')].pop(); return sh || $('.reader') || document.body; },
+  first() { const f = this.focusables(this.scope())[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
+  held: null,
+  key(e) {
+    const a = document.activeElement;
+    const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+    // appui long sur OK (ou touche Menu) sur un livre : le menu du livre, comme un appui long au doigt
+    if (a && a.classList && a.classList.contains('book')) {
+      if (e.key === 'ContextMenu') { e.preventDefault(); a.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })); return; }
+      if (e.key === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+        if (!e.repeat && !this.held) this.held = { el: a, t: setTimeout(() => { if (this.held) this.held.fired = true; a.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })); }, 650) };
+        return;
+      }
+    }
+    const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.key];
+    if (!dir) return;
+    if (typing && (dir === 'left' || dir === 'right')) return;
+    // dans le lecteur, gauche / droite tournent les pages (sauf dans la barre du haut ou les commandes audio)
+    if ($('.reader') && !$('.scrim') && (dir === 'left' || dir === 'right') && !(a && a.closest('.r-top, .player'))) return;
+    const list = this.focusables(this.scope());
+    if (!list.length) return;
+    e.preventDefault(); e.stopPropagation();
+    if (!a || a === document.body || !list.includes(a)) return this.first();
+    const r = a.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let best = null, bestScore = Infinity;
+    for (const x of list) {
+      if (x === a) continue;
+      const q = x.getBoundingClientRect(); const qx = q.left + q.width / 2, qy = q.top + q.height / 2;
+      const dx = qx - cx, dy = qy - cy;
+      const main = dir === 'up' ? -dy : dir === 'down' ? dy : dir === 'left' ? -dx : dx;
+      if (main <= 4) continue;
+      const side = dir === 'up' || dir === 'down' ? Math.abs(dx) : Math.abs(dy);
+      const score = main + side * 2.2;
+      if (score < bestScore) { bestScore = score; best = x; }
+    }
+    if (best) {
+      best.focus({ preventScroll: true });
+      const q = best.getBoundingClientRect();
+      if (q.top < 60 || q.bottom > innerHeight - 60) best.scrollIntoView({ block: 'center' }); else best.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  },
+  keyUp(e) {
+    if (e.key !== 'Enter' || !this.held) return;
+    const h0 = this.held; this.held = null;
+    clearTimeout(h0.t); e.preventDefault();
+    if (!h0.fired) h0.el.click();
+  },
+};
+TV.init();
 
 boot();

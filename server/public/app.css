@@ -664,3 +664,8 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .sumtext h4.keyh { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
 .sumtext ul.keys, .sumtext ol.keys { list-style: none; padding: 0; display: grid; gap: 8px; }
 .sumtext ul.keys li, .sumtext ol.keys li { margin: 0; padding: 10px 14px; border-left: 3px solid var(--brass); background: var(--panel-2); border-radius: 0 10px 10px 0; font: italic 600 16px/1.4 var(--font-display); }
+
+/* Télé : la télécommande doit toujours montrer où l'on est */
+.tv :focus { outline: 3px solid var(--brass); outline-offset: 3px; }
+.tv .book:focus { transform: translateY(-10px); outline: none; }
+.tv .book:focus .cover { box-shadow: 0 0 0 4px var(--brass), 10px 16px 22px -6px rgba(0,0,0,.6); }

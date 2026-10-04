@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bannière de l'application sur Android TV / Google TV (320 × 180) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:angle="315" android:startColor="#FF2A1A10" android:endColor="#FF5B3A2A" />
+        </shape>
+    </item>
+    <item android:width="96dp" android:height="96dp" android:gravity="center_vertical|left" android:left="24dp" android:drawable="@drawable/ic_launcher" />
+    <item android:width="160dp" android:height="2dp" android:gravity="center_vertical|right" android:right="24dp" android:top="40dp">
+        <shape android:shape="rectangle"><solid android:color="#FFD4A76A" /></shape>
+    </item>
+</layer-list>
