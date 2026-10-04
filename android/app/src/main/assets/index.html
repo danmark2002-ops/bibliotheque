@@ -1533,7 +1533,17 @@ function heroEl(b) {
       h('button', { class: 'btn primary', onclick: () => openBook(b, mini) }, icon('book'), 'Continuer'),
       h('button', { class: 'btn', onclick: () => openBook(b, mini, { audio: true }) }, icon('headphones'), 'Écouter'))));
 }
-let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if ($('.case') && !$('.reader')) renderLibrary(); }, 150); });
+// l'étagère dépend seulement de la largeur : l'ouverture du clavier (qui change la hauteur) ne doit rien reconstruire,
+// sinon le champ de recherche perd le focus et le clavier se referme aussitôt
+let resizeT, lastW = innerWidth;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    if (innerWidth === lastW) return;
+    lastW = innerWidth;
+    if ($('.case') && !$('.reader')) renderLibrary({ keepSearch: document.activeElement?.classList.contains('search') });
+  }, 150);
+});
 
 // ================= Ajout de livres =================
 function pickFiles() {
