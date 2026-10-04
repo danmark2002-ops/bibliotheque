@@ -9,6 +9,7 @@ import android.content.UriPermission;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.speech.tts.TextToSpeech;
@@ -81,6 +82,7 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new AiBridge(), "AndroidAI");
         web.addJavascriptInterface(new AutoBridge(), "AndroidAuto");
         web.addJavascriptInterface(new CastBridge(), "AndroidCast");
+        web.addJavascriptInterface(new VideoBridge(), "AndroidVideo");
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -431,6 +433,95 @@ public class MainActivity extends Activity {
         android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
         return (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION)
             || getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
+    }
+
+    // ---------- Condensé vidéo MP4 d'un livre ----------
+    private static volatile boolean videoBusy;
+
+    class VideoBridge {
+        @JavascriptInterface
+        public boolean exists(String id) { return VideoMaker.out(MainActivity.this, id).exists(); }
+
+        @JavascriptInterface
+        public boolean busy() { return videoBusy; }
+
+        /** Fabrique la vidéo ; progression : window.__videoProgress({id, stage, frac, msg} | {id, done} | {id, error}) */
+        @JavascriptInterface
+        public void make(String id, String title, String author, String scriptJson) {
+            if (videoBusy) { js("__videoProgress", "{\"id\":\"" + id + "\",\"error\":\"Une vidéo est déjà en préparation.\"}"); return; }
+            videoBusy = true;
+            new Thread(() -> {
+                android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                android.os.PowerManager.WakeLock wl = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "bibliotheque:video");
+                wl.acquire(90 * 60 * 1000L);
+                try {
+                    VideoMaker.make(getApplicationContext(), id, title, author, new JSONObject(scriptJson), (stage, frac, msg) -> {
+                        try { js("__videoProgress", new JSONObject().put("id", id).put("stage", stage).put("frac", frac).put("msg", msg).toString()); } catch (Exception ignored) { }
+                    });
+                    js("__videoProgress", new JSONObject().put("id", id).put("done", true).toString());
+                } catch (Throwable e) {
+                    try { js("__videoProgress", new JSONObject().put("id", id).put("error", String.valueOf(e.getMessage())).toString()); } catch (Exception ignored) { }
+                } finally { videoBusy = false; if (wl.isHeld()) wl.release(); }
+            }).start();
+        }
+
+        @JavascriptInterface
+        public void cancel() { VideoMaker.cancel = true; }
+
+        private Uri uri(String id) { return Partage.uriFor("video-" + id + ".mp4"); }
+
+        /** Regarder la vidéo dans le lecteur vidéo du téléphone. */
+        @JavascriptInterface
+        public boolean play(String id) {
+            if (!exists(id)) return false;
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(uri(id), "video/mp4").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            try { startActivity(i); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean share(String id, String title) {
+            if (!exists(id)) return false;
+            Intent i = new Intent(Intent.ACTION_SEND).setType("video/mp4").putExtra(Intent.EXTRA_STREAM, uri(id)).putExtra(Intent.EXTRA_SUBJECT, title).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try { startActivity(Intent.createChooser(i, "Partager la vidéo")); return true; } catch (Exception e) { return false; }
+        }
+
+        /** Télécharger : copie dans la Galerie (Films/Bibliothèque). Renvoie "" si tout va bien, sinon le message d'erreur. */
+        @JavascriptInterface
+        public String save(String id, String title) {
+            File src = VideoMaker.out(MainActivity.this, id);
+            if (!src.exists()) return "La vidéo n'existe pas encore.";
+            String name = (title == null ? "Livre" : title).replaceAll("[\\\\/:*?\"<>|]", " ").trim();
+            if (name.length() > 80) name = name.substring(0, 80);
+            name = name + " - condensé.mp4";
+            try {
+                android.content.ContentValues v = new android.content.ContentValues();
+                v.put(android.provider.MediaStore.Video.Media.DISPLAY_NAME, name);
+                v.put(android.provider.MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+                Uri dest;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    v.put(android.provider.MediaStore.Video.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_MOVIES + "/Bibliotheque");
+                    v.put(android.provider.MediaStore.Video.Media.IS_PENDING, 1);
+                    dest = getContentResolver().insert(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI, v);
+                } else {
+                    File d = new File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES), "Bibliotheque");
+                    d.mkdirs();
+                    File f = new File(d, name);
+                    try (InputStream in = new java.io.FileInputStream(src); java.io.OutputStream out = new java.io.FileOutputStream(f)) { copy(in, out); }
+                    return "";
+                }
+                if (dest == null) return "La Galerie a refusé la vidéo.";
+                try (InputStream in = new java.io.FileInputStream(src); java.io.OutputStream out = getContentResolver().openOutputStream(dest)) { copy(in, out); }
+                if (Build.VERSION.SDK_INT >= 29) { v.clear(); v.put(android.provider.MediaStore.Video.Media.IS_PENDING, 0); getContentResolver().update(dest, v, null, null); }
+                return "";
+            } catch (Exception e) { return "Enregistrement impossible : " + e.getMessage(); }
+        }
+
+        @JavascriptInterface
+        public void remove(String id) { VideoMaker.out(MainActivity.this, id).delete(); }
+    }
+
+    private static void copy(InputStream in, java.io.OutputStream out) throws IOException {
+        byte[] b = new byte[65536]; int n; while ((n = in.read(b)) > 0) out.write(b, 0, n);
     }
 
     // ---------- Caster l'écran de l'application sur la télé ----------

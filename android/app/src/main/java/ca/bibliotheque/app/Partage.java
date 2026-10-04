@@ -20,7 +20,8 @@ public class Partage extends ContentProvider {
     private File fileFor(Uri uri) throws FileNotFoundException {
         String name = uri.getLastPathSegment();
         if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException();
-        File f = new File(new File(getContext().getCacheDir(), "partage"), name);
+        // les vidéos du condensé sont gardées dans files/videos ; les copies de livres dans cache/partage
+        File f = name.startsWith("video-") && name.endsWith(".mp4") ? new File(VideoMaker.dir(getContext()), name) : new File(new File(getContext().getCacheDir(), "partage"), name);
         if (!f.exists()) throw new FileNotFoundException();
         return f;
     }
@@ -30,6 +31,7 @@ public class Partage extends ContentProvider {
         if (n.endsWith(".pdf")) return "application/pdf";
         if (n.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         if (n.endsWith(".md")) return "text/markdown";
+        if (n.endsWith(".mp4")) return "video/mp4";
         return "text/plain";
     }
 

@@ -35,6 +35,8 @@ const ICONS = {
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5z"/><path d="M4 19a2 2 0 0 1 2-2h13"/>',
   prof: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/>',
   cast: '<path d="M2 16.1A5 5 0 0 1 5.9 20"/><path d="M2 12.05A9 9 0 0 1 9.95 20"/><path d="M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><path d="M2 20h.01"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/>',
+  film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
   copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
@@ -773,7 +775,8 @@ function editBook(b) {
     h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon('book'), h('span', {}, 'Lire')),
     h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
     h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')),
-    Prof.on() ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null) : null;
+    Prof.on() ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null,
+    Video.on() ? h('button', { class: 'bact' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
   const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {},
     actRow,
     qb,
@@ -1241,6 +1244,99 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
       this.voicePicker(),
       this.engine === 'online' ? h('details', { class: 'more' }, h('summary', {}, 'Clé Gemini'),
         h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.askKey(); } }, icon('refresh'), 'Changer la clé'))) : null), { wide: true });
+  },
+};
+
+// ---------- Condensé vidéo MP4 ----------
+// Gemini écrit un condensé en scènes (phrase choc, narration, recherche d'images) ;
+// le téléphone trouve des images libres, enregistre la voix et monte un vrai fichier MP4.
+const Video = {
+  on: () => !!(window.AndroidVideo && window.AndroidAI?.generateOnline && window.LocalAPI),
+  exists: (id) => { try { return !!AndroidVideo.exists(id); } catch { return false; } },
+  jobs: {},
+  prompt(b, text, words) {
+    const target = Math.max(600, Math.min(2200, Math.round(words * 0.06)));
+    const scenes = Math.max(5, Math.min(18, Math.round(target / 130)));
+    return `Tu prépares le « condensé vidéo » du livre « ${b.title} »${b.author ? ' de ' + b.author : ''}.
+Ce n'est ni un résumé ni le livre entier : c'est un condensé qui va droit au but et transmet les grands messages du livre, avec force et clarté.
+Écris environ ${target} mots de narration au total, répartis en ${scenes} scènes environ, dans l'ordre du livre.
+Pour chaque scène :
+- "phrase" : une phrase choc que TU formules (jamais recopiée du livre), 15 mots au plus, qui dit le message de la scène.
+- "narration" : le texte dit à voix haute, vivant et passionné (exclamations, questions à l'auditeur, images frappantes), en tutoyant l'auditeur, sans supposer où il se trouve. Pas de listes ni de symboles.
+- "images" : 2 recherches d'images courtes en ANGLAIS (2 à 4 mots, des choses concrètes et photographiables, ex. "ancient library books", "night sky stars"), pertinentes pour la scène.
+Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
+Réponds UNIQUEMENT avec du JSON valide, sans texte autour, de la forme :
+{"scenes":[{"phrase":"…","narration":"…","images":["…","…"]}]}
+
+<livre>
+${text}
+</livre>`;
+  },
+  parse(raw) {
+    let t = String(raw || '').replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    const a = t.indexOf('{'), z = t.lastIndexOf('}');
+    if (a < 0 || z <= a) throw new Error('Gemini n\'a pas renvoyé de scénario lisible. Réessaie.');
+    const j = JSON.parse(t.slice(a, z + 1));
+    if (!Array.isArray(j.scenes) || !j.scenes.length) throw new Error('Le scénario de Gemini est vide. Réessaie.');
+    j.scenes = j.scenes.filter((s) => s && typeof s.narration === 'string' && s.narration.trim()).map((s) => ({
+      phrase: String(s.phrase || '').trim(), narration: Prof.clean(String(s.narration)), images: (Array.isArray(s.images) ? s.images : []).map(String).slice(0, 3) }));
+    return j;
+  },
+  async create(b) {
+    if (!Prof.hasKey()) return Prof.askKey(() => this.create(b));
+    if (AndroidVideo.busy()) return toast('Une vidéo est déjà en préparation.');
+    stopAllAudio();
+    const box = h('div', { class: 'up' }, h('b', {}, '🎬 Vidéo : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })),
+      h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { AndroidVideo.cancel(); this.jobs[b.id] = 'cancel'; } }, icon('stop'), 'Annuler')));
+    $('#uploads')?.append(box);
+    const say = (t) => { $('span', box).textContent = t; };
+    const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    const fail = (m) => { say(m); $('span', box).style.color = 'var(--danger)'; $('.prof-row', box)?.remove(); setTimeout(() => box.remove(), 15000); };
+    this.jobs[b.id] = 'run';
+    try {
+      const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
+      if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
+      if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
+      say('Gemini écrit le condensé… (environ une minute)');
+      const words = t.text.split(/\s+/).length;
+      const script = this.parse(await onlineAsk('', this.prompt(b, condense(t.text, 300000), words)));
+      if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
+      say(`Condensé prêt : ${script.scenes.length} scènes. Recherche des images…`);
+      await new Promise((res, rej) => {
+        window.__videoProgress = (j) => {
+          const r = JSON.parse(j); if (r.id !== b.id) return;
+          if (r.error) { window.__videoProgress = null; return rej(new Error(r.error)); }
+          if (r.done) { window.__videoProgress = null; return res(); }
+          const w = { images: [0, 0.25], voice: [0.25, 0.25], audio: [0.5, 0.02], encode: [0.52, 0.48] }[r.stage] || [0, 0];
+          bar(w[0] + w[1] * (r.frac || 0)); say(r.msg + ' · garde l\'application ouverte');
+        };
+        AndroidVideo.make(b.id, b.title, b.author || '', JSON.stringify(script));
+      });
+      box.remove();
+      toast('🎬 La vidéo est prête !');
+      this.open(b);
+    } catch (e) { fail(e.message); }
+    finally { delete this.jobs[b.id]; }
+  },
+  open(b) {
+    const ready = this.exists(b.id);
+    const busy = !!this.jobs[b.id];
+    const close = sheet('Condensé vidéo', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
+      h('div', { class: 'aiopt' },
+        h('h4', {}, ready ? 'La vidéo est prête 🎬' : busy ? 'La vidéo se prépare…' : 'Le livre en vidéo'),
+        h('p', {}, ready
+          ? 'Un condensé du livre, en images, avec la voix du Professeur et les phrases choc à l\'écran.'
+          : 'Gemini écrit un condensé du livre (entre le résumé et le livre complet), le téléphone trouve des images libres de droits pour chaque scène, enregistre la voix et monte un fichier MP4. Compte de 5 à 15 minutes ; garde l\'application ouverte.'),
+        h('div', { class: 'prof-row' },
+          ready ? h('button', { class: 'btn primary', onclick: () => { if (!AndroidVideo.play(b.id)) toast('Aucun lecteur vidéo trouvé sur le téléphone.'); } }, icon('play'), 'Regarder') : null,
+          ready ? h('button', { class: 'btn', onclick: () => { const r = AndroidVideo.save(b.id, b.title); toast(r || 'Vidéo enregistrée dans ta Galerie (Films › Bibliotheque)'); } }, icon('download'), 'Télécharger') : null,
+          ready ? h('button', { class: 'btn', onclick: () => AndroidVideo.share(b.id, b.title) }, icon('share'), 'Partager') : null,
+          !ready && !busy ? h('button', { class: 'btn primary', onclick: () => { close(); this.create(b); } }, icon('film'), 'Créer la vidéo') : null)),
+      ready ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
+        h('div', { class: 'prof-row', style: { marginTop: '10px' } },
+          h('button', { class: 'btn', onclick: () => { close(); this.create(b); } }, icon('refresh'), 'Refaire la vidéo'),
+          h('button', { class: 'btn', onclick: () => { AndroidVideo.remove(b.id); close(); toast('Vidéo supprimée'); } }, icon('trash'), 'Supprimer'))) : null), { wide: true });
   },
 };
 
