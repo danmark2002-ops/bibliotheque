@@ -894,6 +894,13 @@ svg.rot-r { transform: rotate(-90deg); }
 .fcat.sel { background: var(--brass); border-color: var(--brass); color: var(--brass-ink, #241809); }
 .qcitem.pending { opacity: .5; pointer-events: none; }
 
+/* Boîtes de progression (Professeur, ajouts…) : jamais plus larges que l'écran */
+.uploads > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.up span, .up small { display: block; overflow-wrap: anywhere; }
+.up .prof-row { flex-wrap: wrap; }
+.up .prof-row .btn { flex: 1 1 auto; justify-content: center; min-width: 0; padding-left: 10px; padding-right: 10px; }
+@media (max-width: 560px) { .uploads { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); width: auto; } }
+
 </style>
 </head>
 <body>
