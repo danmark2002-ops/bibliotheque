@@ -274,11 +274,28 @@ public class MainActivity extends Activity {
     }
     private boolean askingPhone = false;
 
-    private void walkPhone(File dir, String rel, int depth, JSONArray out) throws Exception {
+    // Recherche dans tout le téléphone : pause, reprise, annulation, et pourcentage qui avance
+    private volatile int scanCtl = 0; // 0 en marche, 1 en pause, 2 annulée
+    private long lastProg = 0;
+
+    private void scanTick(double frac, int found, String rel) throws Exception {
+        while (scanCtl == 1) Thread.sleep(150);
+        if (scanCtl == 2) throw new InterruptedException("annulée");
+        long now = System.currentTimeMillis();
+        if (now - lastProg > 250) {
+            lastProg = now;
+            js("__scanProgress", new JSONObject().put("pct", Math.min(99.9, frac * 100)).put("found", found).put("dir", rel).toString());
+        }
+    }
+
+    /** Chaque sous-dossier reçoit sa part du pourcentage : la barre avance au fil des dossiers parcourus. */
+    private void walkPhone(File dir, String rel, int depth, JSONArray out, double from, double span) throws Exception {
+        scanTick(from, out.length(), rel);
         if (depth > 14 || out.length() > 5000) return;
         File[] kids = dir.listFiles();
         if (kids == null) return;
         java.util.Arrays.sort(kids);
+        List<File> dirs = new ArrayList<>();
         for (File f : kids) {
             String name = f.getName();
             if (name.startsWith(".")) continue;
@@ -286,13 +303,17 @@ public class MainActivity extends Activity {
             if (f.isDirectory()) {
                 // Android/data et obb : réservés aux applications ; Android/media garde par ex. les documents WhatsApp
                 if (r.equals("Android/data") || r.equals("Android/obb") || r.equalsIgnoreCase("LOST.DIR")) continue;
-                walkPhone(f, r, depth + 1, out);
+                dirs.add(f);
             } else if (isBook(name) && f.length() > 0) {
                 JSONObject o = new JSONObject();
                 o.put("id", f.getAbsolutePath()); o.put("name", name); o.put("path", r);
                 o.put("size", f.length()); o.put("mtime", f.lastModified());
                 out.put(o);
             }
+        }
+        for (int i = 0; i < dirs.size(); i++) {
+            File d = dirs.get(i);
+            walkPhone(d, rel.isEmpty() ? d.getName() : rel + "/" + d.getName(), depth + 1, out, from + span * i / dirs.size(), span / dirs.size());
         }
     }
 
@@ -400,6 +421,9 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public boolean phoneAccess() { return MainActivity.this.phoneAccess(); }
+        @JavascriptInterface public void scanPause() { scanCtl = 1; }
+        @JavascriptInterface public void scanResume() { scanCtl = 0; }
+        @JavascriptInterface public void scanCancel() { scanCtl = 2; }
 
         /** Demande l'autorisation ; la réponse arrive dans window.__phoneAccess("1" ou "0") au retour dans l'application. */
         @JavascriptInterface
@@ -436,7 +460,12 @@ public class MainActivity extends Activity {
                     Uri tree = folderTree(lib);
                     if (isPhone(lib)) {
                         if (!phoneAccess()) res.put("error", "L'application n'a plus l'autorisation de lire le téléphone.");
-                        else { JSONArray files = new JSONArray(); walkPhone(phoneRoot(), "", 0, files); res.put("files", files); }
+                        else {
+                            JSONArray files = new JSONArray();
+                            scanCtl = 0;
+                            try { walkPhone(phoneRoot(), "", 0, files, 0, 1); res.put("files", files); }
+                            catch (InterruptedException stop) { res.put("cancelled", true); }
+                        }
                     } else if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
                     else {
                         JSONArray files = new JSONArray();
@@ -628,7 +657,7 @@ public class MainActivity extends Activity {
                     return true;
                 }
             });
-            browser.setDownloadListener((url, ua, cd, mime, len) -> downloadBook(url, ua, cd, mime, false));
+            browser.setDownloadListener((dl, ua, cd, mime, len) -> downloadBook(dl, ua, cd, mime, false));
             col.addView(bar, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             col.addView(browser, new android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
             browserBox.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
