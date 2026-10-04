@@ -122,12 +122,22 @@ async function boot() {
   checkReceived(); // une bibliothèque partagée a peut-être ouvert l'application
   maintenance();
 }
+// Faux livre : le fichier n'est qu'une page de publicité d'un site de téléchargement
+function baitSheet(b, fromEl, opts) {
+  const close = sheet('Ce fichier n\'est pas le livre', h('div', {},
+    h('p', {}, `« ${b.title} » ne contient que ${b.pages} page${b.pages > 1 ? 's' : ''} : c'est une page de publicité d'un site de « téléchargement gratuit », avec un faux bouton « Download ». Le vrai livre n'a jamais été dans ce fichier.`),
+    h('p', { class: 'muted' }, 'Ces sites diffusent souvent des fichiers trompeurs. Pour un livre récent, passe par une librairie ou le prêt numérique de ta bibliothèque.'),
+    h('div', { class: 'actions', style: { justifyContent: 'space-between', marginTop: '16px' } },
+      h('button', { class: 'btn', onclick: () => { close(); openBook(b, fromEl, { ...opts, anyway: true }); } }, 'L\'ouvrir quand même'),
+      h('button', { class: 'btn danger', onclick: async () => { close(); await trashBook(b); } }, icon('trash'), 'Mettre à la poubelle'))));
+}
 // Entretien discret au démarrage : doublons regroupés, titres techniques corrigés, couvertures blanches refaites
 async function maintenance() {
   if (!window.LocalAPI?.tidy || S.me?.role !== 'owner') return;
   try {
     const r = await LocalAPI.tidy();
-    if (r.merged || r.renamed) { await loadBooks(); renderLibrary(); }
+    if (r.merged || r.renamed || r.baits) { await loadBooks(); renderLibrary(); }
+    if (r.baits) toast(`${r.baits} fichier${r.baits > 1 ? 's' : ''} trompeur${r.baits > 1 ? 's' : ''} repéré${r.baits > 1 ? 's' : ''} (publicités de sites de téléchargement) : marqué${r.baits > 1 ? 's' : ''} « Faux livre »`);
     if (r.merged) toast(`${r.merged} livre${r.merged > 1 ? 's' : ''} en double regroupé${r.merged > 1 ? 's' : ''} : on garde celui que tu lisais (les copies sont dans la poubelle)`);
     let n = 0;
     const fixed = await LocalAPI.fixCovers(() => { if (++n % 5 === 0) loadBooks().then(() => { if (!$('.reader')) renderLibrary(); }); });
@@ -201,6 +211,7 @@ function bookEl(b) {
   const cv = $('.cover', el);
   if (!b.progress && b.status === 'ready' && !b.state) cv.append(h('span', { class: 'ribbon', title: 'Nouveau' }));
   if (b.fav) cv.append(h('span', { class: 'fav-badge', title: 'Favori' }, icon('starFill')));
+  if (b.bait) cv.append(h('span', { class: 'status-pill bait' }, 'Faux livre'));
   if (b.status === 'processing') cv.append(h('span', { class: 'status-pill' }, 'Préparation…'));
   if (b.status === 'error') cv.append(h('span', { class: 'status-pill' }, 'Fichier illisible'));
   el.append(h('span', { class: 'under' }, h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()),
@@ -2424,6 +2435,7 @@ function sentences(text) {
 
 // ================= Lecteur =================
 async function openBook(b, fromEl, opts = {}) {
+  if (b.bait && !opts.anyway) return baitSheet(b, fromEl, opts);
   if (b.kind === 'audio') { await flyOpen(b, fromEl); return new AudioBook(b).mount(); }
   if (PAGED(b.kind) && b.ocr === 'done' && store.get('view:' + b.id, 'text') === 'text' && window.LocalAPI) b = { ...b, kind: 'ocr', base: b.kind }; // livre converti : lu en texte
   await flyOpen(b, fromEl);

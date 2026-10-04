@@ -918,3 +918,5 @@ svg.rot-r { transform: rotate(-90deg); }
 .player .cap .chip { margin-left: 6px; height: 28px; padding: 0 10px; border-radius: 9px; border: 1px solid #d4ab6a; background: #d4ab6a; color: #241809; font: 600 12px Inter, sans-serif; }
 
 .sharechoices { display: grid; gap: 10px; margin-top: 14px; }
+
+.status-pill.bait { background: #a8322a; color: #fff; }

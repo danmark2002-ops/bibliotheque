@@ -54,7 +54,8 @@ window.LocalAPI = (() => {
   }
   // Polices standard et tables de caractères : sans elles, le texte de certains PDF ne s'affiche pas (pages blanches)
   const PDF_RES = location.host === 'appassets.local' ? '/pdfjs/' : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/';
-  const pdfOpts = (data) => ({ data, standardFontDataUrl: PDF_RES + 'standard_fonts/', cMapUrl: PDF_RES + 'cmaps/', cMapPacked: true, useWorkerFetch: false, isEvalSupported: false });
+  const pdfOpts = (data) => ({ data, standardFontDataUrl: PDF_RES + 'standard_fonts/', cMapUrl: PDF_RES + 'cmaps/', cMapPacked: true, useWorkerFetch: false, isEvalSupported: false,
+    disableFontFace: true }); // les lettres sont dessinées directement : les polices intégrées aux PDF ne disparaissent plus dans Android
   const docs = new Map();
   async function pdfDoc(id) {
     if (docs.has(id)) return docs.get(id);
@@ -572,7 +573,7 @@ window.LocalAPI = (() => {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
       tracks: m.tracks, chapters: m.chapters, dur: m.dur, ocr: m.ocr || '',
-      fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
+      bait: !!m.bait, fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   const BAD_TITLE = /^(untitled|sans titre|document\d*|pdf|adobe .*|microsoft (word|powerpoint) - .*|.*photoshop.*|.*indesign.*|.*acrobat.*|.*\.(docx?|pdf|indd|qxd|psd|tiff?|jpe?g))$/i;
@@ -801,12 +802,23 @@ window.LocalAPI = (() => {
       return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
     });
   }
+  // ---------- Faux livres : pages de publicité des sites de « téléchargement gratuit » ----------
+  const BAIT = /(t[ée]l[ée]charg\w*|download|lire en ligne|read online)[^.\n]{0,90}(livre|ebook|e-book|pdf|epub|gratuit|gratis|free)|(ebook|pdf|epub)\s*(gratuit|gratis|free)\s*(download|t[ée]l[ée]charg)/i;
+  async function isBait(m) {
+    if (m.kind !== 'pdf' || m.pages > 6) return false;
+    let txt = String(m.title || '') + ' ';
+    for (let n = 1; n <= Math.min(2, m.pages); n++) { try { txt += await pdfText(m.id, n) + ' '; } catch {} }
+    const hits = (txt.match(new RegExp(BAIT.source, 'gi')) || []).length;
+    return hits >= 2 || (hits >= 1 && /^\W*(download|t[ée]l[ée]charg)/i.test(String(m.title || '')));
+  }
   // ---------- Entretien : doublons, titres techniques, couvertures blanches ----------
   const normT = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
   async function tidy() {
     const metas = await all('meta'); const live = metas.filter((m) => !m.trashed && !String(m.id).startsWith('ocr:'));
     const progs = new Map((await all('prog')).map((p) => [p.book, p]));
     let renamed = 0, merged = 0;
+    let baits = 0;
+    for (const m of live) if (m.kind === 'pdf' && m.pages <= 6 && m.baitChecked !== 2) { m.bait = await isBait(m); m.baitChecked = 2; await put('meta', m); if (m.bait) baits++; }
     for (const m of live) if (BAD_TITLE.test(String(m.title).trim()) && m.fname) { const t2 = m.fname.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(); if (t2 && !BAD_TITLE.test(t2)) { m.title = t2; await put('meta', m); renamed++; } }
     // doublons : même fichier (nom et taille), ou même titre, même format, même nombre de pages et taille presque égale
     const groups = new Map();
@@ -830,20 +842,20 @@ window.LocalAPI = (() => {
       }
       await put('meta', keep); // le livre gardé peut encore absorber d'autres copies (autre nom de fichier, même livre)
     }
-    return { renamed, merged };
+    return { renamed, merged, baits };
   }
   // Couvertures blanches déjà sur l'étagère : on les refait (une fois par livre)
   async function fixCovers(onEach) {
     let fixed = 0;
     for (const m of await all('meta')) {
-      if (m.kind !== 'pdf' || m.trashed || m.coverChecked) continue;
+      if (m.kind !== 'pdf' || m.trashed || m.coverChecked >= 2) continue;
       try {
         const rec = await get('blob', m.id);
         let blank = !rec?.cover;
         if (rec?.cover) { const bmp = await createImageBitmap(rec.cover); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0); blank = isBlank(c); }
         if (blank) { const doc = await pdfDoc(m.id); const cover = await pdfCover(doc); rec.cover = cover; await put('blob', rec, m.id); coverUrls.delete(m.id); fixed++; onEach && onEach(); }
       } catch {}
-      m.coverChecked = 1; await put('meta', m);
+      m.coverChecked = 2; await put('meta', m);
     }
     return fixed;
   }
