@@ -383,6 +383,25 @@ input, select { font: inherit; color: inherit; }
   padding: 70px 14px 90px; -webkit-overflow-scrolling: touch;
 }
 .page.pdf { align-items: center; }
+.page { background: var(--paper); }
+/* PDF : la feuille est posée sur un fond noir, comme dans Google Livres */
+.reader.pdf-mode { background: #000; --chrome: rgba(14,14,14,.84); --chrome-ink: #ececec; }
+.reader.pdf-mode .r-top, .reader.pdf-mode .r-bottom { border-color: rgba(255,255,255,.06); }
+.reader.pdf-mode .page { background: #000; color: #bbb; }
+.reader.pdf-mode .page.pdf:not(.zoom) { padding: 0; overflow: hidden; display: block; background: #fff; box-sizing: border-box; }
+.reader.pdf-mode .page.pdf:not(.zoom) .pdf-canvas { box-shadow: none; border-radius: 0; }
+.reader.pdf-mode .page.pdf:not(.zoom) .folio { display: none; }
+.reader.pdf-mode[data-theme="nuit"] .page.pdf:not(.zoom) { background: #1b1b1b; }
+/* Pli de page */
+.curl-shade, .curl-flap, .curl-flap > div { position: absolute; inset: 0; pointer-events: none; }
+.curl-shade { z-index: 2; overflow: hidden; }
+.curl-flap { z-index: 4; filter: drop-shadow(0 0 7px rgba(0,0,0,.3)); }
+.curl-flap > div { background: var(--paper); }
+.reader.pdf-mode .curl-flap > div { background: #f4f4f2; }
+.reader.pdf-mode[data-theme="nuit"] .curl-flap > div { background: #2a2a2a; }
+.curl-shade i, .curl-flap i { position: absolute; height: 6000px; margin-top: -3000px; transform-origin: 0 50%; }
+.curl-shade i { background: linear-gradient(to right, rgba(0,0,0,.34), rgba(0,0,0,.12) 45%, rgba(0,0,0,0)); }
+.curl-flap i { background: linear-gradient(to right, rgba(0,0,0,.16), rgba(255,255,255,.3) 16%, rgba(255,255,255,.06) 55%, rgba(0,0,0,.1)); }
 .pdf-canvas { display: block; max-width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); background: #fff; border-radius: 2px; }
 .page.zoom { align-items: flex-start; justify-content: flex-start; }
 .page.zoom .pdf-canvas { max-width: none; }

@@ -395,6 +395,25 @@ input, select { font: inherit; color: inherit; }
   padding: 70px 14px 90px; -webkit-overflow-scrolling: touch;
 }
 .page.pdf { align-items: center; }
+.page { background: var(--paper); }
+/* PDF : la feuille est posée sur un fond noir, comme dans Google Livres */
+.reader.pdf-mode { background: #000; --chrome: rgba(14,14,14,.84); --chrome-ink: #ececec; }
+.reader.pdf-mode .r-top, .reader.pdf-mode .r-bottom { border-color: rgba(255,255,255,.06); }
+.reader.pdf-mode .page { background: #000; color: #bbb; }
+.reader.pdf-mode .page.pdf:not(.zoom) { padding: 0; overflow: hidden; display: block; background: #fff; box-sizing: border-box; }
+.reader.pdf-mode .page.pdf:not(.zoom) .pdf-canvas { box-shadow: none; border-radius: 0; }
+.reader.pdf-mode .page.pdf:not(.zoom) .folio { display: none; }
+.reader.pdf-mode[data-theme="nuit"] .page.pdf:not(.zoom) { background: #1b1b1b; }
+/* Pli de page */
+.curl-shade, .curl-flap, .curl-flap > div { position: absolute; inset: 0; pointer-events: none; }
+.curl-shade { z-index: 2; overflow: hidden; }
+.curl-flap { z-index: 4; filter: drop-shadow(0 0 7px rgba(0,0,0,.3)); }
+.curl-flap > div { background: var(--paper); }
+.reader.pdf-mode .curl-flap > div { background: #f4f4f2; }
+.reader.pdf-mode[data-theme="nuit"] .curl-flap > div { background: #2a2a2a; }
+.curl-shade i, .curl-flap i { position: absolute; height: 6000px; margin-top: -3000px; transform-origin: 0 50%; }
+.curl-shade i { background: linear-gradient(to right, rgba(0,0,0,.34), rgba(0,0,0,.12) 45%, rgba(0,0,0,0)); }
+.curl-flap i { background: linear-gradient(to right, rgba(0,0,0,.16), rgba(255,255,255,.3) 16%, rgba(255,255,255,.06) 55%, rgba(0,0,0,.1)); }
 .pdf-canvas { display: block; max-width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1); background: #fff; border-radius: 2px; }
 .page.zoom { align-items: flex-start; justify-content: flex-start; }
 .page.zoom .pdf-canvas { max-width: none; }
@@ -2810,6 +2829,66 @@ function flyOpen(b, fromEl) {
   return new Promise((res) => { setTimeout(res, 330); a.onfinish = () => fly.remove(); });
 }
 
+// ---- Pli de page, comme dans Google Livres ----
+// La page du dessus se replie le long d'une ligne qui suit le doigt : son verso ombré glisse par-dessus,
+// et la page voisine (déjà dessinée) apparaît dessous avec une ombre portée.
+const easeOut = (k) => 1 - Math.pow(1 - k, 3);
+const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+class Curl {
+  constructor(stage, top, under) {
+    this.top = top; this.under = under;
+    if (!under.isConnected) stage.append(under);
+    if (!top.isConnected) stage.append(top);
+    // la feuille peut être plus petite que l'écran (PDF sur fond noir) : on travaille dans les coordonnées du lecteur
+    this.X = top.offsetLeft; this.Y = top.offsetTop; this.W = top.offsetWidth || stage.clientWidth; this.H = top.offsetHeight || stage.clientHeight;
+    this.y0 = this.Y + this.H * 0.9; this.dy = 0; this.lift = null; this.p = 0;
+    under.style.zIndex = 1; top.style.zIndex = 3;
+    this.shadeBar = h('i'); this.flapBar = h('i');
+    this.shade = h('div', { class: 'curl-shade' }, this.shadeBar);
+    this.flap = h('div', {}, this.flapBar);
+    this.flapWrap = h('div', { class: 'curl-flap' }, this.flap);
+    stage.append(this.shade, this.flapWrap);
+  }
+  static clip(poly, M, n, cutSide) { // garde la partie du polygone d'un côté de la ligne de pli
+    const side = (q) => ((q.x - M.x) * n.x + (q.y - M.y) * n.y) * (cutSide ? 1 : -1);
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], sa = side(a), sb = side(b);
+      if (sa >= 0) out.push(a);
+      if ((sa >= 0) !== (sb >= 0)) { const t = sa / (sa - sb); out.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }); }
+    }
+    return out;
+  }
+  static poly(pts) { return pts.length < 3 ? 'polygon(0 0,0 0,0 0)' : `polygon(${pts.map((q) => `${q.x.toFixed(1)}px ${q.y.toFixed(1)}px`).join(',')})`; }
+  static bar(el, M, ang, w) { el.style.cssText = `left:${M.x}px;top:${M.y}px;width:${w}px;transform:rotate(${ang}deg)`; }
+  // p = 0 : page à plat ; p = 1 : page entièrement tournée
+  set(p) {
+    this.p = p;
+    const W = this.W, H = this.H, X = this.X, Y = this.Y, y0 = this.y0;
+    let P = { x: X + W - 2 * W * p, y: y0 + this.dy + (this.lift ? this.lift(p) : 0) };
+    const vx = P.x - X, vy = P.y - y0, d = Math.hypot(vx, vy); // le coin reste à une page de distance du dos : la feuille ne se déchire pas
+    if (d > W) P = { x: X + (vx * W) / d, y: y0 + (vy * W) / d };
+    const dx = X + W - P.x, dy = y0 - P.y, L = Math.hypot(dx, dy);
+    if (L < 0.5) { this.top.style.clipPath = ''; this.shade.style.display = this.flapWrap.style.display = 'none'; return; }
+    this.shade.style.display = this.flapWrap.style.display = '';
+    const n = { x: dx / L, y: dy / L }, M = { x: (X + W + P.x) / 2, y: (y0 + P.y) / 2 };
+    const rect = [{ x: X, y: Y }, { x: X + W, y: Y }, { x: X + W, y: Y + H }, { x: X, y: Y + H }];
+    const keep = Curl.clip(rect, M, n, false), cut = Curl.clip(rect, M, n, true);
+    const back = cut.map((q) => { const s = 2 * ((q.x - M.x) * n.x + (q.y - M.y) * n.y); return { x: q.x - s * n.x, y: q.y - s * n.y }; });
+    this.top.style.clipPath = Curl.poly(keep.map((q) => ({ x: q.x - X, y: q.y - Y })));
+    this.shade.style.clipPath = Curl.poly(cut);
+    this.flap.style.clipPath = Curl.poly(back);
+    const ang = (Math.atan2(n.y, n.x) * 180) / Math.PI;
+    Curl.bar(this.shadeBar, M, ang, Math.max(14, Math.min(120, L * 0.45)));
+    Curl.bar(this.flapBar, M, ang + 180, Math.max(1, L / 2));
+    this.shade.style.opacity = Math.min(1, (1 - p) * 5);
+  }
+  destroy() {
+    this.shade.remove(); this.flapWrap.remove();
+    for (const x of [this.top, this.under]) { x.style.clipPath = ''; x.style.zIndex = ''; }
+  }
+}
+
 class Reader {
   constructor(b, opts) {
     this.b = b; this.opts = opts;
@@ -2818,7 +2897,7 @@ class Reader {
     this.page = Math.min(b.pages, Math.max(1, b.progress?.page || 1));
     this.theme = store.get('theme', 'sepia'); this.fs = store.get('fs', 19);
     this.rate = store.get('rate', 1); this.voice = store.get('voice', '');
-    this.texts = new Map(); this.imgs = new Map();
+    this.texts = new Map(); this.imgs = new Map(); this.built = new Map(); this.cur = null;
     this.playing = false; this.sIdx = 0; this.sents = [];
     this.watermark = S.me.role === 'reader' ? `${S.me.name} · ${new Date().toLocaleDateString('fr-CA')}` : '';
   }
@@ -2831,7 +2910,7 @@ class Reader {
     this.lbl = h('span', {});
     this.left = h('span', {});
     this.audioBtn = h('button', { class: 'rbtn', title: 'Lecture audio', onclick: () => this.toggleAudio() }, icon('headphones'));
-    this.el = h('div', { class: 'reader', 'data-theme': this.theme },
+    this.el = h('div', { class: 'reader' + (b.kind === 'pdf' ? ' pdf-mode' : ''), 'data-theme': this.theme },
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
@@ -2849,21 +2928,46 @@ class Reader {
     this.el.addEventListener('dragstart', (e) => e.preventDefault());
     this.stage.addEventListener('click', (e) => { if (e.detail === 1) this.clickT = setTimeout(() => this.el.classList.toggle('immersive'), 250); });
     this.stage.addEventListener('dblclick', () => { clearTimeout(this.clickT); this.toggleZoom(); });
-    // Glisser pour tourner la page : écouté sur tout le lecteur (y compris les bords), seuil bas, geste rapide accepté
-    let sx = 0, sy = 0, st = 0, tracking = false;
+    // Tourner la page au doigt : la page suit le doigt et se plie (voir Curl), puis termine ou revient selon le geste
+    let sx = 0, sy = 0, tracking = false, drag = null, hist = [];
     const ignore = (t) => t.closest && t.closest('.r-top, .r-bottom, .player, .scrim, input, select');
     this.el.addEventListener('touchstart', (e) => {
-      if (e.touches.length !== 1 || ignore(e.target)) { tracking = false; return; }
-      tracking = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+      if (e.touches.length !== 1 || ignore(e.target) || this.zoom) { tracking = false; return; }
+      this.finishTurn();
+      tracking = true; drag = null; sx = e.touches[0].clientX; sy = e.touches[0].clientY; hist = [[sx, performance.now()]];
+    }, { passive: true });
+    this.el.addEventListener('touchmove', (e) => {
+      if (!tracking || e.touches.length !== 1) return;
+      const t = e.touches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      hist.push([t.clientX, performance.now()]); if (hist.length > 5) hist.shift();
+      if (!drag) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        if (Math.abs(dx) < Math.abs(dy) * 1.2) { tracking = false; return; }
+        const dir = dx < 0 ? 1 : -1, n = this.page + dir;
+        if (n < 1 || n > this.total) { drag = { dead: true, dir }; return; }
+        drag = { dir, n, curl: this.startDrag(dir, n, sy - this.stage.getBoundingClientRect().top) };
+      }
+      if (drag.curl && drag.curl === this.dragCurl) {
+        const W = drag.curl.W, k = Math.max(0, Math.min(1, Math.abs(dx) / (W * 0.85)));
+        drag.curl.dy = dy * 0.5;
+        drag.curl.set(drag.dir > 0 ? (dx < 0 ? k : 0) : (dx > 0 ? 1 - k : 1));
+      }
     }, { passive: true });
     this.el.addEventListener('touchend', (e) => {
       if (!tracking) return; tracking = false;
-      const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy, dt = Date.now() - st;
-      if (this.zoom) return;
-      const ax = Math.abs(dx);
-      if (ax > Math.abs(dy) * 1.2 && (ax >= 48 || (ax >= 24 && dt < 260))) this.go(this.page + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1);
+      if (!drag) return; // simple toucher : les zones de gauche et de droite s'en occupent
+      if (drag.dead) { if (drag.dir > 0) toast('Fin du livre'); return; }
+      const t = e.changedTouches[0], dx = t.clientX - sx;
+      const [x0, t0] = hist[0], v = (t.clientX - x0) / Math.max(1, performance.now() - t0); // vitesse en px/ms
+      if (!drag.curl || drag.curl !== this.dragCurl) { // page voisine pas encore prête : on tourne sans suivre le doigt
+        if (Math.abs(dx) >= 40 || Math.abs(v) > 0.3) this.go(drag.n, drag.dir);
+        return;
+      }
+      const fwd = drag.dir > 0, moved = fwd ? drag.curl.p : 1 - drag.curl.p;
+      const flick = fwd ? v < -0.25 : v > 0.25, back = fwd ? v > 0.25 : v < -0.25;
+      this.endDrag(drag, !back && (flick || moved > 0.3));
     }, { passive: true });
-    this.el.addEventListener('touchcancel', () => { tracking = false; }, { passive: true });
+    this.el.addEventListener('touchcancel', () => { tracking = false; if (drag && drag.curl === this.dragCurl) this.endDrag(drag, false); }, { passive: true });
     this.onKey = (e) => {
       if ($('.scrim')) return;
       if (e.key === 'ArrowRight' || e.key === 'PageDown') this.go(this.page + 1, 1);
@@ -2872,7 +2976,7 @@ class Reader {
       else if (e.key === ' ' && this.player) { e.preventDefault(); this.playing ? this.pause() : this.play(); }
     };
     addEventListener('keydown', this.onKey);
-    this.onResize = () => { clearTimeout(this.rt); this.rt = setTimeout(() => (this.reflow ? this.relayout() : this.render(0)), 220); };
+    this.onResize = () => { clearTimeout(this.rt); this.rt = setTimeout(() => { if (this.reflow) this.relayout(); else { this.resetBuilt(); this.render(0); } }, 220); };
     this.onFonts = () => { if (this.reflow && this.pages) { Reader.cache.clear(); this.curKey = null; this.relayout(); } };
     document.fonts?.addEventListener?.('loadingdone', this.onFonts);
     addEventListener('resize', this.onResize);
@@ -2974,7 +3078,7 @@ class Reader {
     if (key === prev) return;
     await this.paginate();
     if (this.closed) return;
-    this.page = this.pageOfPos(pos); await this.render(0);
+    this.resetBuilt(); this.page = this.pageOfPos(pos); await this.render(0);
   }
   async drawReflow(pg, n) {
     const items = this.pages[n - 1] || [];
@@ -2985,7 +3089,7 @@ class Reader {
       sentences(it.text).forEach((x) => { el.append(h('span', { class: 's', 'data-i': i++ }, x), ' '); });
       prose.append(el);
     }
-    this.sents = $$('.s', prose).map((x) => x.textContent);
+    pg._sents = $$('.s', prose).map((x) => x.textContent);
     pg.replaceChildren(prose);
   }
   async getText(n) {
@@ -3000,35 +3104,101 @@ class Reader {
     }
     return this.imgs.get(n);
   }
-  async render(dir) {
-    const b = this.b, n = this.page;
+  // ---- Pages : chaque page est dessinée d'avance, pour tourner sans attente ----
+  pageEl(n) {
+    let e = this.built.get(n);
+    if (!e) {
+      const b = this.b, pg = h('div', { class: 'page ' + b.kind + (this.reflow ? ' reflow' : '') + (this.zoom ? ' zoom' : '') });
+      e = { pg, ready: false };
+      e.p = (async () => {
+        try { if (b.kind === 'pdf') await this.drawPdf(pg, n); else if (this.reflow) await this.drawReflow(pg, n); else await this.drawText(pg, n); }
+        catch (err) { pg.replaceChildren(h('div', { class: 'loading' }, err.message)); e.failed = true; }
+        pg.append(h('div', { class: 'folio' }, `— ${n} —`));
+        e.ready = true; return pg;
+      })();
+      this.built.set(n, e);
+    }
+    return e;
+  }
+  preload() { // garde la page courante et ses deux voisines prêtes
+    const n = this.page;
+    for (const [k, e] of this.built) if (Math.abs(k - n) > 1 && e.pg !== this.cur) { if (!e.pg.isConnected) this.built.delete(k); }
+    if (n < this.total) this.pageEl(n + 1);
+    if (n > 1) this.pageEl(n - 1);
+  }
+  resetBuilt() { this.finishTurn(); this.cancelDrag(); this.built.clear(); }
+  tidy() { $$('.page', this.stage).forEach((x) => { if (x !== this.cur) x.remove(); }); }
+  static still() { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  updateBar(n) {
     this.slider.value = n; this.lbl.textContent = `${n} / ${this.total}`;
     const rest = this.total - n; this.left.textContent = rest ? `${rest} page${rest > 1 ? 's' : ''} restante${rest > 1 ? 's' : ''}` : 'Dernière page';
-    const pg = h('div', { class: 'page ' + b.kind + (this.reflow ? ' reflow' : '') + (this.zoom ? ' zoom' : '') }, h('div', { class: 'loading' }, 'Chargement…'));
-    const old = this.stage.querySelector('.page:not(.leaving)');
-    this.stage.append(pg);
-    if (old) {
-      if (dir) { old.classList.add('leaving'); old.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${-dir * 40}%) rotateY(${dir * 18}deg)`, opacity: 0 }], { duration: 300, easing: 'ease-in' }).onfinish = () => old.remove(); }
-      else old.remove();
+  }
+  async render(dir) {
+    const n = this.page;
+    this.finishTurn(); this.cancelDrag();
+    this.updateBar(n);
+    const e = this.pageEl(n);
+    if (!e.ready) {
+      if (!this.cur && !$('.page', this.stage)) this.stage.append(h('div', { class: 'page' }, h('div', { class: 'loading' }, 'Chargement…')));
+      await e.p;
+      if (n !== this.page || this.closed) return;
+      this.finishTurn(); this.cancelDrag();
     }
-    if (dir) pg.animate([{ transform: `translateX(${dir * 40}%) rotateY(${-dir * 18}deg)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    try {
-      if (b.kind === 'pdf') await this.drawPdf(pg, n); else if (this.reflow) await this.drawReflow(pg, n); else await this.drawText(pg, n);
-    } catch (e) { pg.replaceChildren(h('div', { class: 'loading' }, e.message)); }
+    if (dir && this.cur && this.cur !== e.pg && !Reader.still()) {
+      const fwd = dir > 0, old = this.cur;
+      const curl = new Curl(this.stage, fwd ? old : e.pg, fwd ? e.pg : old);
+      curl.lift = (p) => -curl.H * 0.08 * Math.sin(Math.PI * p); // la page se soulève un peu en tournant
+      curl.set(fwd ? 0 : 1);
+      return this.animate(curl, fwd ? 0 : 1, fwd ? 1 : 0, 470, easeInOut, () => this.setCurrent(n, e));
+    }
+    this.setCurrent(n, e);
+  }
+  setCurrent(n, e) {
+    const b = this.b, pg = e.pg;
+    if (!pg.isConnected) this.stage.append(pg);
+    this.cur = pg; this.tidy();
+    this.sents = pg._sents || [];
+    if (e.failed) this.built.delete(n);
     if (n !== this.page) return;
-    pg.append(h('div', { class: 'folio' }, `— ${n} —`));
     clearTimeout(this.trackT);
     this.sendTrack = () => { this.sendTrack = null; return post('/api/track', { book: b.id, type: 'page', page: n, ...(this.reflow ? { pages: this.total, pos: this.pageStarts[n - 1] } : {}) }).catch(() => {}); };
     this.trackT = setTimeout(() => this.sendTrack && this.sendTrack(), 700);
-    // préchargement
-    if (b.kind === 'pdf') { if (n < this.total) this.getImg(n + 1).catch(() => {}); } else if (!this.reflow && n < this.total) this.getText(n + 1);
+    this.preload();
     if (this.playing) this.highlight();
+  }
+  animate(curl, from, to, ms, ease, done) {
+    this.finishTurn();
+    return new Promise((res) => {
+      const t0 = performance.now();
+      const end = () => { cancelAnimationFrame(this.raf); this.turning = null; curl.destroy(); done(); res(); };
+      this.turning = { end };
+      const step = (now) => { const k = Math.min(1, (now - t0) / ms); curl.set(from + (to - from) * ease(k)); if (k < 1) this.raf = requestAnimationFrame(step); else end(); };
+      this.raf = requestAnimationFrame(step);
+    });
+  }
+  finishTurn() { if (this.turning) this.turning.end(); } // termine net une page en train de tourner
+  startDrag(dir, n, y0) {
+    if (Reader.still() || !this.cur) return null;
+    const e = this.built.get(n);
+    if (!e || !e.ready) { this.pageEl(n); return null; }
+    const fwd = dir > 0;
+    const curl = new Curl(this.stage, fwd ? this.cur : e.pg, fwd ? e.pg : this.cur);
+    curl.y0 = Math.max(curl.Y + curl.H * 0.12, Math.min(curl.Y + curl.H * 0.95, y0));
+    curl.set(fwd ? 0 : 1);
+    this.dragCurl = curl;
+    return curl;
+  }
+  cancelDrag() { const c = this.dragCurl; if (!c) return; this.dragCurl = null; c.destroy(); this.tidy(); }
+  endDrag(drag, commit) {
+    const c = this.dragCurl; if (!c) return; this.dragCurl = null;
+    const to = (drag.dir > 0) === commit ? 1 : 0;
+    this.animate(c, c.p, to, 110 + 300 * Math.abs(to - c.p), easeOut, () => { if (commit) this.go(drag.n, 0); else this.tidy(); });
   }
   async drawPdf(pg, n) {
     const bmp = await this.getImg(n);
-    if (n !== this.page) return;
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    const availW = pg.clientWidth - 28, availH = pg.clientHeight - 150;
+    const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
+    const availW = this.zoom ? sw - 28 : sw, availH = this.zoom ? sh - 150 : sh - 16;
     let w = Math.min(availW, availH * (bmp.width / bmp.height));
     if (this.zoom) w = Math.max(availW, w) * 2;
     w = Math.max(200, Math.floor(w)); const hgt = Math.floor(w * (bmp.height / bmp.width));
@@ -3042,12 +3212,14 @@ class Reader {
       for (let y = -c.height; y < c.height; y += 110 * dpr) for (let x = -c.width; x < c.width; x += 280 * dpr) ctx.fillText(this.watermark, x, y);
       ctx.restore();
     }
+    if (!this.zoom) { // la feuille, centrée sur le fond noir, a exactement la taille de la page du PDF
+      Object.assign(pg.style, { left: Math.round((sw - w) / 2) + 'px', top: Math.round((sh - hgt) / 2) + 'px', width: w + 'px', height: hgt + 'px' });
+      c.style.width = '100%'; c.style.height = '100%';
+    }
     pg.replaceChildren(c);
   }
   async drawText(pg, n) {
     const t = await this.getText(n);
-    if (n !== this.page) return;
-    this.sents = sentences(t);
     const prose = h('article', { class: 'prose' + (n === 1 ? ' first' : ''), style: { '--fs': this.fs + 'px' } });
     let i = 0;
     const paras = t.split(/\n{2,}/);
@@ -3060,7 +3232,7 @@ class Reader {
       prose.append(el);
     }
     // aligne les phrases de la page avec celles de l'affichage
-    this.sents = $$('.s', prose).map((x) => x.textContent);
+    pg._sents = $$('.s', prose).map((x) => x.textContent);
     pg.replaceChildren(prose);
   }
   go(n, dir) {
@@ -3070,7 +3242,7 @@ class Reader {
     if (was) { this.stopSpeech(); this.sIdx = 0; }
     this.page = n; this.render(dir).then(() => { if (was) this.play(); });
   }
-  toggleZoom() { if (this.b.kind !== 'pdf') return; this.zoom = !this.zoom; this.el.classList.toggle('zooming', this.zoom); this.render(0); }
+  toggleZoom() { if (this.b.kind !== 'pdf') return; this.zoom = !this.zoom; this.el.classList.toggle('zooming', this.zoom); this.resetBuilt(); this.render(0); }
   appearance() {
     const themes = [['sepia', 'Sépia'], ['clair', 'Clair'], ['nuit', 'Nuit']];
     const seg = h('div', { class: 'seg' }, themes.map(([k, l]) => h('button', { class: k === this.theme ? 'sel' : '', onclick: (e) => { this.theme = k; store.set('theme', k); this.el.dataset.theme = k; $$('button', seg).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); } }, l)));
@@ -3081,7 +3253,10 @@ class Reader {
   setFs(d) {
     this.fs = Math.max(14, Math.min(30, this.fs + d)); store.set('fs', this.fs);
     if (this.reflow) { clearTimeout(this.fsT); this.fsT = setTimeout(() => this.relayout(), 250); return; }
-    const p = $('.prose', this.el); if (p) p.style.setProperty('--fs', this.fs + 'px');
+    const p = this.cur && $('.prose', this.cur); if (p) p.style.setProperty('--fs', this.fs + 'px');
+    const cur = this.cur; this.resetBuilt(); // les pages voisines déjà prêtes seront refaites à la nouvelle taille
+    if (cur) this.built.set(this.page, { pg: cur, ready: true, p: Promise.resolve(cur) });
+    this.preload();
   }
 
   // ---- Audio ----
@@ -3144,8 +3319,9 @@ class Reader {
     if (!this.cap) return;
     const s = this.sents[this.sIdx] || '';
     this.cap.replaceChildren(h('span', { class: 'wave' }, h('i'), h('i'), h('i'), h('i')), s);
-    $$('.s', this.el).forEach((x) => x.classList.toggle('cur', Number(x.dataset.i) === this.sIdx));
-    const cur = $('.s.cur', this.el); if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const root = this.cur || this.el;
+    $$('.s', root).forEach((x) => x.classList.toggle('cur', Number(x.dataset.i) === this.sIdx));
+    const cur = $('.s.cur', root); if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
   // Phrases d'une page sans l'afficher (même découpage que l'affichage)
   async pageSents(n) {
