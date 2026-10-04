@@ -2428,7 +2428,9 @@ function sentences(text) {
   const out = [];
   for (let p of parts.map((s) => s.trim()).filter(Boolean)) {
     while (p.length > 260) { let c = p.lastIndexOf(', ', 220); if (c < 80) c = p.lastIndexOf(' ', 240); if (c < 1) c = 240; out.push(p.slice(0, c + 1)); p = p.slice(c + 1).trim(); }
-    if (out.length && p.length < 18 && !/[.!?…]$/.test(out[out.length - 1])) out[out.length - 1] += ' ' + p; else out.push(p);
+    const prev = out[out.length - 1];
+    if (prev && /(^|[\s.(«"])(\p{Lu}|M|Mme|Mlle|Dr|St|Ste|av|apr|J\.-C|etc|p|ex|vol|chap|art|cf)\.$/u.test(prev)) out[out.length - 1] += ((/^\p{Lu}\./u.test(p) && /(^|[\s.(«"])\p{Lu}\.$/u.test(prev)) || /^-/.test(p) ? '' : ' ') + p; // sigles (O.G.M.), initiales, abréviations : pas une fin de phrase
+    else if (prev && p.length < 18 && !/[.!?…]$/.test(prev)) out[out.length - 1] += ' ' + p; else out.push(p);
   }
   return out;
 }
@@ -2529,7 +2531,7 @@ const Ocr = {
     const flush = () => { const L = band.filter((b) => (b.l + b.r) / 2 < W / 2), R = band.filter((b) => (b.l + b.r) / 2 >= W / 2); out.push(...L, ...R); band = []; };
     for (const b of bl) { if (b.r - b.l > W * 0.62) { flush(); out.push(b); } else band.push(b); }
     flush();
-    return out.map((b) => b.t.replace(/-\n(?=\p{Ll})/gu, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n');
+    return out.map((b) => b.t.replace(/-\n(?=\p{Ll})/gu, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n'); // remis en forme à l'affichage (voir local.js)
   },
   async run(b, from = 1) {
     if (this.jobs[b.id]) return toast('La conversion est déjà en cours');
@@ -2545,7 +2547,7 @@ const Ocr = {
         let txt = '';
         try {
           if (b.kind === 'pdf') { const t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; if (t.replace(/\s/g, '').length > 120) txt = t; } // la page a déjà du vrai texte
-          if (!txt) { const c = await LocalAPI.pageCanvasAt(b.id, n, 1700); txt = this.order(await this.recognize(c)); }
+          if (!txt) { const c = await LocalAPI.pageCanvasAt(b.id, n, 2200); txt = this.order(await this.recognize(c)); }
         } catch { fails++; }
         pages[n - 1] = txt; done++;
         if (done % 4 === 0) await LocalAPI.ocrSave(b.id, pages.map((x) => x || ''), false);
@@ -2863,7 +2865,7 @@ class Reader {
   measureDims() {
     const top = $('.r-top', this.el).offsetHeight, bot = $('.r-bottom', this.el).offsetHeight;
     const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
-    this.PT = top + 10; this.PB = bot + 16; this.PX = sw < 520 ? 22 : 28;
+    this.PT = top + 38; this.PB = bot + 40; this.PX = sw < 520 ? 24 : 32; // place pour le titre courant en haut et le numéro de page en bas
     this.W = Math.max(220, Math.min(680, sw - this.PX * 2)); this.H = Math.max(200, sh - this.PT - this.PB);
     this.stage.style.setProperty('--pt', this.PT + 'px'); this.stage.style.setProperty('--pb', this.PB + 'px'); this.stage.style.setProperty('--px', this.PX + 'px');
     return `${this.b.id}|${this.W}x${this.H}|${this.fs}`;
@@ -2949,7 +2951,8 @@ class Reader {
     const prose = h('article', { class: 'prose reflow' + (n === 1 && items[0] && !items[0].cont && !items[0].h ? ' first' : ''), style: { '--fs': this.fs + 'px', width: this.W + 'px' } });
     let i = 0;
     for (const it of items) {
-      const el = h(it.h ? 'h3' : 'p', { class: it.h ? 'hd' : (it.cont ? 'cont' : '') });
+      const caps = it.h && it.text === it.text.toUpperCase() && /\p{Lu}{3}/u.test(it.text);
+      const el = h(it.h ? 'h3' : 'p', { class: it.h ? 'hd' + (caps ? ' caps' : '') : (it.cont ? 'cont' : '') });
       sentences(it.text).forEach((x) => { el.append(h('span', { class: 's', 'data-i': i++ }, x), ' '); });
       prose.append(el);
     }
@@ -2977,7 +2980,8 @@ class Reader {
       e.p = (async () => {
         try { if (PAGED(b.kind)) await this.drawPdf(pg, n); else if (this.reflow) await this.drawReflow(pg, n); else await this.drawText(pg, n); }
         catch (err) { pg.replaceChildren(h('div', { class: 'loading' }, err.message)); e.failed = true; }
-        pg.append(h('div', { class: 'folio' }, `— ${n} —`));
+        pg.append(h('div', { class: 'folio' }, String(n)));
+        if (this.reflow) pg.append(h('div', { class: 'runhead' }, this.b.title)); // titre courant, comme en haut d'une page de livre
         e.ready = true; return pg;
       })();
       this.built.set(n, e);

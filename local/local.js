@@ -754,7 +754,7 @@ window.LocalAPI = (() => {
   // Demande au navigateur de garder les données (évite l'effacement automatique)
   try { navigator.storage?.persist?.(); } catch {}
   async function paragraphs(id, opts = {}) {
-    if (opts.ocr) return (await ocrGet(id)).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
+    if (opts.ocr) return bookify((await ocrGet(id)).join('\n\n'));
     const rec = await get('blob', id);
     return (rec?.pages || []).join('\n\n').split(/\n{2,}/).filter((x) => x.trim());
   }
@@ -802,6 +802,30 @@ window.LocalAPI = (() => {
       return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
     });
   }
+  // ---------- Texte reconnu (OCR) remis en forme de livre ----------
+  // Les blocs reconnus coupent souvent un paragraphe en morceaux : on les recolle, on repère les titres en majuscules,
+  // on corrige les confusions de lettres les plus sûres.
+  function ocrFix(s) {
+    return s.replace(/\(cid:\d+\)/g, '').replace(/(^|[.!?»]\s+)[|l1](?=l\s)/gu, '$1I') // « |l est » ou « ll est » en début de phrase : « Il est »
+      .replace(/(?<=\p{L})\|(?=\p{L})/gu, 'l').replace(/(^|\s)\|(?=\p{Ll})/gu, '$1l').replace(/(^|\s)\|(?=\s|\p{Lu})/gu, '$1I').replace(/\|/g, '')
+      .replace(/(?<=\p{L})0(?=\p{L})/gu, 'o').replace(/\s+([,.])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  }
+  const isHeading = (s) => { const L = s.replace(/[^\p{L}]/gu, ''); return s.length <= 90 && L.length >= 4 && (L.match(/\p{Lu}/gu) || []).length / L.length >= 0.8 && !/[,;]$/.test(s); };
+  function bookify(text) {
+    const out = [];
+    for (let p of text.split(/\n{2,}/)) {
+      p = ocrFix(p); if (!p || p.replace(/[^\p{L}\p{N}]/gu, '').length < 2) continue;
+      if (/^\d{1,4}$/.test(p)) continue; // numéros de page imprimés
+      if (isHeading(p)) { out.push('# ' + p); continue; }
+      const prev = out[out.length - 1];
+      if (prev && !prev.startsWith('# ')) {
+        if (/[\p{L}]-$/u.test(prev) && /^\p{Ll}/u.test(p)) { out[out.length - 1] = prev.slice(0, -1) + p; continue; } // mot coupé d'une colonne à l'autre
+        if (!/[.!?»…:)"]$/.test(prev) && /^[\p{Ll}(«"]/u.test(p)) { out[out.length - 1] = prev + ' ' + p; continue; } // même paragraphe
+      }
+      out.push(p);
+    }
+    return out;
+  }
   // ---------- Faux livres : pages de publicité des sites de « téléchargement gratuit » ----------
   const BAIT = /(t[ée]l[ée]charg\w*|download|lire en ligne|read online)[^.\n]{0,90}(livre|ebook|e-book|pdf|epub|gratuit|gratis|free)|(ebook|pdf|epub)\s*(gratuit|gratis|free)\s*(download|t[ée]l[ée]charg)/i;
   async function isBait(m) {
@@ -819,7 +843,7 @@ window.LocalAPI = (() => {
     let renamed = 0, merged = 0;
     let baits = 0;
     for (const m of live) if (m.kind === 'pdf' && m.pages <= 6 && m.baitChecked !== 2) { m.bait = await isBait(m); m.baitChecked = 2; await put('meta', m); if (m.bait) baits++; }
-    for (const m of live) if (BAD_TITLE.test(String(m.title).trim()) && m.fname) { const t2 = m.fname.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(); if (t2 && !BAD_TITLE.test(t2)) { m.title = t2; await put('meta', m); renamed++; } }
+    for (const m of live) if ((BAD_TITLE.test(String(m.title).trim()) || String(m.title).replace(/[^\p{L}]/gu, '').length < 3) && m.fname) { const t2 = m.fname.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(); if (t2 && !BAD_TITLE.test(t2)) { m.title = t2; await put('meta', m); renamed++; } }
     // doublons : même fichier (nom et taille), ou même titre, même format, même nombre de pages et taille presque égale
     const groups = new Map();
     for (const m of live) {

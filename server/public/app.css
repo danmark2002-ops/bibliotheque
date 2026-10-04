@@ -920,3 +920,18 @@ svg.rot-r { transform: rotate(-90deg); }
 .sharechoices { display: grid; gap: 10px; margin-top: 14px; }
 
 .status-pill.bait { background: #a8322a; color: #fff; }
+
+/* Pages de texte « comme un livre » : justifié, retrait sans espace entre paragraphes, titres centrés, lettrine,
+   titre courant en haut, numéro en bas, légère ombre de reliure */
+.page.reflow { background: linear-gradient(90deg, rgba(60,40,20,.10), rgba(60,40,20,0) 4%, rgba(60,40,20,0) 96%, rgba(60,40,20,.05)), var(--paper); }
+.reader[data-theme="nuit"] .page.reflow { background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(0,0,0,0) 4%), var(--paper); }
+.prose.reflow { line-height: 1.62; text-align: justify; hyphens: auto; -webkit-hyphens: auto; text-rendering: optimizeLegibility; font-variant-ligatures: common-ligatures; }
+.prose.reflow p { margin: 0; text-indent: 1.6em; }
+.prose.reflow p.cont, .prose.reflow .hd + p, .prose.reflow p:first-child { text-indent: 0; }
+.prose.reflow .hd { text-align: center; margin: 1.3em 0 .9em; line-height: 1.3; }
+.prose.reflow .hd:first-child { margin-top: .2em; }
+.prose.reflow .hd.caps { font: 600 .9em/1.4 var(--font-read); letter-spacing: .09em; }
+.prose.reflow .hd + p::first-letter { float: left; font: 600 3.1em/.82 var(--font-display); padding: .06em .08em 0 0; color: #9a6a2c; }
+.reader[data-theme="nuit"] .prose.reflow .hd + p::first-letter { color: #c9a06a; }
+.page.reflow .runhead { position: absolute; left: 0; right: 0; top: calc(var(--pt, 72px) - 30px); text-align: center; font: 500 11px/1 var(--font-read); font-variant: small-caps; letter-spacing: .12em; text-transform: lowercase; opacity: .5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 60px; pointer-events: none; }
+.page.reflow .folio { bottom: calc(var(--pb, 90px) - 30px); font: 12px/1 var(--font-read); opacity: .55; }
