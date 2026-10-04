@@ -86,7 +86,7 @@ public class LivreService extends MediaBrowserService {
     private boolean asking;
     private boolean fromCar; // lecture lancée depuis l'auto : elle continue même si l'application du téléphone se ferme
     private boolean profDone = true, waitingMore; // cours encore en préparation : on attend la partie suivante
-    private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur qui conduit.";
+    private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur. Ne suppose jamais où il se trouve ni ce qu'il fait (route, volant, maison…) : n'en parle pas.";
 
     // Lecture lancée sur le téléphone : l'auto l'affiche et ses boutons la commandent
     private static volatile String phoneJson = "";
