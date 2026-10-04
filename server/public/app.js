@@ -354,7 +354,7 @@ function openDrawer() {
 }
 
 function authorsEl(q) {
-  const groups = groupByAuthor(S.books.filter((b) => !b.trashed && inLib(b))).filter(([a]) => !q || a.toLowerCase().includes(q)).sort((x, y) => authorCmp(x[0], y[0]));
+  const groups = groupByAuthor(S.books.filter((b) => !b.trashed && inLib(b))).filter(([a]) => !q || fold(a).includes(fold(q))).sort((x, y) => authorCmp(x[0], y[0]));
   if (!groups.length) return h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Aucun auteur.');
   return h('div', { class: 'authors' }, groups.map(([a, bs]) => h('button', { class: 'author', onclick: () => go({ k: 'author', v: a }) },
     h('span', { class: 'ini' }, a === 'Auteur inconnu' ? '?' : a.trim()[0].toUpperCase()),
@@ -382,7 +382,8 @@ function caseFor(groups, owner) {
   return caseEl;
 }
 
-function renderLibrary() {
+const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+function renderLibrary(opts = {}) {
   const owner = S.me.role === 'owner';
   const local = !!window.LocalAPI;
   if (local && !store.get('libnames16', false)) { // une fois : la bibliothèque prend le nom de son dossier
@@ -392,7 +393,9 @@ function renderLibrary() {
   if (!local) S.nav = { k: 'all' };
   if (S.nav.k === 'col' && !S.cols.some((c) => c.id === S.nav.v)) S.nav = { k: 'all' };
   const q = S.filter.toLowerCase();
-  const books = sortBooks(S.books.filter((b) => inNav(b) && (!q || (b.title + ' ' + b.author).toLowerCase().includes(q))));
+  // recherche sans tenir compte des accents ni des majuscules : « depart » trouve « Départ »
+  const nq = fold(S.filter);
+  const books = sortBooks(S.books.filter((b) => inNav(b) && (!nq || fold(b.title + ' ' + (b.author || '')).includes(nq))));
   const asList = S.view === 'list';
   const live = S.books.filter((b) => !b.trashed && inLib(b));
   let body;
@@ -426,7 +429,7 @@ function renderLibrary() {
   );
   const count = S.nav.k === 'authors' ? `${new Set(live.map(authorOf)).size} auteurs` : `${books.length} livre${books.length > 1 ? 's' : ''}`;
   const toolbar = S.books.length ? h('div', { class: 'toolbar' },
-    h('input', { class: 'search', placeholder: S.nav.k === 'authors' ? 'Rechercher un auteur' : 'Rechercher un titre ou un auteur', value: S.filter, oninput: (e) => { S.filter = e.target.value; const pos = e.target.selectionStart; renderLibrary(); const i = $('.search'); i.focus(); i.setSelectionRange(pos, pos); } }),
+    h('input', { class: 'search', placeholder: S.nav.k === 'authors' ? 'Rechercher un auteur' : 'Rechercher un titre ou un auteur', value: S.filter, type: 'search', enterkeyhint: 'search', autocomplete: 'off', oninput: (e) => { S.filter = e.target.value; clearTimeout(renderLibrary.t); renderLibrary.t = setTimeout(() => renderLibrary({ keepSearch: true }), 220); } }),
     S.nav.k !== 'authors' ? h('label', { class: 'sortsel', title: 'Trier' }, h('span', {}, 'Trier'),
       h('select', { onchange: (e) => { S.sort = e.target.value; store.set('sort', S.sort); renderLibrary(); } },
         Object.entries(SORTS).map(([k, l]) => h('option', { value: k, selected: k === S.sort }, l)))) : null,
@@ -452,7 +455,14 @@ function renderLibrary() {
     body,
     owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.') : null,
   ));
-  $('#app').replaceChildren(room);
+  // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
+  const ow = $('#app .wrap'), nw = $('.wrap', room), ot = ow && $(':scope > .toolbar', ow), nt = $(':scope > .toolbar', nw);
+  if (opts.keepSearch && ot && nt) {
+    const before = [], after = []; let seen = false;
+    for (const c of [...nw.children]) { if (c === nt) { seen = true; continue; } (seen ? after : before).push(c); }
+    [...ow.children].forEach((c) => { if (c !== ot) c.remove(); });
+    ot.before(...before); ot.after(...after);
+  } else $('#app').replaceChildren(room);
   // hors de #app : les messages d'envoi survivent au rafraîchissement de l'étagère
   if (!$('#uploads')) document.body.append(h('div', { class: 'uploads', id: 'uploads' }));
   if (!$('#dz')) document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
