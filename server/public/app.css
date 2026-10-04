@@ -935,3 +935,21 @@ svg.rot-r { transform: rotate(-90deg); }
 .reader[data-theme="nuit"] .prose.reflow .hd + p::first-letter { color: #c9a06a; }
 .page.reflow .runhead { position: absolute; left: 0; right: 0; top: calc(var(--pt, 72px) - 30px); text-align: center; font: 500 11px/1 var(--font-read); font-variant: small-caps; letter-spacing: .12em; text-transform: lowercase; opacity: .5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 60px; pointer-events: none; }
 .page.reflow .folio { bottom: calc(var(--pb, 90px) - 30px); font: 12px/1 var(--font-read); opacity: .55; }
+
+/* Livre converti (photo → texte) : page blanche imprimée, comme la photo d'origine */
+.reader.print-mode { background: #000; --chrome: rgba(14,14,14,.84); --chrome-ink: #ececec; }
+.reader.print-mode .r-top, .reader.print-mode .r-bottom { border-color: rgba(255,255,255,.06); }
+.reader.print-mode .stage { background: #000; }
+.reader.print-mode .page.reflow { top: var(--st, 0); bottom: auto; height: var(--sh, 100%); width: var(--sw, 100%); left: calc(50% - var(--sw, 100%) / 2); right: auto; box-sizing: border-box; background: #fff; color: #161616; justify-content: flex-start; }
+.reader.print-mode .prose.reflow { font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; font-size: calc(var(--fs, 18px) * .86); line-height: 1.42; color: #161616; text-align: justify; }
+.reader.print-mode .prose.reflow p { margin: 0 0 .8em; text-indent: 0; }
+.reader.print-mode .prose.reflow .hd, .reader.print-mode .prose.reflow .hd.caps { text-align: left; font: italic 700 1.02em/1.35 Georgia, 'Noto Serif', serif; letter-spacing: 0; margin: 1.1em 0 .45em; color: #111; }
+.reader.print-mode .prose.reflow .hd:first-child { margin-top: 0; }
+.reader.print-mode .prose.reflow .hd + p::first-letter { float: none; font: inherit; padding: 0; color: inherit; }
+.reader.print-mode .page.reflow .runhead { display: none; }
+.reader.print-mode .page.reflow .folio { bottom: 12px; font: 11px/1 Georgia, serif; color: #555; opacity: 1; }
+.reader.print-mode .curl-flap > div { background: #f4f4f2; }
+.reader.print-mode[data-theme="nuit"] .page.reflow { background: #1b1b1b; color: #d6d6d6; }
+.reader.print-mode[data-theme="nuit"] .prose.reflow, .reader.print-mode[data-theme="nuit"] .prose.reflow .hd { color: #d6d6d6; }
+.reader.print-mode[data-theme="nuit"] .page.reflow .folio { color: #999; }
+.reader.print-mode[data-theme="nuit"] .curl-flap > div { background: #2a2a2a; }

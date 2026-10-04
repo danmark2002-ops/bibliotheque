@@ -948,6 +948,24 @@ svg.rot-r { transform: rotate(-90deg); }
 .page.reflow .runhead { position: absolute; left: 0; right: 0; top: calc(var(--pt, 72px) - 30px); text-align: center; font: 500 11px/1 var(--font-read); font-variant: small-caps; letter-spacing: .12em; text-transform: lowercase; opacity: .5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 60px; pointer-events: none; }
 .page.reflow .folio { bottom: calc(var(--pb, 90px) - 30px); font: 12px/1 var(--font-read); opacity: .55; }
 
+/* Livre converti (photo → texte) : page blanche imprimée, comme la photo d'origine */
+.reader.print-mode { background: #000; --chrome: rgba(14,14,14,.84); --chrome-ink: #ececec; }
+.reader.print-mode .r-top, .reader.print-mode .r-bottom { border-color: rgba(255,255,255,.06); }
+.reader.print-mode .stage { background: #000; }
+.reader.print-mode .page.reflow { top: var(--st, 0); bottom: auto; height: var(--sh, 100%); width: var(--sw, 100%); left: calc(50% - var(--sw, 100%) / 2); right: auto; box-sizing: border-box; background: #fff; color: #161616; justify-content: flex-start; }
+.reader.print-mode .prose.reflow { font-family: Georgia, 'Noto Serif', 'Times New Roman', serif; font-size: calc(var(--fs, 18px) * .86); line-height: 1.42; color: #161616; text-align: justify; }
+.reader.print-mode .prose.reflow p { margin: 0 0 .8em; text-indent: 0; }
+.reader.print-mode .prose.reflow .hd, .reader.print-mode .prose.reflow .hd.caps { text-align: left; font: italic 700 1.02em/1.35 Georgia, 'Noto Serif', serif; letter-spacing: 0; margin: 1.1em 0 .45em; color: #111; }
+.reader.print-mode .prose.reflow .hd:first-child { margin-top: 0; }
+.reader.print-mode .prose.reflow .hd + p::first-letter { float: none; font: inherit; padding: 0; color: inherit; }
+.reader.print-mode .page.reflow .runhead { display: none; }
+.reader.print-mode .page.reflow .folio { bottom: 12px; font: 11px/1 Georgia, serif; color: #555; opacity: 1; }
+.reader.print-mode .curl-flap > div { background: #f4f4f2; }
+.reader.print-mode[data-theme="nuit"] .page.reflow { background: #1b1b1b; color: #d6d6d6; }
+.reader.print-mode[data-theme="nuit"] .prose.reflow, .reader.print-mode[data-theme="nuit"] .prose.reflow .hd { color: #d6d6d6; }
+.reader.print-mode[data-theme="nuit"] .page.reflow .folio { color: #999; }
+.reader.print-mode[data-theme="nuit"] .curl-flap > div { background: #2a2a2a; }
+
 </style>
 </head>
 <body>
@@ -4650,7 +4668,8 @@ class Reader {
     this.lbl = h('span', {});
     this.left = h('span', {});
     this.audioBtn = h('button', { class: 'rbtn', title: 'Lecture audio', onclick: () => this.toggleAudio() }, icon('headphones'));
-    this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : ''), 'data-theme': this.theme },
+    this.print = b.kind === 'ocr'; // livre converti : page blanche imprimée, comme la photo
+    this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : '') + (this.print ? ' print-mode' : ''), 'data-theme': this.theme },
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
@@ -4747,6 +4766,14 @@ class Reader {
   measureDims() {
     const top = $('.r-top', this.el).offsetHeight, bot = $('.r-bottom', this.el).offsetHeight;
     const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
+    if (this.print) { // feuille blanche posée sur fond noir, proportions d'une vraie page
+      const avail = Math.max(240, sh - top - bot - 16), sheetW = Math.min(sw, 720);
+      const sheetH = Math.min(avail, Math.round(sheetW * 1.45)), st = top + 8 + Math.round((avail - sheetH) / 2);
+      this.PX = Math.round(sheetW * 0.08); this.PT = Math.round(sheetH * 0.06); this.PB = Math.round(sheetH * 0.07) + 14;
+      this.W = Math.max(200, sheetW - this.PX * 2); this.H = Math.max(160, sheetH - this.PT - this.PB);
+      for (const [k, v] of [['--st', st], ['--sh', sheetH], ['--sw', sheetW], ['--pt', this.PT], ['--pb', this.PB], ['--px', this.PX]]) this.stage.style.setProperty(k, v + 'px');
+      return `${this.b.id}|print|${this.W}x${this.H}|${this.fs}`;
+    }
     this.PT = top + 38; this.PB = bot + 40; this.PX = sw < 520 ? 24 : 32; // place pour le titre courant en haut et le numéro de page en bas
     this.W = Math.max(220, Math.min(680, sw - this.PX * 2)); this.H = Math.max(200, sh - this.PT - this.PB);
     this.stage.style.setProperty('--pt', this.PT + 'px'); this.stage.style.setProperty('--pb', this.PB + 'px'); this.stage.style.setProperty('--px', this.PX + 'px');

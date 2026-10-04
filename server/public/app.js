@@ -2777,7 +2777,8 @@ class Reader {
     this.lbl = h('span', {});
     this.left = h('span', {});
     this.audioBtn = h('button', { class: 'rbtn', title: 'Lecture audio', onclick: () => this.toggleAudio() }, icon('headphones'));
-    this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : ''), 'data-theme': this.theme },
+    this.print = b.kind === 'ocr'; // livre converti : page blanche imprimée, comme la photo
+    this.el = h('div', { class: 'reader' + (PAGED(b.kind) ? ' pdf-mode' : '') + (this.print ? ' print-mode' : ''), 'data-theme': this.theme },
       h('div', { class: 'r-top' },
         h('button', { class: 'rbtn', title: 'Fermer', onclick: () => this.close() }, icon('back')),
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
@@ -2874,6 +2875,14 @@ class Reader {
   measureDims() {
     const top = $('.r-top', this.el).offsetHeight, bot = $('.r-bottom', this.el).offsetHeight;
     const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
+    if (this.print) { // feuille blanche posée sur fond noir, proportions d'une vraie page
+      const avail = Math.max(240, sh - top - bot - 16), sheetW = Math.min(sw, 720);
+      const sheetH = Math.min(avail, Math.round(sheetW * 1.45)), st = top + 8 + Math.round((avail - sheetH) / 2);
+      this.PX = Math.round(sheetW * 0.08); this.PT = Math.round(sheetH * 0.06); this.PB = Math.round(sheetH * 0.07) + 14;
+      this.W = Math.max(200, sheetW - this.PX * 2); this.H = Math.max(160, sheetH - this.PT - this.PB);
+      for (const [k, v] of [['--st', st], ['--sh', sheetH], ['--sw', sheetW], ['--pt', this.PT], ['--pb', this.PB], ['--px', this.PX]]) this.stage.style.setProperty(k, v + 'px');
+      return `${this.b.id}|print|${this.W}x${this.H}|${this.fs}`;
+    }
     this.PT = top + 38; this.PB = bot + 40; this.PX = sw < 520 ? 24 : 32; // place pour le titre courant en haut et le numéro de page en bas
     this.W = Math.max(220, Math.min(680, sw - this.PX * 2)); this.H = Math.max(200, sh - this.PT - this.PB);
     this.stage.style.setProperty('--pt', this.PT + 'px'); this.stage.style.setProperty('--pb', this.PB + 'px'); this.stage.style.setProperty('--px', this.PX + 'px');
