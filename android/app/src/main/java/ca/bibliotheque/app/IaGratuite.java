@@ -72,9 +72,14 @@ final class IaGratuite {
             String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
             String[] res = http(url, key, body.toString());
             int code = Integer.parseInt(res[0]);
+            // certains formats de clés passent mieux dans l'adresse que dans l'en-tête : second essai
+            if (code == 401 || code == 403 || (code == 400 && res[1].contains("API_KEY"))) {
+                String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body.toString());
+                if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
+            }
             if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
-            if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Vérifie-la dans le Professeur (Autres options → Changer la clé).");
-            if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Vérifie-la dans le Professeur (Autres options → Changer la clé).");
+            if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
+            if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
             if (code == 429) { Thread.sleep(urgent ? 4000 : 20000); throw new Exception("quota gratuit momentanément atteint"); }
             if (code >= 400) throw new Exception("erreur " + code);
             JSONObject j = new JSONObject(res[1]);
@@ -95,7 +100,7 @@ final class IaGratuite {
             c.setRequestMethod("POST");
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            c.setRequestProperty("x-goog-api-key", key);
+            if (!key.isEmpty()) c.setRequestProperty("x-goog-api-key", key);
             try (OutputStream o = c.getOutputStream()) { o.write(json.getBytes(StandardCharsets.UTF_8)); }
             int code = c.getResponseCode();
             InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();

@@ -2227,14 +2227,15 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
   hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
   // la clé Gemini gratuite, demandée une seule fois
   askKey(then) {
-    const inp = h('input', { type: 'password', placeholder: 'AIza…', autocomplete: 'off' });
+    const inp = h('input', { type: 'password', placeholder: 'AIza… ou AQ.…', autocomplete: 'off' });
     const close = sheet('Clé Gemini gratuite', h('div', {},
       h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Le Professeur utilise Gemini de Google. Colle ici ta clé gratuite (aistudio.google.com → Clés API). Elle reste seulement sur ce téléphone.'),
       h('label', { class: 'field' }, 'Clé', inp),
       h('div', { class: 'actions', style: { marginTop: '14px' } },
         h('button', { class: 'btn primary', onclick: () => {
           const k = inp.value.trim();
-          if (!/^AIza[\w-]{20,}$/.test(k)) return toast('Colle une clé qui commence par AIza');
+          // Google utilise plusieurs formats de clés (AIza…, AQ.…) : on accepte toute clé plausible
+          if (!/^[\w.-]{20,}$/.test(k)) return toast('Cette clé ne semble pas complète : recopie-la en entier, sans espace.');
           AndroidAI.setGeminiKey(k); close(); toast('Clé enregistrée'); then && then();
         } }, icon('prof'), 'Enregistrer'))));
     setTimeout(() => inp.focus(), 50);
