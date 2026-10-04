@@ -25,6 +25,13 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Polices et tables de caractères pour les PDF (évite les pages blanches)
+        run: |
+          cd /tmp && npm pack pdfjs-dist@6.2.108 --silent && tar -xzf pdfjs-dist-6.2.108.tgz
+          mkdir -p $GITHUB_WORKSPACE/android/app/src/main/assets/pdfjs
+          cp -r /tmp/package/standard_fonts /tmp/package/cmaps $GITHUB_WORKSPACE/android/app/src/main/assets/pdfjs/
+          du -sh $GITHUB_WORKSPACE/android/app/src/main/assets/pdfjs
+
       - name: Compiler
         working-directory: android
         run: |

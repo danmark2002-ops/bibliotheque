@@ -916,3 +916,5 @@ svg.rot-r { transform: rotate(-90deg); }
 /* Texte ⇄ Photo */
 .viewchip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid currentColor; background: transparent; color: inherit; font-size: 13px; font-weight: 600; opacity: .9; }
 .player .cap .chip { margin-left: 6px; height: 28px; padding: 0 10px; border-radius: 9px; border: 1px solid #d4ab6a; background: #d4ab6a; color: #241809; font: 600 12px Inter, sans-serif; }
+
+.sharechoices { display: grid; gap: 10px; margin-top: 14px; }

@@ -120,6 +120,19 @@ async function boot() {
   await loadBooks();
   renderLibrary();
   checkReceived(); // une bibliothèque partagée a peut-être ouvert l'application
+  maintenance();
+}
+// Entretien discret au démarrage : doublons regroupés, titres techniques corrigés, couvertures blanches refaites
+async function maintenance() {
+  if (!window.LocalAPI?.tidy || S.me?.role !== 'owner') return;
+  try {
+    const r = await LocalAPI.tidy();
+    if (r.merged || r.renamed) { await loadBooks(); renderLibrary(); }
+    if (r.merged) toast(`${r.merged} livre${r.merged > 1 ? 's' : ''} en double regroupé${r.merged > 1 ? 's' : ''} : on garde celui que tu lisais (les copies sont dans la poubelle)`);
+    let n = 0;
+    const fixed = await LocalAPI.fixCovers(() => { if (++n % 5 === 0) loadBooks().then(() => { if (!$('.reader')) renderLibrary(); }); });
+    if (fixed) { await loadBooks(); if (!$('.reader')) renderLibrary(); }
+  } catch {}
 }
 async function loadBooks() { S.books = await api('/api/books'); await loadCols(); }
 
@@ -152,7 +165,7 @@ function renderAuth() {
 function perRow() { const w = Math.min(window.innerWidth, 1180); return w < 400 ? 3 : w < 640 ? 4 : w < 900 ? 5 : w < 1100 ? 6 : 7; }
 function coverEl(b) {
   const c = h('div', { class: 'cover', style: { '--c': b.color || '#555' } });
-  if ((b.kind === 'pdf' || b.coverUrl) && b.status === 'ready') { // vraie couverture (PDF, EPUB…) ; sinon on en dessine une
+  if (((b.kind === 'pdf' && !window.LocalAPI) || b.coverUrl) && b.status === 'ready') { // vraie couverture (PDF, EPUB…) ; sinon on en dessine une
     const img = h('img', { src: b.coverUrl || `/api/books/${b.id}/cover.jpg`, alt: '', loading: 'lazy', draggable: 'false' });
     img.onerror = () => img.replaceWith(genCover(b));
     c.append(img);
@@ -593,6 +606,7 @@ async function uploadFiles(files, { lib: target } = {}) {
     catch (e) { $('span', box).textContent = e.message; setTimeout(() => box.remove(), 6000); }
   }
   for (const f of files) {
+    if (window.LocalAPI?.findDup) { const d = await LocalAPI.findDup(f, target || (S.lib === 'all' ? 'main' : curLib().id)); if (d) { toast(`« ${d.title} » est déjà sur l'étagère`); added.push(d); continue; } }
     const box = h('div', { class: 'up' }, h('b', {}, f.name), h('span', { class: 'muted' }, 'Envoi…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
     $('#uploads')?.append(box);
     try {
@@ -687,7 +701,9 @@ function reviewFound(entries) {
 }
 function addFromLink() {
   const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
-  const go = () => { const u = inp.value.trim(); if (!/^https?:\/\/\S+/i.test(u)) return toast('Colle une adresse qui commence par https://'); close(); AndroidWeb.fetch(u); };
+  const go = () => { const u = inp.value.trim(); if (!/^https?:\/\/\S+/i.test(u)) return toast('Colle une adresse qui commence par https://'); close();
+    if (/gofile\.io\/d\//i.test(u)) { AndroidWeb.open(u, 'Bibliothèque partagée'); toast('Touche « Download » : la bibliothèque s\'ajoute toute seule'); return; } // lien de partage d'une bibliothèque
+    AndroidWeb.fetch(u); };
   const close = sheet('Ajouter depuis un lien', h('div', {},
     h('p', { class: 'muted' }, 'Le lien d\'un livre (PDF, EPUB…) ou d\'un article : l\'article devient un livre que tu peux lire ou écouter.'),
     h('label', { class: 'field' }, 'Adresse', inp),
@@ -1061,13 +1077,14 @@ function shareLibrary(id) {
   const size = books.reduce((a, b) => a + (b.size || 0), 0);
   const close = sheet('Partager « ' + lib.name + ' »', h('div', {},
     h('p', {}, `${books.length} livre${books.length > 1 ? 's' : ''}${size ? ', environ ' + fmtSize(size) : ''}, réunis dans un seul fichier avec le nom et le décor de la bibliothèque.`),
-    h('p', { class: 'muted' }, 'Envoie-le par Quick Share, Google Drive, WhatsApp ou courriel. La personne l\'ouvre avec l\'application Bibliothèque, et tout s\'ajoute chez elle comme une nouvelle bibliothèque.'),
-    size > 25e6 ? h('p', { class: 'hint' }, 'Gros fichier : un courriel le refusera sûrement. Passe plutôt par Quick Share ou Google Drive.') : null,
-    h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
-      h('button', { class: 'btn', onclick: () => close() }, 'Annuler'),
-      h('button', { class: 'btn primary', onclick: () => { close(); packLibrary(lib, books); } }, icon('share'), 'Préparer et envoyer'))));
+    size > 400e6 ? h('p', { class: 'hint' }, `Gros envoi (${fmtSize(size)}) : utilise le Wi-Fi.`) : null,
+    h('div', { class: 'sharechoices' },
+      AndroidShare.upload ? h('button', { class: 'addbig', onclick: () => { close(); packLibrary(lib, books, 'link'); } },
+        h('span', { class: 'addic' }, icon('link')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer un lien'), h('small', {}, 'Tout se fait seul : la bibliothèque est mise en ligne et tu reçois un lien à texter. La personne l\'ouvre sur son téléphone, et tout s\'ajoute.'))) : null,
+      h('button', { class: 'addbig', onclick: () => { close(); packLibrary(lib, books, 'file'); } },
+        h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer le fichier'), h('small', {}, 'Quick Share (téléphone à côté), WhatsApp, Drive…'))))));
 }
-async function packLibrary(lib, books) {
+async function packLibrary(lib, books, how = 'file') {
   const box = h('div', { class: 'up' }, h('b', {}, `Partage de « ${lib.name} »`), h('span', { class: 'muted' }, 'Préparation…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
   $('#uploads')?.append(box);
   const say = (pct, msg) => { $('i', box).style.width = pct + '%'; $('span', box).textContent = msg; };
@@ -1102,6 +1119,14 @@ async function packLibrary(lib, books) {
       }
       AndroidShare.fileEnd();
     }
+    if (how === 'link' && AndroidShare.upload) {
+      say(0, 'Mise en ligne…');
+      const r = await new Promise((res) => { window.__upProgress = (pc) => say(Number(pc), `Mise en ligne · ${Math.floor(Number(pc))} %`); window.__upDone = (j) => { try { res(JSON.parse(j)); } catch { res({ error: 'Envoi impossible' }); } }; AndroidShare.upload(lib.name); });
+      window.__upProgress = window.__upDone = null;
+      if (r.error || !r.link) throw new Error(r.error || 'Envoi impossible');
+      box.remove(); shareLinkSheet(lib.name, r.link);
+      return;
+    }
     say(100, 'Prêt : choisis comment l\'envoyer');
     if (!AndroidShare.finish(lib.name)) throw new Error('Envoi impossible');
     setTimeout(() => box.remove(), 2500);
@@ -1109,6 +1134,16 @@ async function packLibrary(lib, books) {
     try { AndroidShare.abort(); } catch {}
     say(100, e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000);
   }
+}
+function shareLinkSheet(name, link) {
+  const msg = `Je te partage ma bibliothèque « ${name} ». Ouvre ce lien sur ton téléphone, télécharge le fichier, puis ouvre-le avec l'application Bibliothèque : ${link}`;
+  const close = sheet('Lien prêt', h('div', {},
+    h('p', {}, 'Ta bibliothèque est en ligne. Envoie ce lien à la personne :'),
+    h('div', { class: 'linkbox' }, link),
+    h('p', { class: 'hint' }, 'Le lien reste actif quelques jours. Dans l\'application, la personne peut aussi faire Ajouter › Depuis un lien.'),
+    h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '14px' } },
+      h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(link); toast('Lien copié'); } catch { toast('Copie le lien affiché'); } } }, icon('copy'), 'Copier'),
+      h('button', { class: 'btn primary', onclick: () => { close(); AndroidShare.text ? AndroidShare.text(msg) : (navigator.share ? navigator.share({ text: msg }) : null); } }, icon('share'), 'Envoyer le lien'))));
 }
 // Réception : Android a déjà décompressé le fichier ; on propose d'ajouter la bibliothèque
 window.__biblioRecue = () => checkReceived();

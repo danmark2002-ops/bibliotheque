@@ -52,15 +52,33 @@ window.LocalAPI = (() => {
     })();
     return pdfjsP;
   }
+  // Polices standard et tables de caractères : sans elles, le texte de certains PDF ne s'affiche pas (pages blanches)
+  const PDF_RES = location.host === 'appassets.local' ? '/pdfjs/' : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/';
+  const pdfOpts = (data) => ({ data, standardFontDataUrl: PDF_RES + 'standard_fonts/', cMapUrl: PDF_RES + 'cmaps/', cMapPacked: true, useWorkerFetch: false, isEvalSupported: false });
   const docs = new Map();
   async function pdfDoc(id) {
     if (docs.has(id)) return docs.get(id);
     const rec = await get('blob', id); if (!rec?.file) throw new Error('Livre introuvable');
     const lib = await pdfjs();
-    const p = rec.file.arrayBuffer().then((data) => lib.getDocument({ data }).promise);
+    const p = rec.file.arrayBuffer().then((data) => lib.getDocument(pdfOpts(data)).promise);
     docs.set(id, p); if (docs.size > 3) docs.delete(docs.keys().next().value);
     p.catch(() => docs.delete(id));
     return p;
+  }
+  // Une page est-elle blanche ? (on échantillonne des points)
+  function isBlank(c) {
+    const g = c.getContext('2d'); const { width: w, height: hh } = c; let dark = 0, n = 0;
+    const d = g.getImageData(0, 0, w, hh).data;
+    for (let y = 0; y < hh; y += Math.max(1, Math.floor(hh / 120))) for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 80))) { const i = (y * w + x) * 4; n++; if (d[i] + d[i + 1] + d[i + 2] < 690) dark++; }
+    return dark / n < 0.004;
+  }
+  // Couverture : la première page qui n'est pas blanche (beaucoup de PDF commencent par une page vide)
+  async function pdfCover(doc) {
+    for (let n = 1; n <= Math.min(4, doc.numPages); n++) {
+      const c = await renderPage(doc, n, 520);
+      if (!isBlank(c)) return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+    }
+    return null; // tout est blanc : l'étagère dessinera une couverture
   }
   async function renderPage(doc, n, width) {
     const page = await doc.getPage(n);
@@ -557,6 +575,7 @@ window.LocalAPI = (() => {
       fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
       coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
+  const BAD_TITLE = /^(untitled|sans titre|document\d*|pdf|adobe .*|microsoft (word|powerpoint) - .*|.*photoshop.*|.*indesign.*|.*acrobat.*|.*\.(docx?|pdf|indd|qxd|psd|tiff?|jpe?g))$/i;
   const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
     '.epub': 'epub', '.mobi': 'mobi', '.azw': 'mobi', '.azw3': 'mobi', '.prc': 'mobi', '.odt': 'odt', '.rtf': 'rtf', '.fb2': 'fb2', '.doc': 'doc',
     '.html': 'html', '.htm': 'html', '.xhtml': 'html',
@@ -580,17 +599,17 @@ window.LocalAPI = (() => {
     if (kind === 'pdf') {
       const lib = await pdfjs();
       const data = await file.arrayBuffer();
-      const doc = await lib.getDocument({ data: data.slice(0) }).promise;
+      const doc = await lib.getDocument(pdfOpts(data.slice(0))).promise;
       meta.pages = doc.numPages;
       try {
         const info = (await doc.getMetadata()).info || {};
-        if (info.Title && info.Title.length > 2 && info.Title.length < 150 && !/untitled|sans titre|microsoft word|\.(docx?|pdf|indd)$|^document\d*$/i.test(info.Title)) meta.title = info.Title;
+        if (info.Title && info.Title.length > 2 && info.Title.length < 150 && !BAD_TITLE.test(info.Title.trim())) meta.title = info.Title;
         if (info.Author) meta.author = String(info.Author).slice(0, 120);
       } catch {}
       onp(60, 'Création de la couverture…');
-      const c = await renderPage(doc, 1, 520);
-      const cover = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+      const cover = await pdfCover(doc);
       await put('blob', { file, cover }, id);
+      if (!cover) meta.noCover = true;
       try { await doc.cleanup?.(); } catch {}
     } else if (kind === 'docx') {
       onp(45, 'Lecture du document Word…');
@@ -782,11 +801,61 @@ window.LocalAPI = (() => {
       return { s: it.str, l: (it.transform[4] - vb[0]) / W, t: 1 - (it.transform[5] - vb[1] + hgt) / H, w: (it.width || hgt * it.str.length * 0.5) / W, h: (hgt * 1.25) / H };
     });
   }
+  // ---------- Entretien : doublons, titres techniques, couvertures blanches ----------
+  const normT = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  async function tidy() {
+    const metas = await all('meta'); const live = metas.filter((m) => !m.trashed && !String(m.id).startsWith('ocr:'));
+    const progs = new Map((await all('prog')).map((p) => [p.book, p]));
+    let renamed = 0, merged = 0;
+    for (const m of live) if (BAD_TITLE.test(String(m.title).trim()) && m.fname) { const t2 = m.fname.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(); if (t2 && !BAD_TITLE.test(t2)) { m.title = t2; await put('meta', m); renamed++; } }
+    // doublons : même fichier (nom et taille), ou même titre, même format, même nombre de pages et taille presque égale
+    const groups = new Map();
+    for (const m of live) {
+      const keys = [];
+      if (m.fname && m.fsize) keys.push('f|' + (m.lib || 'main') + '|' + normT(m.fname) + '|' + m.fsize);
+      const nt = normT(m.title); if (nt.length >= 6) keys.push('t|' + (m.lib || 'main') + '|' + nt + '|' + m.kind + '|' + m.pages);
+      for (const k of keys) { if (!groups.has(k)) groups.set(k, []); groups.get(k).push(m); }
+    }
+    const done = new Set();
+    for (const [k, list] of groups) {
+      let g = list.filter((m) => !done.has(m.id)); if (g.length < 2) continue;
+      if (k.startsWith('t|')) { const s0 = g[0].fsize || 0; g = g.filter((m) => !s0 || !m.fsize || Math.abs(m.fsize - s0) / Math.max(s0, m.fsize) < 0.05); if (g.length < 2) continue; }
+      const score = (m) => { const p = progs.get(m.id); return (p?.last || 0) * 10 + (p?.opens || 0); };
+      g.sort((a, b) => score(b) - score(a) || (a.created || 0) - (b.created || 0));
+      const keep = g[0];
+      for (const d of g.slice(1)) { // on garde le livre déjà lu ; ce que l'autre avait (favori, état, collections) le rejoint
+        keep.fav = keep.fav || d.fav; if (!keep.state || d.state === 'lu') keep.state = d.state || keep.state;
+        keep.cols = [...new Set([...(keep.cols || []), ...(d.cols || [])])]; if (!keep.summary && d.summary) keep.summary = d.summary;
+        d.trashed = now(); d.dupOf = keep.id; await put('meta', d); done.add(d.id); merged++;
+      }
+      await put('meta', keep); // le livre gardé peut encore absorber d'autres copies (autre nom de fichier, même livre)
+    }
+    return { renamed, merged };
+  }
+  // Couvertures blanches déjà sur l'étagère : on les refait (une fois par livre)
+  async function fixCovers(onEach) {
+    let fixed = 0;
+    for (const m of await all('meta')) {
+      if (m.kind !== 'pdf' || m.trashed || m.coverChecked) continue;
+      try {
+        const rec = await get('blob', m.id);
+        let blank = !rec?.cover;
+        if (rec?.cover) { const bmp = await createImageBitmap(rec.cover); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0); blank = isBlank(c); }
+        if (blank) { const doc = await pdfDoc(m.id); const cover = await pdfCover(doc); rec.cover = cover; await put('blob', rec, m.id); coverUrls.delete(m.id); fixed++; onEach && onEach(); }
+      } catch {}
+      m.coverChecked = 1; await put('meta', m);
+    }
+    return fixed;
+  }
+  async function findDup(file, lib) {
+    for (const m of await all('meta')) if (!m.trashed && (m.lib || 'main') === lib && m.fname && normT(m.fname) === normT(file.name) && m.fsize === file.size) return m;
+    return null;
+  }
   async function isScanned(id) { // peu ou pas de texte dans les premières pages : livre photographié
     const m = await get('meta', id); if (!m) return false; if (m.kind === 'images') return true; if (m.kind !== 'pdf') return false;
     const ns = [1, 2, 3, Math.ceil(m.pages / 2), m.pages].filter((x, i, a) => x >= 1 && x <= m.pages && a.indexOf(x) === i);
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { handle, upload, uploadAudio, uploadImages, isScanned, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { handle, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();

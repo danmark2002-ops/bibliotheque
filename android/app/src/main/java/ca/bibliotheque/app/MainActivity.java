@@ -556,6 +556,38 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    private static byte[] readAll(InputStream in) throws IOException {
+        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(); byte[] b = new byte[1 << 15]; int n;
+        while ((n = in.read(b)) > 0) bo.write(b, 0, n);
+        return bo.toByteArray();
+    }
+
+    /** Envoi « multipart » en continu (fichiers de plusieurs Go), avec la progression ; renvoie la page de téléchargement. */
+    private String gofile(String url, File f) throws Exception {
+        String bd = "----biblio" + System.currentTimeMillis();
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        c.setDoOutput(true); c.setRequestMethod("POST"); c.setChunkedStreamingMode(1 << 20);
+        c.setConnectTimeout(30000); c.setReadTimeout(300000);
+        c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + bd);
+        try (java.io.OutputStream out = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            out.write(("--" + bd + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + f.getName().replace("\"", "") + "\"\r\nContent-Type: application/zip\r\n\r\n").getBytes("UTF-8"));
+            byte[] buf = new byte[1 << 16]; long sent = 0, total = Math.max(1, f.length()); int n; long last = 0;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n); sent += n;
+                long now = System.currentTimeMillis();
+                if (now - last > 400) { last = now; js("__upProgress", String.valueOf(Math.min(99.0, sent * 100.0 / total))); }
+            }
+            out.write(("\r\n--" + bd + "--\r\n").getBytes("UTF-8"));
+        }
+        int code = c.getResponseCode();
+        String body; try (InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream()) { body = in == null ? "" : new String(readAll(in), "UTF-8"); }
+        JSONObject j = new JSONObject(body);
+        if (!"ok".equals(j.optString("status"))) throw new IOException("gofile " + code);
+        String link = j.getJSONObject("data").optString("downloadPage", "");
+        if (link.isEmpty()) throw new IOException("lien");
+        return link;
+    }
+
     class ShareBridge {
         @JavascriptInterface
         public boolean begin(String fileName, String manifest) {
@@ -611,6 +643,36 @@ public class MainActivity extends Activity {
         public void abort() {
             try { if (zipOut != null) zipOut.close(); } catch (Exception ignored) { }
             zipOut = null;
+        }
+
+        /** Met la bibliothèque en ligne (Gofile, sans compte) : window.__upProgress(%) puis window.__upDone({link} ou {error}). */
+        @JavascriptInterface
+        public void upload(String title) {
+            try { zipOut.close(); } catch (Exception e) { js("__upDone", "{\"error\":\"Préparation impossible\"}"); return; }
+            zipOut = null;
+            final File f = zipFile;
+            new Thread(() -> {
+                JSONObject res = new JSONObject();
+                try {
+                    String link = null;
+                    try { link = gofile("https://upload.gofile.io/uploadfile", f); } catch (Exception first) {
+                        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL("https://api.gofile.io/servers").openConnection();
+                        c.setConnectTimeout(15000); c.setReadTimeout(20000);
+                        String body; try (InputStream in = c.getInputStream()) { body = new String(readAll(in), "UTF-8"); }
+                        String server = new JSONObject(body).getJSONObject("data").getJSONArray("servers").getJSONObject(0).getString("name");
+                        link = gofile("https://" + server + ".gofile.io/contents/uploadfile", f);
+                    }
+                    res.put("link", link);
+                } catch (Exception e) { try { res.put("error", "La mise en ligne a échoué. Vérifie la connexion, ou utilise « Envoyer le fichier »."); } catch (Exception ignored) { } }
+                js("__upDone", res.toString());
+            }).start();
+        }
+
+        /** Partage un simple message (le lien) : texto, WhatsApp, courriel… */
+        @JavascriptInterface
+        public void text(String msg) {
+            Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, msg);
+            runOnUiThread(() -> { try { startActivity(Intent.createChooser(i, "Envoyer le lien")); } catch (Exception ignored) { } });
         }
 
         @JavascriptInterface
@@ -721,6 +783,13 @@ public class MainActivity extends Activity {
                 String cd2 = cd != null && !cd.isEmpty() ? cd : c.getHeaderField("Content-Disposition");
                 String mime2 = c.getContentType() != null ? c.getContentType() : mime;
                 String name = android.webkit.URLUtil.guessFileName(cur, cd2, mime2);
+                if (name.toLowerCase(Locale.ROOT).endsWith(".biblio")) { // une bibliothèque partagée par lien
+                    File dir = new File(getCacheDir(), "web"); dir.mkdirs();
+                    File out = new File(dir, "partage.biblio");
+                    try (InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) { byte[] buf = new byte[1 << 16]; int r; while ((r = in.read(buf)) > 0) fo.write(buf, 0, r); }
+                    runOnUiThread(() -> { closeBrowser(); handleIncoming(new Intent(Intent.ACTION_VIEW, Uri.fromFile(out))); });
+                    return;
+                }
                 if (!isBook(name)) {
                     String ext = extFor(mime2);
                     boolean html = mime2 != null && (mime2.toLowerCase(Locale.ROOT).startsWith("text/html") || mime2.toLowerCase(Locale.ROOT).contains("xhtml"));
