@@ -40,7 +40,7 @@ dependencies {
     // IA intégrée au téléphone (Gemini Nano, via AICore) : gratuite, sans Internet, sans compte
     implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
     // Reconnaissance du texte des pages photographiées : sur le téléphone, sans Internet
-    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
     // Google Cast : envoyer une vidéo du Professeur sur la télé en un clic
     implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
     implementation 'androidx.mediarouter:mediarouter:1.7.0'
