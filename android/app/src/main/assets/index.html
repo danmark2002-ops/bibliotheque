@@ -1509,6 +1509,7 @@ function renderLibrary(opts = {}) {
     owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.') : null,
   ));
   // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
+  if (document.activeElement && document.activeElement.classList.contains('search')) opts.keepSearch = true; // toute mise à jour pendant la frappe épargne le champ
   const ow = $('#app .wrap'), nw = $('.wrap', room), ot = ow && $(':scope > .toolbar', ow), nt = $(':scope > .toolbar', nw);
   if (opts.keepSearch && ot && nt) {
     const before = [], after = []; let seen = false;
