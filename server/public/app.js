@@ -2985,7 +2985,7 @@ class Reader {
     if (!this.imgs.has(n)) {
       this.imgs.set(n, window.LocalAPI ? LocalAPI.pageCanvas(this.b.id, n) : fetch(`/api/books/${this.b.id}/page/${n}`, { credentials: 'same-origin' }).then((r) => { if (!r.ok) throw new Error(r.status === 429 ? 'Doucement ! Patiente quelques secondes.' : 'Page indisponible'); return r.blob(); }).then((bl) => createImageBitmap(bl)));
       this.imgs.get(n).catch(() => this.imgs.delete(n));
-      if (this.imgs.size > 8) { const k = [...this.imgs.keys()].find((x) => Math.abs(x - n) > 3); if (k) this.imgs.delete(k); }
+      if (this.imgs.size > 8) { const k = [...this.imgs.keys()].find((x) => Math.abs(x - n) > 3); if (k) { const old = this.imgs.get(k); this.imgs.delete(k); old.then((im) => setTimeout(() => { if (im?.close) im.close(); else if (window.LocalAPI?.freeCanvas) LocalAPI.freeCanvas(im); }, 5000)).catch(() => {}); } }
     }
     return this.imgs.get(n);
   }

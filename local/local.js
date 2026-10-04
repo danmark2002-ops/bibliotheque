@@ -54,17 +54,60 @@ window.LocalAPI = (() => {
   }
   // Polices standard et tables de caractères : sans elles, le texte de certains PDF ne s'affiche pas (pages blanches)
   const PDF_RES = location.host === 'appassets.local' ? '/pdfjs/' : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/';
-  const pdfOpts = (data) => ({ data, standardFontDataUrl: PDF_RES + 'standard_fonts/', cMapUrl: PDF_RES + 'cmaps/', cMapPacked: true, useWorkerFetch: false, isEvalSupported: false,
-    disableFontFace: true }); // les lettres sont dessinées directement : les polices intégrées aux PDF ne disparaissent plus dans Android
-  const docs = new Map();
-  async function pdfDoc(id) {
-    if (docs.has(id)) return docs.get(id);
+  // Deux façons de dessiner les lettres : polices du PDF chargées dans le navigateur (par défaut), ou lettres tracées une à une.
+  // Selon le téléphone et le PDF, l'une ou l'autre peut échouer : chaque page est vérifiée et redessinée au besoin.
+  const pdfOpts = (data, path = false) => ({ data, standardFontDataUrl: PDF_RES + 'standard_fonts/', cMapUrl: PDF_RES + 'cmaps/', cMapPacked: true, useWorkerFetch: false, isEvalSupported: false,
+    disableFontFace: !!path, fontExtraProperties: !!path });
+  const docs = new Map(), drawMode = new Map(); // drawMode : livre → 'path' quand les polices du PDF ne s'affichent pas
+  async function pdfDoc(id, path = false) {
+    const key = id + (path ? '|p' : '');
+    if (docs.has(key)) return docs.get(key);
     const rec = await get('blob', id); if (!rec?.file) throw new Error('Livre introuvable');
     const lib = await pdfjs();
-    const p = rec.file.arrayBuffer().then((data) => lib.getDocument(pdfOpts(data)).promise);
-    docs.set(id, p); if (docs.size > 3) docs.delete(docs.keys().next().value);
-    p.catch(() => docs.delete(id));
+    const p = rec.file.arrayBuffer().then((data) => lib.getDocument(pdfOpts(data, path)).promise);
+    docs.set(key, p);
+    if (docs.size > 4) { const k = docs.keys().next().value; const old = docs.get(k); docs.delete(k); old.then((d) => setTimeout(() => d.destroy().catch(() => {}), 15000)).catch(() => {}); }
+    p.catch(() => docs.delete(key));
     return p;
+  }
+  // Part de la page couverte d'encre (points échantillonnés)
+  function inkFrac(c) {
+    const { width: w, height: hh } = c; if (!w || !hh) return 0;
+    const d = c.getContext('2d').getImageData(0, 0, w, hh).data; let dark = 0, n = 0;
+    for (let y = 0; y < hh; y += Math.max(1, Math.floor(hh / 200))) for (let x = 0; x < w; x += Math.max(1, Math.floor(w / 140))) { const i = (y * w + x) * 4; n++; if (d[i] + d[i + 1] + d[i + 2] < 600) dark++; }
+    return dark / n;
+  }
+  const freeCanvas = (c) => { try { c.width = 0; c.height = 0; } catch {} }; // libère la mémoire tout de suite (Android)
+  async function pageText(doc, n) { try { return await (await doc.getPage(n)).getTextContent(); } catch { return { items: [], styles: {} }; } }
+  // Dernier recours : le texte de la page écrit avec une police du téléphone, à sa place exacte
+  async function drawTextLayer(doc, n, c, tc) {
+    const lib = await pdfjs(); const page = await doc.getPage(n);
+    const vp = page.getViewport({ scale: c.width / page.getViewport({ scale: 1 }).width });
+    const g = c.getContext('2d'); g.fillStyle = '#111'; g.textBaseline = 'alphabetic';
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      const t = lib.Util.transform(vp.transform, it.transform), fh = Math.hypot(t[2], t[3]); if (fh < 3) continue;
+      const fam = (tc.styles[it.fontName] || {}).fontFamily || 'serif';
+      g.save(); g.font = `${fh.toFixed(1)}px ${fam === 'monospace' ? 'monospace' : fam === 'sans-serif' ? 'sans-serif' : 'Georgia, "Noto Serif", serif'}`;
+      g.translate(t[4], t[5]); g.rotate(Math.atan2(t[1], t[0]));
+      const want = it.width * vp.scale, got = g.measureText(it.str).width;
+      if (want > 0 && got > 0) g.scale(Math.max(0.5, Math.min(2, want / got)), 1);
+      g.fillText(it.str, 0, 0); g.restore();
+    }
+  }
+  // Rendu vérifié : si la page contient du texte mais sort (presque) vide, on la redessine autrement
+  async function smartRender(id, n, width) {
+    const path = drawMode.get(id) === 'path';
+    const doc = await pdfDoc(id, path);
+    let c = await renderPage(doc, n, width);
+    const tc = await pageText(doc, n);
+    const chars = tc.items.reduce((s, x) => s + (x.str ? x.str.replace(/\s/g, '').length : 0), 0);
+    const low = (cv) => inkFrac(cv) < chars * 6e-6;
+    if (chars < 40 || !low(c)) return c;
+    const alt = await renderPage(await pdfDoc(id, !path), n, width).catch(() => null);
+    if (alt && inkFrac(alt) > inkFrac(c) * 1.4 + 0.001) { drawMode.set(id, path ? 'face' : 'path'); freeCanvas(c); c = alt; } else if (alt) freeCanvas(alt);
+    if (low(c)) await drawTextLayer(doc, n, c, tc).catch(() => {});
+    return c;
   }
   // Une page est-elle blanche ? (on échantillonne des points)
   function isBlank(c) {
@@ -744,11 +787,10 @@ window.LocalAPI = (() => {
     throw new Error('Non disponible en mode local');
   }
 
-  async function pageCanvasAt(id, n, width) { if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, width); const doc = await pdfDoc(id); return renderPage(doc, n, width); } // plus net pour le zoom
+  async function pageCanvasAt(id, n, width) { if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, width); return smartRender(id, n, width); } // plus net pour le zoom
   async function pageCanvas(id, n) {
     if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, Math.min(1800, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
-    const doc = await pdfDoc(id);
-    return renderPage(doc, n, Math.min(1800, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
+    return smartRender(id, n, Math.min(1600, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
   }
 
   // Demande au navigateur de garder les données (évite l'effacement automatique)
@@ -908,5 +950,5 @@ window.LocalAPI = (() => {
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();
