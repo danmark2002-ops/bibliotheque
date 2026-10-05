@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'ca.bibliotheque.app'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'ca.bibliotheque.app'
         minSdk 26
-        targetSdk 34
-        versionCode 47
-        versionName '5.6'
+        targetSdk 36
+        versionCode 48
+        versionName '5.7'
     }
 
     signingConfigs {

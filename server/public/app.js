@@ -654,62 +654,13 @@ function openAddMenu() {
       big('file', 'Un livre', 'Choisis un ou plusieurs fichiers sur le téléphone : PDF, EPUB, Kindle, Word, texte…', pickFiles),
       big('folder', 'Un dossier entier', f ? `Tous les livres d'un autre dossier, dans une nouvelle bibliothèque. Celle-ci suit déjà « ${f.name} ».` : 'Tous les livres d\'un dossier, d\'un coup. Les nouveaux s\'ajouteront quand tu actualises.', () => (lib && !f ? chooseFolder(lib.id, { adopt: true }) : addFolderLib()))),
     h('div', { class: 'addrow' },
-      window.AndroidFolder?.askPhoneAccess ? small('scan', 'Tout le téléphone', scanPhone) : null,
       window.AndroidWeb ? small('link', 'Depuis un lien', addFromLink) : null,
       small('paste', 'Coller un texte', pasteText)),
     window.AndroidWeb ? h('button', { class: 'addfind', onclick: () => { close(); openCatalogues(); } },
       icon('globe'), h('span', {}, h('b', {}, 'Trouver des livres'), h('small', {}, 'Des milliers de livres gratuits en français')), chevR()) : null,
     lib ? h('p', { class: 'hint', style: { marginTop: '14px' } }, `Ils iront dans « ${lib.name} ».`) : null));
 }
-// « Tout le téléphone » : une bibliothèque à part, remplie avec les livres trouvés partout dans le téléphone
-async function scanPhone() {
-  if (!AndroidFolder.phoneAccess()) {
-    const ok = await new Promise((res) => {
-      const close = sheet('Chercher dans tout le téléphone', h('div', {},
-        h('p', {}, 'L\'application va chercher tous les livres (PDF, EPUB, Word, texte…) rangés n\'importe où dans le téléphone : Téléchargements, documents WhatsApp, Drive hors ligne…'),
-        h('p', { class: 'muted' }, 'Android va te demander d\'autoriser « l\'accès à tous les fichiers ». Active l\'interrupteur, puis reviens ici. Rien ne quitte le téléphone.'),
-        h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
-          h('button', { class: 'btn', onclick: () => { close(); res(false); } }, 'Annuler'),
-          h('button', { class: 'btn primary', onclick: async () => { close(); res(!!(await nativeCall('__phoneAccess', () => AndroidFolder.askPhoneAccess()))); } }, 'Autoriser'))));
-    });
-    if (!ok) return toast('Sans autorisation, choisis plutôt un dossier');
-  }
-  const m = folderMap();
-  let lib = libs().find((l) => m[l.id]?.phone);
-  if (!lib) {
-    const l = libs(); const used = new Set(l.map((x) => x.decor));
-    const decor = ['ardoise', 'olivier', 'ebene', 'chene', 'acajou', 'bouleau', 'noyer'].find((k) => !used.has(k)) || 'ardoise';
-    lib = { id: 'lib' + Date.now().toString(36), name: 'Tout le téléphone', decor };
-    l.push(lib); saveLibs(l); AndroidFolder.setPhone(lib.id);
-  }
-  switchLib(lib.id);
-  await scanFolder(lib.id, null, { review: true, elsewhere: true });
-}
-// Après la recherche : on montre les dossiers trouvés, l'utilisateur coche ceux à garder
-function reviewFound(entries) {
-  return new Promise((res) => {
-    const groups = new Map();
-    for (const e of entries) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : 'Stockage principal'; if (!groups.has(d)) groups.set(d, []); groups.get(d).push(e); }
-    const junk = /(facture|invoice|re[çc]u|receipt|relev[ée]|statement|billet|ticket|boarding|commande|order|scan|cv|resume|contrat|bail|impot|tax)/i;
-    const rows = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([d, list]) => {
-      const cb = h('input', { type: 'checkbox', checked: !list.every((e) => junk.test(e.name)) });
-      const size = list.reduce((a, e) => a + (e.size || 0), 0);
-      return { cb, list, el: h('label', { class: 'foundrow' }, cb, h('span', {}, h('b', {}, d.split('/').slice(-2).join(' › ')), h('small', {}, `${list.length} fichier${list.length > 1 ? 's' : ''} · ${fmtSize(size)} · ${list.slice(0, 3).map((e) => e.name.replace(/\.[^.]+$/, '')).join(', ')}${list.length > 3 ? '…' : ''}`))) };
-    });
-    let done = false; const finish = (v) => { if (done) return; done = true; close(); res(v); };
-    const close = sheet(`${entries.length} livre${entries.length > 1 ? 's' : ''} trouvé${entries.length > 1 ? 's' : ''}`, h('div', {},
-      h('p', { class: 'muted', style: { marginTop: '-4px' } }, 'Décoche les dossiers qui ne contiennent pas de livres (factures, papiers…).'),
-      h('div', { class: 'actions', style: { margin: '0 0 10px' } },
-        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = true; }) }, 'Tout cocher'),
-        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = false; }) }, 'Tout décocher')),
-      h('div', { class: 'foundlist' }, rows.map((r) => r.el)),
-      h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
-        h('button', { class: 'btn', onclick: () => finish([]) }, 'Annuler'),
-        h('button', { class: 'btn primary', onclick: () => finish(rows.filter((r) => r.cb.checked).flatMap((r) => r.list)) }, icon('plus'), 'Ajouter les dossiers cochés'))), { wide: true });
-    const obs = new MutationObserver(() => { if (!document.body.contains(rows[0]?.el)) { obs.disconnect(); finish([]); } });
-    if (rows.length) obs.observe(document.body, { childList: true, subtree: true }); else finish([]);
-  });
-}
+
 function addFromLink() {
   const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
   const go = () => { const u = inp.value.trim(); if (!/^https?:\/\/\S+/i.test(u)) return toast('Colle une adresse qui commence par https://'); close();
@@ -958,22 +909,16 @@ function scanFolder(libId, webFiles, opts) {
   FOLDER.queue = run.catch(() => 0);
   return run;
 }
-async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}) {
+async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
-  let entries, ctl = null;
+  let entries;
   FOLDER.busy = true; renderLibrary();
   try {
-    const phone = !!folderOf(libId)?.phone && !!window.AndroidFolder?.scanPause;
-    if (phone) ctl = scanPanel(lib.name);
     if (hasNativeFolder()) {
-      let box = null;
-      if (!phone) { box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box); }
-      else window.__scanProgress = (j) => { try { const x = JSON.parse(j); ctl.set(x.pct, `${Math.floor(x.pct)} % du téléphone · ${x.found} livre${x.found > 1 ? 's' : ''} trouvé${x.found > 1 ? 's' : ''}`, x.dir); } catch {} };
+      const box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box);
       const r = await nativeCall('__folderScanned', () => AndroidFolder.scan(libId));
-      box?.remove(); window.__scanProgress = null;
-      if (r?.cancelled) { ctl?.done(); toast('Recherche annulée'); return 0; }
-      if (!r || r.error) { ctl?.done(); toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
-      if (ctl) ctl.set(100, `Recherche terminée · ${r.files.length} livre${r.files.length > 1 ? 's' : ''} trouvé${r.files.length > 1 ? 's' : ''}`, '');
+      box.remove();
+      if (!r || r.error) { toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
       entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, get: async () => {
         const resp = await fetch('/__dossier?lib=' + encodeURIComponent(libId) + '&id=' + encodeURIComponent(f.id));
         if (!resp.ok) throw new Error('Fichier illisible');
@@ -991,10 +936,6 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
     }
     const k = await LocalAPI.known(libId);
     let fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
-    if (elsewhere) { // déjà dans une autre bibliothèque : on ne le copie pas une deuxième fois
-      const have = new Set(S.books.filter((b) => !b.trashed && b.fname).map((b) => b.fname + '|' + b.size));
-      fresh = fresh.filter((e) => !have.has(e.name + '|' + e.size));
-    }
     { // les pistes audio d'un même dossier forment un seul livre
       const byDir = new Map(), rest = [];
       for (const e of fresh) { if (AUDIO_EXT.test(e.name) && !/\.m4b$/i.test(e.name)) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : ''; if (!byDir.has(d)) byDir.set(d, []); byDir.get(d).push(e); } else rest.push(e); }
@@ -1004,12 +945,10 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
       }
       fresh = rest.sort((a, b) => a.path.localeCompare(b.path, 'fr'));
     }
-    if (review && fresh.length) { ctl?.hide(); FOLDER.busy = false; renderLibrary(); fresh = await reviewFound(fresh); if (!fresh.length) { ctl?.done(); return 0; } FOLDER.busy = true; ctl?.show(); }
     const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
-    if (!fresh.length) { ctl?.done(); if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
+    if (!fresh.length) { if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
     for (let i = 0; i < fresh.length; i++) {
-      if (ctl) { await ctl.wait(); if (ctl.cancelled) { toast(`Ajout arrêté : ${ok} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`); break; } ctl.set((i / fresh.length) * 100, `Ajout des livres · ${i + 1} sur ${fresh.length}`, fresh[i].path); }
       const e = fresh[i];
       const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, `${lib.name} : livre ${i + 1} sur ${fresh.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
       $('#uploads')?.append(box);
@@ -1028,25 +967,8 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
     if (!quiet) toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
     return ok;
   } finally {
-    ctl?.done(); FOLDER.busy = false; await loadBooks(); renderLibrary();
+    FOLDER.busy = false; await loadBooks(); renderLibrary();
   }
-}
-// Panneau de la recherche dans tout le téléphone : pourcentage, pause, reprise, annulation
-function scanPanel(name) {
-  const bar = h('i', { style: { width: '0%' } }), txt = h('span', {}, 'Recherche dans le téléphone…'), dir = h('small', { class: 'scandir' }, '');
-  const pauseBtn = h('button', { class: 'btn', onclick: () => {
-    c.paused = !c.paused; if (c.paused) AndroidFolder.scanPause(); else AndroidFolder.scanResume();
-    pauseBtn.replaceChildren(icon(c.paused ? 'play' : 'pause'), c.paused ? 'Reprendre' : 'Pause'); el.classList.toggle('paused', c.paused);
-    txt.textContent = c.paused ? 'En pause · ' + txt.textContent : txt.textContent.replace(/^En pause · /, '');
-  } }, icon('pause'), 'Pause');
-  const el = h('div', { class: 'scanpanel' }, h('b', {}, name), txt, h('div', { class: 'bar' }, bar), dir,
-    h('div', { class: 'actions' }, pauseBtn, h('button', { class: 'btn danger', onclick: () => { if (!confirm('Annuler la recherche ? Les livres déjà ajoutés restent.')) return; c.cancelled = true; c.paused = false; AndroidFolder.scanCancel(); } }, icon('close'), 'Annuler')));
-  document.body.append(el);
-  const c = { paused: false, cancelled: false,
-    set(pct, t, d) { bar.style.width = Math.max(0, Math.min(100, pct)) + '%'; if (t) txt.textContent = (c.paused ? 'En pause · ' : '') + t; dir.textContent = d || ''; },
-    wait: () => new Promise((res) => { const tick = () => (c.paused && !c.cancelled ? setTimeout(tick, 200) : res()); tick(); }),
-    hide() { el.hidden = true; }, show() { el.hidden = false; }, done() { el.remove(); } };
-  return c;
 }
 function openFolder(libId = curLib()?.id) {
   if (!libId) return openLibraries();

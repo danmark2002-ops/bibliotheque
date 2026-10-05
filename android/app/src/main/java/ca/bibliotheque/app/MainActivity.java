@@ -68,6 +68,10 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        edgeToEdge(root);
+        // Android 13+ (obligatoire avec Android 16) : le geste « retour » passe par ce rappel, plus par onBackPressed()
+        if (Build.VERSION.SDK_INT >= 33)
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -267,61 +271,8 @@ public class MainActivity extends Activity {
 
     private void saveFolders(JSONObject o) { prefs().edit().putString("folders", o.toString()).apply(); }
 
-    // ---------- « Tout le téléphone » : une bibliothèque qui cherche les livres dans tout le stockage ----------
+    // Ancien mode « Tout le téléphone » (retiré : Google Play refuse l'accès à tous les fichiers)
     private static final String PHONE = "phone:";
-    private boolean isPhone(String lib) { return PHONE.equals(folders().optString(lib == null ? "main" : lib, "")); }
-    private File phoneRoot() { return android.os.Environment.getExternalStorageDirectory(); }
-    private boolean phoneAccess() {
-        if (Build.VERSION.SDK_INT >= 30) return android.os.Environment.isExternalStorageManager();
-        return checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
-    }
-    private boolean askingPhone = false;
-
-    // Recherche dans tout le téléphone : pause, reprise, annulation, et pourcentage qui avance
-    private volatile int scanCtl = 0; // 0 en marche, 1 en pause, 2 annulée
-    private long lastProg = 0;
-
-    private void scanTick(double frac, int found, String rel) throws Exception {
-        while (scanCtl == 1) Thread.sleep(150);
-        if (scanCtl == 2) throw new InterruptedException("annulée");
-        long now = System.currentTimeMillis();
-        if (now - lastProg > 250) {
-            lastProg = now;
-            js("__scanProgress", new JSONObject().put("pct", Math.min(99.9, frac * 100)).put("found", found).put("dir", rel).toString());
-        }
-    }
-
-    /** Chaque sous-dossier reçoit sa part du pourcentage : la barre avance au fil des dossiers parcourus. */
-    private void walkPhone(File dir, String rel, int depth, JSONArray out, double from, double span) throws Exception {
-        scanTick(from, out.length(), rel);
-        if (depth > 14 || out.length() > 5000) return;
-        File[] kids = dir.listFiles();
-        if (kids == null) return;
-        java.util.Arrays.sort(kids);
-        List<File> dirs = new ArrayList<>();
-        for (File f : kids) {
-            String name = f.getName();
-            if (name.startsWith(".")) continue;
-            String r = rel.isEmpty() ? name : rel + "/" + name;
-            if (f.isDirectory()) {
-                // Android/data et obb : réservés aux applications ; Android/media garde par ex. les documents WhatsApp
-                if (r.equals("Android/data") || r.equals("Android/obb") || r.equalsIgnoreCase("LOST.DIR")) continue;
-                dirs.add(f);
-            } else if (isBook(name) && f.length() > 0) {
-                // l'audio du téléphone, c'est surtout de la musique : on ne garde que les vrais livres audio
-                if (isAudio(name) && !name.toLowerCase(Locale.ROOT).endsWith(".m4b")
-                    && !r.toLowerCase(Locale.ROOT).matches(".*(audiobook|audio ?book|livres? audio|livre-audio|audible|libby|ohdio|biblioth).*")) continue;
-                JSONObject o = new JSONObject();
-                o.put("id", f.getAbsolutePath()); o.put("name", name); o.put("path", r);
-                o.put("size", f.length()); o.put("mtime", f.lastModified());
-                out.put(o);
-            }
-        }
-        for (int i = 0; i < dirs.size(); i++) {
-            File d = dirs.get(i);
-            walkPhone(d, rel.isEmpty() ? d.getName() : rel + "/" + d.getName(), depth + 1, out, from + span * i / dirs.size(), span / dirs.size());
-        }
-    }
 
     // ---------- Pages PDF dessinées par le moteur d'Android (PDFium, celui de Chrome) ----------
     // Bien plus tolérant que pdf.js envers les polices abîmées des PDF : fin des pages blanches ou à moitié écrites.
@@ -468,14 +419,6 @@ public class MainActivity extends Activity {
     }
 
     private WebResourceResponse folderFile(String lib, String docId) {
-        if (isPhone(lib) && docId != null && phoneAccess()) {
-            try {
-                File f = new File(docId).getCanonicalFile();
-                if (f.getPath().startsWith(phoneRoot().getCanonicalPath() + "/") && f.isFile() && isBook(f.getName()))
-                    return new WebResourceResponse("application/octet-stream", null, 200, "OK", new java.util.HashMap<>(), new java.io.FileInputStream(f));
-            } catch (Exception ignored) { }
-            return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
-        }
         Uri tree = folderTree(lib);
         if (tree == null || docId == null) return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
         try {
@@ -496,11 +439,13 @@ public class MainActivity extends Activity {
         public String list() {
             JSONArray out = new JSONArray();
             JSONObject o = folders();
+            List<String> old = new ArrayList<>();
+            for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) { String id = it.next(); if (PHONE.equals(o.optString(id))) old.add(id); }
+            if (!old.isEmpty()) { for (String id : old) o.remove(id); saveFolders(o); } // la bibliothèque et ses livres restent, sans recherche dans tout le téléphone
             for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) {
                 String id = it.next();
                 try {
                     JSONObject f = new JSONObject();
-                    if (PHONE.equals(o.optString(id))) { f.put("id", id); f.put("ok", phoneAccess()); f.put("phone", true); f.put("name", "Tout le téléphone"); out.put(f); continue; }
                     Uri tree = folderTree(id);
                     f.put("id", id); f.put("ok", tree != null); f.put("name", tree != null ? folderName(tree) : "Dossier inaccessible");
                     out.put(f);
@@ -519,29 +464,6 @@ public class MainActivity extends Activity {
             });
         }
 
-        @JavascriptInterface public boolean phoneAccess() { return MainActivity.this.phoneAccess(); }
-        @JavascriptInterface public void scanPause() { scanCtl = 1; }
-        @JavascriptInterface public void scanResume() { scanCtl = 0; }
-        @JavascriptInterface public void scanCancel() { scanCtl = 2; }
-
-        /** Demande l'autorisation ; la réponse arrive dans window.__phoneAccess("1" ou "0") au retour dans l'application. */
-        @JavascriptInterface
-        public void askPhoneAccess() {
-            runOnUiThread(() -> {
-                if (MainActivity.this.phoneAccess()) { js("__phoneAccess", "1"); return; }
-                askingPhone = true;
-                try {
-                    if (Build.VERSION.SDK_INT >= 30) {
-                        try { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getPackageName()))); }
-                        catch (Exception e) { startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
-                    } else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, 4250);
-                } catch (Exception e) { askingPhone = false; js("__phoneAccess", "0"); }
-            });
-        }
-
-        @JavascriptInterface
-        public void setPhone(String lib) { JSONObject o = folders(); try { o.put(lib, PHONE); } catch (Exception ignored) { } saveFolders(o); }
-
         @JavascriptInterface
         public void forget(String lib) {
             JSONObject o = folders();
@@ -557,15 +479,7 @@ public class MainActivity extends Activity {
                 try {
                     res.put("lib", lib);
                     Uri tree = folderTree(lib);
-                    if (isPhone(lib)) {
-                        if (!phoneAccess()) res.put("error", "L'application n'a plus l'autorisation de lire le téléphone.");
-                        else {
-                            JSONArray files = new JSONArray();
-                            scanCtl = 0;
-                            try { walkPhone(phoneRoot(), "", 0, files, 0, 1); res.put("files", files); }
-                            catch (InterruptedException stop) { res.put("cancelled", true); }
-                        }
-                    } else if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
+                    if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
                     else {
                         JSONArray files = new JSONArray();
                         walk(getContentResolver(), tree, DocumentsContract.getTreeDocumentId(tree), "", 0, files);
@@ -1454,13 +1368,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (askingPhone) { askingPhone = false; js("__phoneAccess", phoneAccess() ? "1" : "0"); }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 4250) { askingPhone = false; js("__phoneAccess", phoneAccess() ? "1" : "0"); }
     }
 
     @Override
@@ -1510,8 +1422,26 @@ public class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    /** Android 15/16 : l'application s'étend sous la barre d'état et la barre de navigation. On garde le contenu à l'abri
+     *  (barres, encoche, clavier) avec une marge égale à leur taille ; la marge prend la couleur du fond de l'application. */
+    private void edgeToEdge(FrameLayout root) {
+        root.setBackgroundColor(Color.parseColor("#140f0b"));
+        if (Build.VERSION.SDK_INT < 30) return; // avant Android 11 : Android garde déjà le contenu sous les barres
+        getWindow().setDecorFitsSystemWindows(false);
+        root.setOnApplyWindowInsetsListener((v, in) -> {
+            android.graphics.Insets i = in.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout() | android.view.WindowInsets.Type.ime());
+            v.setPadding(i.left, i.top, i.right, i.bottom);
+            return android.view.WindowInsets.CONSUMED;
+        });
+        android.view.WindowInsetsController c = getWindow().getInsetsController();
+        if (c != null) c.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS); // icônes claires sur fond sombre
+        if (Build.VERSION.SDK_INT >= 29) { getWindow().setNavigationBarContrastEnforced(false); getWindow().setStatusBarContrastEnforced(false); }
+    }
+
     @Override
-    public void onBackPressed() {
+    public void onBackPressed() { handleBack(); } // Android 12 et moins
+
+    private void handleBack() {
         if (browserBox != null && browserBox.getVisibility() == android.view.View.VISIBLE) {
             if (browser.canGoBack()) browser.goBack(); else closeBrowser();
             return;
