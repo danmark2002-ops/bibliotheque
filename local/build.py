@@ -14,6 +14,8 @@ lib = base64.b64encode((pdfjs / 'pdf.min.mjs').read_bytes()).decode()
 worker = base64.b64encode((pdfjs / 'pdf.worker.min.mjs').read_bytes()).decode()
 icon = base64.b64encode((pub / 'icon.svg').read_bytes()).decode()
 
+# version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
+apple = '\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Bibliothèque">\n<link rel="apple-touch-icon" href="icon-180.png">' if cdn else ''
 embedded = "" if cdn else f'<script id="pdfjs-lib" type="text/plain">{lib}</script>\n<script id="pdfjs-worker" type="text/plain">{worker}</script>\n'
 html = f"""<!doctype html>
 <html lang="fr">
@@ -22,7 +24,7 @@ html = f"""<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#140f0b">
 <title>Bibliothèque</title>
-<link rel="icon" href="data:image/svg+xml;base64,{icon}">
+<link rel="icon" href="data:image/svg+xml;base64,{icon}">{apple}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
