@@ -80,3 +80,11 @@ details.card summary { font-weight: 600; cursor: pointer; }
 .applist img, .applist .ph { width: 44px; height: 44px; border-radius: 12px; flex: none; background: var(--panel-2); display: grid; place-items: center; font-weight: 800; color: var(--go); }
 .applist .grow { flex: 1; min-width: 0; }
 .olist { padding-left: 22px; margin: 12px 0; } .olist li { margin: 6px 0; line-height: 1.45; }
+/* Modèle de revenus */
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.choice { text-align: left; padding: 14px; border-radius: 16px; border: 1px solid var(--line, rgba(255,255,255,.12)); background: var(--panel-2, rgba(255,255,255,.04)); color: inherit; font: inherit; }
+.choice b { display: block; font-size: 16px; margin-bottom: 4px; }
+.choice small { display: block; line-height: 1.35; }
+.choice.on { border-color: var(--go); box-shadow: inset 0 0 0 1px var(--go); }
+.warnbox { margin-top: 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(242,184,75,.45); background: rgba(242,184,75,.08); line-height: 1.45; }
+.card.warn { border-color: rgba(242,184,75,.45); }

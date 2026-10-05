@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 26
         targetSdk 36
-        versionCode 48
-        versionName '5.7'
+        versionCode 49
+        versionName '5.8'
     }
 
     signingConfigs {
@@ -37,6 +37,8 @@ android {
 }
 
 dependencies {
+    // Version Premium : paiement unique par Google Play (version 8 ou plus exigée par Google depuis le 31 août 2026)
+    implementation 'com.android.billingclient:billing:8.0.0'
     // IA intégrée au téléphone (Gemini Nano, via AICore) : gratuite, sans Internet, sans compte
     implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
     // Reconnaissance du texte des pages photographiées : sur le téléphone, sans Internet

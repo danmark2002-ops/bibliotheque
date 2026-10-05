@@ -980,6 +980,20 @@ svg.rot-r { transform: rotate(-90deg); }
   .book:hover .cover, .book:focus-visible .cover { transform: none; box-shadow: 4px 6px 12px -3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4); }
 }
 
+/* ---------- Premium ---------- */
+.premium p { margin: 0 0 12px; color: var(--ink-2); }
+.pfeats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.pfeat { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--glass-line); }
+.pfeat.hi { border-color: var(--brass); background: rgba(212,171,106,.08); }
+.pfeat .pic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(212,171,106,.14); color: var(--brass); }
+.pfeat .pic svg { width: 18px; height: 18px; }
+.pfeat b { display: block; font-size: 15px; }
+.pfeat small { display: block; color: var(--ink-2); font-size: 12.5px; line-height: 1.35; }
+.pbuy { display: flex; flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 12px; }
+.pbuy .btn.big { height: 50px; justify-content: center; font-size: 16px; }
+.pbuy small { color: var(--ink-3); font-size: 12px; text-align: center; }
+.pbadge { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--brass); vertical-align: 2px; }
+
 </style>
 </head>
 <body>
@@ -2190,6 +2204,7 @@ document.documentElement.dataset.decor = store.get('decor', 'noyer');
 
 // ================= Démarrage =================
 async function boot() {
+  Premium.init();
   try { S.me = await api('/api/me'); } catch { S.me = { role: null }; }
   document.title = S.me.library || 'Bibliothèque';
   if (!S.me.role) return renderAuth();
@@ -2512,7 +2527,8 @@ function openDrawer() {
     item({ k: 'authors' }, NAV.authors[0], NAV.authors[1]),
     fmts.map((k) => item({ k: 'fmt', v: k }, FMT[k], 'layers')),
     h('div', { class: 'dline' }),
-    item({ k: 'trash' }, 'Poubelle', 'trash'));
+    item({ k: 'trash' }, 'Poubelle', 'trash'),
+    window.AndroidBilling && Premium.st.play ? h('button', { class: 'ditem', onclick: () => { close(); Premium.offer(); } }, icon('spark'), h('span', {}, Premium.ok() ? 'Premium activé ✓' : 'Bibliothèque Premium')) : null);
   const scrim = h('div', { class: 'scrim drawer-scrim', onclick: (e) => { if (e.target === scrim) close(); } }, panel);
   document.body.append(scrim);
 }
@@ -2718,6 +2734,47 @@ function webLib() {
   if (!lib) { lib = { id: 'web' + Date.now().toString(36), name: 'Livres du web', decor: 'olivier', web: true }; l.push(lib); saveLibs(l); }
   return lib;
 }
+
+// ================= Version Premium (achat unique sur Google Play) =================
+// L'essentiel reste gratuit. Premium débloque le Professeur, les résumés IA, les tons expressifs,
+// la conversion photo → texte (un livre offert pour essayer) et le partage de bibliothèques.
+// Copies installées hors de Google Play (APK, version web) : tout est débloqué.
+const PREMIUM_FEATS = [
+  ['prof', 'prof', 'Le Professeur bizarroïde', 'Pose tes questions sur le livre, il t’explique en vidéo'],
+  ['summary', 'spark', 'Résumés IA', 'Le résumé de chaque livre en un toucher'],
+  ['tones', 'voice', 'Tons de voix expressifs', 'Conteur, Enjoué, Passionné'],
+  ['ocr', 'type', 'Photo → texte illimité', 'Convertis tous tes livres photographiés en vrai texte'],
+  ['share', 'share', 'Partage de bibliothèques', 'Envoie une bibliothèque entière à un proche'],
+];
+const PREMIUM_TONES = new Set(['conteur', 'enjoue', 'passionne']);
+const Premium = {
+  st: { play: false, premium: false, price: '', pending: false, ready: false },
+  close: null,
+  init() { try { if (window.AndroidBilling) this.st = { ...this.st, ...JSON.parse(AndroidBilling.state()) }; } catch {} },
+  ok() { return !window.AndroidBilling || !this.st.play || !!this.st.premium; },
+  need(what) { if (this.ok()) return true; this.offer(what); return false; },
+  badge() { return this.ok() ? null : h('span', { class: 'pbadge' }, '★'); },
+  offer(what) {
+    stopAllAudio?.();
+    const st = this.st;
+    const feats = h('div', { class: 'pfeats' }, PREMIUM_FEATS.map(([k, ic, t, d]) => h('div', { class: 'pfeat' + (k === what ? ' hi' : '') }, h('span', { class: 'pic' }, icon(ic)), h('span', {}, h('b', {}, t), h('small', {}, d)))));
+    const buy = h('button', { class: 'btn primary big', disabled: st.ready ? null : true, onclick: () => { try { AndroidBilling.buy(); } catch { toast('Achat impossible pour l’instant'); } } },
+      st.pending ? 'Paiement en attente…' : st.price ? `Débloquer Premium · ${st.price}` : 'Prix en cours de chargement…');
+    this.close = sheet('Bibliothèque Premium', h('div', { class: 'premium' },
+      h('p', {}, 'Lire, écouter et ranger tes livres reste gratuit, sans publicité. Premium ajoute :'), feats,
+      h('div', { class: 'pbuy' }, buy, h('small', {}, 'Paiement unique par Google Play, valable pour toujours sur tes appareils Android avec le même compte Google.')),
+      h('button', { class: 'btn small', onclick: () => { try { AndroidBilling.restore(); toast('Vérification de tes achats…'); } catch {} } }, 'J’ai déjà payé : restaurer mon achat')));
+    if (window.AndroidBilling && !st.ready) try { AndroidBilling.restore(); } catch {}
+  },
+};
+window.__premium = (j) => {
+  let x; try { x = JSON.parse(j); } catch { return; }
+  const was = Premium.ok(); Premium.st = { ...Premium.st, ...x };
+  if (!was && Premium.ok()) { Premium.close?.(); Premium.close = null; toast('Merci ! Bibliothèque Premium est activée'); if (!$('.reader')) renderLibrary(); return; }
+  if (x.event === 'pending') toast('Paiement en attente : Premium s’activera dès qu’il sera confirmé');
+  if (x.event === 'error') toast('Le paiement n’a pas abouti');
+  if (Premium.close && $('.premium')) { Premium.close(); Premium.close = null; if (!Premium.ok()) Premium.offer(); } // prix ou état mis à jour
+};
 // ================= Menu « Ajouter » =================
 // Deux grands choix évidents (un livre, un dossier), puis les autres façons ; les catalogues viennent après
 function openAddMenu() {
@@ -3080,6 +3137,7 @@ function shareLibraryPick() {
     h('button', { class: 'libpick', onclick: () => { close(); shareLibrary(l.id); } }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[l.decor] || '#555' } }), h('span', { class: 'libtxt' }, h('b', {}, l.name)))))));
 }
 function shareLibrary(id) {
+  if (!Premium.need('share')) return;
   const lib = libs().find((x) => x.id === id); if (!lib) return;
   const books = S.books.filter((b) => !b.trashed && (b.lib || 'main') === id);
   if (!books.length) return toast('Cette bibliothèque est vide');
@@ -3519,6 +3577,7 @@ function stopAllAudio() {
   try { if (window.AndroidAuto?.profStop) AndroidAuto.profStop(); } catch {}
 }
 function openSummary(b) {
+  if (!Premium.need('summary')) return;
   stopAllAudio();
   const s = b.summary;
   if (s?.text) {
@@ -3739,6 +3798,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
     return true;
   },
   async open(b) {
+    if (!Premium.need('prof')) return;
     if ((await this.go(b)) === false) return;
     const info = this.info(b.id);
     const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
@@ -4272,7 +4332,7 @@ const TONES = [
 const VOICE_NAMES = ['Camille', 'Dominique', 'Sacha', 'Alex', 'Charlie', 'Morgan', 'Lou', 'Eden', 'Noa', 'Claude', 'Ariel', 'Jo', 'Sam', 'Andréa', 'Maxime', 'Gaby'];
 const REGION = { CA: 'Québec', FR: 'France', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg' };
 const Voice = {
-  tone: () => store.get('tone', 'naturel'),
+  tone: () => { const t = store.get('tone', 'naturel'); return PREMIUM_TONES.has(t) && !Premium.ok() ? 'naturel' : t; },
   toneOf: (k) => TONES.find((t) => t[0] === k) || TONES[2],
   current: () => store.get('voice', ''),
   list() {
@@ -4406,8 +4466,9 @@ function openVoices() {
     next();
   };
   const tones = h('div', { class: 'tonegrid' }, TONES.map(([k, name, desc]) => h('button', { class: 'tonecard' + (k === tone ? ' sel' : ''), onclick: (e) => {
+    if (PREMIUM_TONES.has(k) && !Premium.need('tones')) return;
     tone = k; store.set('tone', k); if (window.__reader?.toneBtn) window.__reader.toneBtn.replaceChildren(icon('voice'), ' ', Voice.toneOf(k)[1]); $$('.tonecard', tones).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); preview(cur, k);
-  } }, h('b', {}, name), h('small', {}, desc))));
+  } }, h('b', {}, name, PREMIUM_TONES.has(k) ? Premium.badge() : null), h('small', {}, desc))));
   const row = (v) => h('div', { class: 'vrow' + ((v ? v.name : '') === cur ? ' sel' : '') },
     h('button', { class: 'vpick', onclick: (e) => {
       cur = v ? v.name : ''; store.set('voice', cur); if (window.__reader) window.__reader.voice = cur;
@@ -4555,6 +4616,7 @@ const Ocr = {
   },
   async run(b, from = 1) {
     if (this.jobs[b.id]) return toast('La conversion est déjà en cours');
+    if (!Premium.ok()) { const free = store.get('ocrFree', ''); if (free && free !== b.id) { Premium.offer('ocr'); return; } store.set('ocrFree', b.id); } // un livre offert pour essayer
     const total = b.pages; const pages = await LocalAPI.ocrGet(b.id); while (pages.length < total) pages.push(null);
     const ctl = progressPanel(`Conversion en texte · ${b.title}`); this.jobs[b.id] = ctl;
     const order = []; for (let i = 0; i < total; i++) order.push(((from - 1 + i) % total) + 1); // à partir de la page en cours

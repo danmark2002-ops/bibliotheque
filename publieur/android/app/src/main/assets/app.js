@@ -76,8 +76,12 @@ const KNOWN = {
     purpose: 'Votre bibliothèque personnelle : lisez et écoutez vos livres, en français',
     features: ['Lit les PDF, EPUB, Word, Kindle, BD et livres audio', 'Lecture à voix haute avec voix québécoise, vitesse réglable et minuterie', 'Tourne les pages comme un vrai livre', 'Convertit les pages photographiées en texte', 'Livres gratuits du domaine public intégrés', 'Partage de votre bibliothèque avec vos proches'],
     ads: false, account: false, sends: false,
+    model: 'premium', price: '4.99',
+    premium: { title: 'Bibliothèque Premium', description: 'Le Professeur, les résumés IA, les tons de voix expressifs, la conversion photo → texte et le partage de bibliothèques. Paiement unique.' },
   },
 };
+const PREMIUM_ID = 'premium', PREMIUM_OPT = 'achat-unique';
+const hasBilling = (perms) => (perms || []).includes('com.android.vending.BILLING');
 
 // ---------- Google : connexion et appels à l'API Android Publisher ----------
 const API = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/';
@@ -115,6 +119,8 @@ function explain(e, ctx = {}) {
   const m = String(e.raw || e.message || ''); const st = e.status;
   const link = (m.match(/https:\/\/console\.(developers|cloud)\.google\.com\/[^\s"]+/) || [])[0];
   if (e.code === 'nokey') return { title: 'La clé d’accès n’est pas encore importée', detail: 'C’est l’étape 2 de la préparation du compte.', go: 'setup' };
+  if (/merchant|payments profile|payment profile|profil de paiement|not.*monetiz/i.test(m)) return { title: 'Profil de paiement requis', detail: 'Pour vendre Premium, Google doit savoir où verser l’argent : Play Console → Paramètres → Profil de paiement (identité et compte bancaire, une seule fois). Ensuite, touche « Créer Premium chez Google ».', url: L.console, urlLabel: 'Ouvrir la Play Console' };
+  if (/BILLING permission|billing permission|com\.android\.vending\.BILLING/i.test(m)) return { title: 'Le paiement n’est pas encore dans l’app', detail: 'Google exige d’abord une version de l’app qui contient le paiement Google Play.', copy: `Ajoute le paiement Google Play (achat unique « premium ») dans ${ctx.label || 'mon application'} et recompile le .aab.` };
   if (/invalid_grant|invalid_client|Invalid JWT|account not found/i.test(m)) return { title: 'La clé d’accès est refusée par Google', detail: 'Elle a peut-être été supprimée ou désactivée. Crée une nouvelle clé JSON et importe-la (étape 2).', go: 'setup' };
   if (/has not been used in project|is disabled|SERVICE_DISABLED|accessNotConfigured/i.test(m)) return { title: 'L’API Google Play n’est pas activée', detail: 'Active-la en un clic, attends une minute, puis réessaie.', url: link || L.api, urlLabel: 'Activer l’API' };
   if (/Package not found|not found: .*applications|No application was found/i.test(m) || (st === 404 && ctx.step === 'edit')) return { title: 'L’application n’existe pas encore dans la Play Console', detail: 'Google exige de la créer une première fois à la main (environ 1 minute). Le Publieur te guide.', go: 'create' };
@@ -251,6 +257,7 @@ function listingFor(info, a) {
   if (!a.account) promises.push('aucun compte à créer');
   if (!a.sends) promises.push('vos données restent sur votre appareil');
   if (promises.length) parts.push(promises[0][0].toUpperCase() + promises.join(', ').slice(1) + '.');
+  if (a.model === 'premium') parts.push(`Gratuite. ${(a.premium || k.premium || {}).title || 'Une version Premium'} est offerte en option, par un paiement unique : ${((a.premium || k.premium || {}).description || 'des fonctions avancées en plus.').replace(/ Paiement unique\.$/, '')}`);
   return { title: name, shortDescription: short, fullDescription: parts.join('\n\n').slice(0, 4000) };
 }
 function policyFor(info, a) {
@@ -465,9 +472,10 @@ function vListing(v) {
   const known = KNOWN[info.package]?.policy;
   const ok = shots.length >= 2 && L1.title && L1.shortDescription && L1.fullDescription.length >= 10;
   return [
-    h('div', { class: 'card' }, h('h2', {}, '3 questions, un clic chacune'),
+    h('div', { class: 'card' }, h('h2', {}, 'Questions rapides, un clic chacune'),
       h('label', { class: 'f' }, 'En une phrase, à quoi sert l’app ? (facultatif)'), purpose,
       yn('ads', 'L’app affiche-t-elle de la publicité ?'), yn('account', 'Faut-il un compte pour l’utiliser ?'), yn('sends', 'Envoie-t-elle des données personnelles à un serveur ?')),
+    vModel(v),
     h('div', { class: 'card' }, h('h2', {}, 'Textes de la fiche (français, Canada)'), field('title', 'Nom', 30), field('shortDescription', 'Description courte', 80), field('fullDescription', 'Description complète', 4000, true)),
     h('div', { class: 'card' }, imgs),
     h('div', { class: 'card' }, h('h2', {}, `Captures d’écran (${shots.length}/8)`), h('p', {}, 'Google en exige au moins 2. Fais des captures de l’app sur ton téléphone, puis choisis-les : le Publieur les met au bon format.'),
@@ -488,6 +496,52 @@ function vListing(v) {
       save(); view.step = app.created ? 'send' : 'create'; render(); scrollTo(0, 0);
     } }, ok ? 'Envoyer à Google' : 'Il manque des captures d’écran')),
   ];
+}
+
+// ---------- Modèle de revenus : gratuite, ou gratuite + Premium (achat unique) ----------
+function vModel(v) {
+  const info = v.info, a = v.answers, k = KNOWN[info.package] || {};
+  if (!a.model) a.model = hasBilling(info.permissions) ? 'premium' : 'free';
+  if (!a.premium) a.premium = { ...(k.premium || { title: `${info.label} Premium`, description: 'Toutes les fonctions avancées, pour toujours. Paiement unique.' }) };
+  if (!a.price) a.price = k.price || '4.99';
+  const pick = (m) => { a.model = m; if (!v.edited) v.listing = listingFor(info, a); render(); };
+  const opt = (m, title, sub) => h('button', { class: 'choice' + (a.model === m ? ' on' : ''), onclick: () => pick(m) }, h('b', {}, title), h('small', {}, sub));
+  const out = [h('h2', {}, 'Comment l’app rapporte-t-elle ?'),
+    h('div', { class: 'choices' }, opt('free', 'Gratuite', 'Aucun paiement'), opt('premium', 'Gratuite + Premium', 'Achat unique dans l’app pour débloquer des fonctions')),
+    h('p', { class: 'muted' }, 'Attention : une app publiée gratuite ne pourra jamais devenir payante. Le modèle « Gratuite + Premium » garde cette porte ouverte.')];
+  if (a.model === 'premium') {
+    const price = h('input', { class: 't', inputmode: 'decimal', value: a.price, onchange: (e) => { const n = Number(String(e.target.value).replace(',', '.')); if (n >= 0.99 && n <= 400) { a.price = n.toFixed(2); } else { toast('Prix entre 0,99 $ et 400 $'); e.target.value = a.price; } } });
+    const t = h('input', { class: 't', maxlength: 55, value: a.premium.title, onchange: (e) => { a.premium.title = e.target.value.trim() || a.premium.title; } });
+    const d = h('textarea', { class: 't', maxlength: 200, onchange: (e) => { a.premium.description = e.target.value.trim(); } }); d.value = a.premium.description;
+    out.push(h('label', { class: 'f' }, 'Prix de Premium ($ CA, taxes en sus)'), price,
+      h('p', { class: 'muted' }, 'Google convertit ce prix automatiquement pour chaque pays.'),
+      h('label', { class: 'f' }, 'Nom affiché au moment de l’achat'), t,
+      h('label', { class: 'f' }, 'Ce que Premium débloque'), d);
+    if (!hasBilling(info.permissions)) out.push(h('div', { class: 'warnbox' }, h('b', {}, 'Le paiement n’est pas encore dans ce fichier.'), ' Google ne permet de créer Premium qu’avec une version de l’app qui contient le paiement Google Play.',
+      h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => copy(`Ajoute une version Premium (achat unique « premium », paiement Google Play) à l'application ${info.label} et recompile le .aab.`, 'Demande pour Claude') }, 'Copier la demande pour Claude'))));
+  }
+  return h('div', { class: 'card' }, out);
+}
+
+// Crée (ou met à jour) le produit Premium chez Google, avec le prix converti pour tous les pays, puis l'active
+async function createPremium(pkg, app) {
+  const a = app.answers || {}, prem = a.premium || {};
+  const amount = Number(a.price || '4.99'), units = Math.floor(amount), nanos = Math.round((amount - units) * 100) * 10000000;
+  const conv = await G.req('POST', `${pkg}/pricing:convertRegionPrices`, { price: { currencyCode: 'CAD', units: String(units), nanos } });
+  const regions = Object.values(conv.convertedRegionPrices || {}).map((r) => ({ regionCode: r.regionCode, price: r.price, availability: 'AVAILABLE' }));
+  if (!regions.length) throw new Error('Conversion des prix impossible');
+  const desc = (prem.description || '').slice(0, 200), title = (prem.title || 'Premium').slice(0, 55);
+  const body = {
+    packageName: pkg, productId: PREMIUM_ID,
+    listings: [{ languageCode: 'fr-CA', title, description: desc }, { languageCode: 'en-US', title: title.replace(/ ?Premium$/, '') + ' Premium', description: 'Unlocks all advanced features, forever. One-time payment.' }],
+    purchaseOptions: [{ purchaseOptionId: PREMIUM_OPT, buyOption: { legacyCompatible: true, multiQuantityEnabled: false }, regionalPricingAndAvailabilityConfigs: regions,
+      newRegionsConfig: conv.convertedOtherRegionsPrice ? { usdPrice: conv.convertedOtherRegionsPrice.usdPrice, eurPrice: conv.convertedOtherRegionsPrice.eurPrice, availability: 'AVAILABLE' } : undefined }],
+  };
+  const ver = encodeURIComponent(conv.regionVersion?.version || '2022/02');
+  await G.req('PATCH', `${pkg}/onetimeproducts/${PREMIUM_ID}?allowMissing=true&updateMask=listings,purchaseOptions&regionsVersion.version=${ver}`, body);
+  await G.req('POST', `${pkg}/oneTimeProducts/${PREMIUM_ID}/purchaseOptions:batchUpdateStates`, { requests: [{ activatePurchaseOptionRequest: { packageName: pkg, productId: PREMIUM_ID, purchaseOptionId: PREMIUM_OPT } }] });
+  const ca = conv.convertedRegionPrices?.CA?.price;
+  return { price: ca ? `${Number(ca.units) + (ca.nanos || 0) / 1e9} $ CA` : `${a.price} $ CA` };
 }
 
 function vCreate(v) {
@@ -595,6 +649,11 @@ async function runPublish(v, log, bar, result, card) {
     try { await G.req('POST', `${pkg}/edits/${editId}:commit`); }
     catch (e) { if (/changesNotSentForReview|sent for review automatically|cannot be sent for review/i.test(e.raw || e.message)) { manual = true; await G.req('POST', `${pkg}/edits/${editId}:commit?changesNotSentForReview=true`); } else throw e; }
     editId = null; cur.ok(); pct(100);
+    if (app.answers?.model === 'premium') {
+      cur = step('Produit Premium chez Google');
+      try { const r = await createPremium(pkg, app); app.premiumReady = true; app.premiumError = null; cur.ok(`Premium en vente : ${r.price}`); }
+      catch (e) { app.premiumReady = false; app.premiumError = explain(e, { label: info.label }); cur.err(); cur.text('Premium : ' + app.premiumError.title + ' (voir la fiche de l’app)'); cur = null; }
+    }
     Object.assign(app, { sent: Date.now(), draft, manual, lastVersionCode: Number(up.versionCode || info.versionCode), lastVersionName: info.versionName, track, created: true, permissions: info.permissions });
     save();
     card.firstChild.textContent = 'Envoyé à Google ✅';
@@ -619,7 +678,11 @@ function todoFor(a) {
   t.push({ id: 'policy', title: 'Politique de confidentialité', where: 'Contenu de l’app → Règles relatives à la confidentialité', answers: [['Adresse', policy || 'Demande à Claude de la mettre en ligne (bouton dans la fiche)']] });
   t.push({ id: 'access', title: 'Accès à l’application', where: 'Contenu de l’app → Accès aux applications', answers: [['Réponse', ans.account ? 'Certaines fonctionnalités sont limitées : fournir un compte de test' : 'Toutes les fonctionnalités sont disponibles sans restriction d’accès']] });
   t.push({ id: 'ads', title: 'Annonces', where: 'Contenu de l’app → Annonces', answers: [['Réponse', ans.ads ? 'Oui, mon application contient des annonces' : 'Non, mon application ne contient pas d’annonces']] });
-  t.push({ id: 'rating', title: 'Classification du contenu', where: 'Contenu de l’app → Classification du contenu → Commencer le questionnaire', answers: [['Courriel', S.contactEmail || '(ton courriel)'], ['Catégorie', k.category === 'Livres et références' ? 'Référence, actualités ou éducation' : 'Toutes les autres catégories d’applications'], ['Violence, sexualité, langage, drogues, jeux d’argent', 'Non à chaque question'], ['Échanges entre utilisateurs', 'Non (sauf si l’app permet de discuter ou d’échanger avec des inconnus)'], ['Partage de la position', p.some((x) => /LOCATION/.test(x)) ? 'Oui' : 'Non'], ['Achats numériques', 'Non']] });
+  t.push({ id: 'rating', title: 'Classification du contenu', where: 'Contenu de l’app → Classification du contenu → Commencer le questionnaire', answers: [['Courriel', S.contactEmail || '(ton courriel)'], ['Catégorie', k.category === 'Livres et références' ? 'Référence, actualités ou éducation' : 'Toutes les autres catégories d’applications'], ['Violence, sexualité, langage, drogues, jeux d’argent', 'Non à chaque question'], ['Échanges entre utilisateurs', 'Non (sauf si l’app permet de discuter ou d’échanger avec des inconnus)'], ['Partage de la position', p.some((x) => /LOCATION/.test(x)) ? 'Oui' : 'Non'], ['Achats numériques', ans.model === 'premium' ? 'Oui (achat unique dans l’app)' : 'Non']] });
+  if (ans.model === 'premium') {
+    t.push({ id: 'payments', title: 'Profil de paiement (pour recevoir l’argent de Premium)', where: 'Paramètres → Profil de paiement (ou « Configurer un compte marchand »)', answers: [['Type de compte', 'Individuel'], ['À fournir', 'Nom, adresse, compte bancaire pour les versements (une seule fois)'], ['Taxes', 'Au Canada, Google perçoit et verse lui-même les taxes de vente sur les achats : vérifie simplement la page Paramètres → Taxes']] });
+    t.push({ id: 'licence', title: 'Tester Premium gratuitement', where: 'Paramètres → Test des licences', answers: [['Testeurs de licence', S.contactEmail || 'Ton adresse Gmail'], ['Résultat', 'Tes achats de Premium seront des achats de test, jamais facturés']] });
+  }
   t.push({ id: 'audience', title: 'Public cible', where: 'Contenu de l’app → Public cible et contenu', answers: [['Tranches d’âge', '18 ans et plus (évite les règles strictes pour les enfants)'], ['Attire involontairement les enfants ?', 'Non']] });
   t.push({ id: 'safety', title: 'Sécurité des données', where: 'Contenu de l’app → Sécurité des données', answers: ans.sends ? [['Collecte ou partage de données', 'Oui — indique les types envoyés (Claude peut t’aider à remplir)']] : [['L’application collecte-t-elle ou partage-t-elle des données ?', 'Non'], ['À vérifier', 'Si une fonction envoie quelque chose à un service externe (traduction, IA en ligne, partage de fichier), Google peut le compter comme une collecte. En cas de doute, demande à Claude de remplir ce formulaire avec toi.']] });
   t.push({ id: 'gov', title: 'Applis gouvernementales, finances, santé', where: 'Contenu de l’app', answers: [['Application gouvernementale', 'Non'], ['Fonctionnalités financières', 'Mon application ne propose aucune fonctionnalité financière'], ['Santé', 'Mon application ne propose aucune fonctionnalité de santé']] });
@@ -637,6 +700,11 @@ function vApp(v) {
   const out = [header(a.label, a.pkg), h('div', { class: 'card' }, h('div', { class: 'app-head' }, a.iconUrl ? h('img', { src: a.iconUrl, alt: '' }) : h('div', { class: 'ph' }, initials(a.label)),
     h('div', {}, h('h2', {}, a.label), statusChip(a), h('br'), h('small', {}, a.lastVersionName ? `Dernière version envoyée : ${a.lastVersionName} (${a.lastVersionCode})` : 'Pas encore envoyée'))))];
   if (!a.sent) { out.push(h('div', { class: 'row' }, h('button', { class: 'btn primary big', onclick: pickApp }, 'Choisir le fichier à publier'))); return out; }
+  if (a.answers?.model === 'premium') out.push(h('div', { class: 'card' + (a.premiumReady ? '' : ' warn') }, h('h2', {}, a.premiumReady ? '✅ Premium est en vente' : '⏳ Premium n’est pas encore en vente'),
+    a.premiumReady ? h('p', {}, `${a.answers.premium?.title || 'Premium'} : ${String(a.answers.price).replace('.', ',')} $ CA (prix converti pour chaque pays).`)
+      : [a.premiumError ? h('p', {}, h('b', {}, a.premiumError.title), ' — ', a.premiumError.detail) : null,
+        h('div', { class: 'row' }, a.premiumError?.url ? h('button', { class: 'btn link small', onclick: () => open(a.premiumError.url) }, (a.premiumError.urlLabel || 'Ouvrir') + ' ↗') : null,
+          h('button', { class: 'btn primary small', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Création…'; try { const r = await createPremium(a.pkg, a); a.premiumReady = true; a.premiumError = null; toast('Premium en vente : ' + r.price); } catch (err) { a.premiumError = explain(err, { label: a.label }); toast(a.premiumError.title); } save(); render(); } }, 'Créer Premium chez Google'))]));
   const list = todoFor(a), done = list.filter((x) => a.todo[x.id]).length;
   if (!a.live) out.push(h('div', { class: 'card' }, h('h2', {}, `Dans la Play Console : ${done}/${list.length}`), h('p', {}, 'Google réserve ces réponses à la Play Console. Ouvre-la, va à l’endroit indiqué et copie la réponse. Coche quand c’est fait.'),
     h('div', { class: 'row' }, h('button', { class: 'btn link small', onclick: () => open(L.console) }, 'Ouvrir la Play Console ↗')),

@@ -967,3 +967,17 @@ svg.rot-r { transform: rotate(-90deg); }
   .book:hover, .book:focus-visible, .book:active { transform: none; }
   .book:hover .cover, .book:focus-visible .cover { transform: none; box-shadow: 4px 6px 12px -3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4); }
 }
+
+/* ---------- Premium ---------- */
+.premium p { margin: 0 0 12px; color: var(--ink-2); }
+.pfeats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.pfeat { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--glass-line); }
+.pfeat.hi { border-color: var(--brass); background: rgba(212,171,106,.08); }
+.pfeat .pic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(212,171,106,.14); color: var(--brass); }
+.pfeat .pic svg { width: 18px; height: 18px; }
+.pfeat b { display: block; font-size: 15px; }
+.pfeat small { display: block; color: var(--ink-2); font-size: 12.5px; line-height: 1.35; }
+.pbuy { display: flex; flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 12px; }
+.pbuy .btn.big { height: 50px; justify-content: center; font-size: 16px; }
+.pbuy small { color: var(--ink-3); font-size: 12px; text-align: center; }
+.pbadge { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--brass); vertical-align: 2px; }

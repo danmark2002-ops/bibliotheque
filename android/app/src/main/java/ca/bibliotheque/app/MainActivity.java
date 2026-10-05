@@ -94,6 +94,9 @@ public class MainActivity extends Activity {
         web.addJavascriptInterface(new ShareBridge(), "AndroidShare");
         web.addJavascriptInterface(new WebBridge(), "AndroidWeb");
         web.addJavascriptInterface(new OcrBridge(), "AndroidOcr");
+        premium = new Premium(this, j -> js("__premium", j));
+        web.addJavascriptInterface(new BillingBridge(), "AndroidBilling");
+        premium.start();
 
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -821,6 +824,16 @@ public class MainActivity extends Activity {
     }
 
     // ---------- Reconnaissance de texte (pages photographiées) : Google ML Kit, sur l'appareil ----------
+    // ---------- Version Premium (paiement unique Google Play) ----------
+    private Premium premium;
+
+    class BillingBridge {
+        /** {"play":bool,"premium":bool,"price":"4,99 $","pending":bool,"ready":bool} */
+        @JavascriptInterface public String state() { return premium.state(null); }
+        @JavascriptInterface public void buy() { premium.buy(); }
+        @JavascriptInterface public void restore() { premium.refresh(); }
+    }
+
     class OcrBridge {
         private com.google.mlkit.vision.text.TextRecognizer rec;
 
@@ -1368,6 +1381,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (premium != null) premium.refresh();
     }
 
     @Override
