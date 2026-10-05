@@ -378,6 +378,27 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Copie un fichier (le .aab) dans Téléchargements/Publieur, pour le premier envoi fait à la main dans la Play Console. */
+        @JavascriptInterface public boolean copyToDownloads(String src, String name, String mimeType) {
+            try (InputStream in = new FileInputStream(src)) {
+                OutputStream os;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues v = new ContentValues();
+                    v.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                    v.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                    v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Publieur");
+                    Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                    if (u == null) return false;
+                    os = getContentResolver().openOutputStream(u);
+                } else {
+                    File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Publieur"); d.mkdirs();
+                    os = new FileOutputStream(new File(d, name));
+                }
+                try (OutputStream o = os) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) o.write(buf, 0, n); }
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
         /** Enregistre un fichier dans Téléchargements (politique de confidentialité, sauvegarde…). */
         @JavascriptInterface public boolean saveDownload(String name, String mimeType, String b64) {
             try {
