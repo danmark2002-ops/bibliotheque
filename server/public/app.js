@@ -2243,12 +2243,25 @@ const TTS = {
     const u = new SpeechSynthesisUtterance(text);
     const v = this.voices().find((x) => x.name === voiceName) || this.voices().find((x) => /^fr/i.test(x.lang));
     if (v) u.voice = v; u.lang = v?.lang || 'fr-FR'; u.rate = rate; u.pitch = pitch;
-    u.onend = () => onend && onend(); u.onerror = (e) => { if (e.error !== 'interrupted' && e.error !== 'canceled') onend && onend(); };
+    // Navigateur (iPhone, Chrome) : la fin de phrase peut se perdre ; on surveille aussi la voix elle-même
+    let done = false; const fin = () => { if (done) return; done = true; clearInterval(this.watch); onend && onend(); };
+    u.onend = fin; u.onerror = (e) => { if (e.error !== 'interrupted' && e.error !== 'canceled') fin(); };
+    this.u = u; // garder la phrase : Safari l'oublie sinon, et la lecture s'arrête après la première
+    clearInterval(this.watch); const t0 = Date.now();
+    this.watch = setInterval(() => { if (Date.now() - t0 > 1500 && !speechSynthesis.speaking && !speechSynthesis.pending) fin(); }, 700);
+    try { speechSynthesis.resume(); } catch {}
     speechSynthesis.speak(u);
   },
-  stop() { this.cb = {}; if (this.native()) AndroidTTS.stop(); else if (window.speechSynthesis) speechSynthesis.cancel(); },
+  // iPhone et Chrome n'autorisent la voix que lancée au moment d'un toucher : on la débloque au premier toucher
+  unlocked: false,
+  unlock() {
+    if (this.unlocked || this.native() || !window.speechSynthesis) return;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'fr-FR'; speechSynthesis.speak(u); this.unlocked = true; } catch {}
+  },
+  stop() { this.cb = {}; clearInterval(this.watch); if (this.native()) AndroidTTS.stop(); else if (window.speechSynthesis) speechSynthesis.cancel(); },
   supported() { return this.native() || 'speechSynthesis' in window; },
 };
+['pointerdown', 'touchend', 'click', 'keydown'].forEach((ev) => document.addEventListener(ev, () => TTS.unlock(), { capture: true, passive: true }));
 // ---- Voix et ton : la voix du téléphone, avec une intonation qui change selon le ton choisi ----
 const TONES = [
   ['calme', 'Calme', 'Posé et doux, pour lire le soir', { p: 0.96, r: 0.88, v: 0.012 }, 'La nuit tombait doucement sur la ville. Au loin, une seule fenêtre restait allumée… On pouvait enfin lire en paix.'],
