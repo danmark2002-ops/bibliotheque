@@ -1,0 +1,82 @@
+name: Construire le Publieur
+
+on:
+  push:
+    paths:
+      - 'publieur/**'
+      - '.github/workflows/publieur.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 */5 * *' # garde la clé de signature en vie dans le cache (effacé après 7 jours sans usage)
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # La clé de signature n'est jamais dans le dépôt (public) : elle vit dans le cache privé des Actions.
+      - name: Clé de signature (cache privé)
+        id: ks
+        uses: actions/cache@v4
+        with:
+          path: ~/.publieur-ks
+          key: publieur-keystore-v1
+
+      - name: Créer la clé la première fois
+        if: steps.ks.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.publieur-ks
+          PASS=$(openssl rand -hex 24)
+          echo -n "$PASS" > ~/.publieur-ks/pass
+          keytool -genkeypair -keystore ~/.publieur-ks/publieur.jks -storepass "$PASS" -keypass "$PASS" -alias publieur \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Publieur, O=Publieur, C=CA"
+
+      - name: Seulement garder la clé en vie
+        if: github.event_name == 'schedule'
+        run: echo "Cache rafraîchi"
+
+      - uses: actions/setup-java@v4
+        if: github.event_name != 'schedule'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: github.event_name != 'schedule'
+        with:
+          gradle-version: '8.9'
+
+      - name: Compiler
+        if: github.event_name != 'schedule'
+        working-directory: publieur/android
+        run: |
+          set -o pipefail
+          export PUBLIEUR_KS=$HOME/.publieur-ks/publieur.jks
+          export PUBLIEUR_KS_PASS=$(cat $HOME/.publieur-ks/pass)
+          gradle assembleRelease --no-daemon 2>&1 | tee ../../publieur-build.log
+
+      - name: Journal d'erreurs (branche build-log-publieur)
+        if: failure() && github.event_name != 'schedule'
+        run: |
+          git config user.name "build-bot"; git config user.email "build-bot@users.noreply.github.com"
+          tail -c 60000 publieur-build.log > /tmp/build.log
+          git checkout --orphan build-log-publieur && git rm -rqf . && cp /tmp/build.log build.log
+          git add build.log && git commit -qm "Journal ${{ github.run_number }}" && git push -f origin build-log-publieur
+
+      - name: Renommer
+        if: github.event_name != 'schedule'
+        run: cp publieur/android/app/build/outputs/apk/release/app-release.apk Publieur.apk
+
+      - name: Publier dans « Releases »
+        if: github.event_name != 'schedule'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: publieur-${{ github.run_number }}
+          name: Publieur — APK ${{ github.run_number }}
+          body: Télécharge Publieur.apk depuis ton téléphone Android et installe-le.
+          files: Publieur.apk
+          make_latest: false

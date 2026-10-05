@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+// La clé de signature n'est jamais dans le dépôt (public) : elle est créée par le serveur de compilation
+// et gardée dans son cache privé (voir .github/workflows/publieur.yml).
+def ks = file(System.getenv('PUBLIEUR_KS') ?: 'absent.jks')
+
+android {
+    namespace 'ca.publieur.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ca.publieur.app'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1'
+    }
+
+    signingConfigs {
+        release {
+            storeFile ks
+            storePassword System.getenv('PUBLIEUR_KS_PASS') ?: ''
+            keyAlias 'publieur'
+            keyPassword System.getenv('PUBLIEUR_KS_PASS') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig ks.exists() ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
