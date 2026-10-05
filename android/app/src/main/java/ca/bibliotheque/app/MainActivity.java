@@ -79,6 +79,7 @@ public class MainActivity extends Activity {
         s.setUserAgentString(s.getUserAgentString() + " BibliothequeApp/2.0");
 
         web.addJavascriptInterface(new TtsBridge(), "AndroidTTS");
+        web.addJavascriptInterface(new PdfBridge(), "AndroidPdf");
         web.addJavascriptInterface(new FolderBridge(), "AndroidFolder");
         web.addJavascriptInterface(new OpenBridge(), "AndroidOpen");
         web.addJavascriptInterface(new AiBridge(), "AndroidAI");
@@ -97,6 +98,7 @@ public class MainActivity extends Activity {
                 if (!HOST.equals(u.getHost())) return null; // polices Google, etc. : réseau normal
                 String path = u.getPath();
                 if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("lib"), u.getQueryParameter("id"));
+                if ("/__pdfpage".equals(path)) return pdfPage(u);
                 if (RECU_PATH.equals(path)) return recuFile(u.getQueryParameter("f"));
                 if (WEB_PATH.equals(path)) return privateFile(webDir(), u.getQueryParameter("f"));
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
@@ -318,6 +320,95 @@ public class MainActivity extends Activity {
         for (int i = 0; i < dirs.size(); i++) {
             File d = dirs.get(i);
             walkPhone(d, rel.isEmpty() ? d.getName() : rel + "/" + d.getName(), depth + 1, out, from + span * i / dirs.size(), span / dirs.size());
+        }
+    }
+
+    // ---------- Pages PDF dessinées par le moteur d'Android (PDFium, celui de Chrome) ----------
+    // Bien plus tolérant que pdf.js envers les polices abîmées des PDF : fin des pages blanches ou à moitié écrites.
+    private final Object pdfLock = new Object();
+    private String pdfKey;
+    private android.graphics.pdf.PdfRenderer pdfR;
+    private android.os.ParcelFileDescriptor pdfFd;
+
+    private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+    private static String safeId(String id) { return id == null ? "" : id.replaceAll("[^\\w-]", "_"); }
+
+    private void pdfClose() {
+        try { if (pdfR != null) pdfR.close(); } catch (Exception ignored) { }
+        try { if (pdfFd != null) pdfFd.close(); } catch (Exception ignored) { }
+        pdfR = null; pdfFd = null; pdfKey = null;
+    }
+
+    private WebResourceResponse pdfError(int code, String msg) {
+        return new WebResourceResponse("text/plain", "UTF-8", code, "Erreur", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(String.valueOf(msg).getBytes()));
+    }
+
+    private WebResourceResponse pdfPage(Uri u) {
+        String book = u.getQueryParameter("book"), lib = u.getQueryParameter("lib"), doc = u.getQueryParameter("doc");
+        int n, w;
+        try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+        w = Math.max(200, Math.min(2400, w));
+        synchronized (pdfLock) {
+            try {
+                String key = book != null ? "b:" + book : "d:" + lib + "|" + doc;
+                if (!key.equals(pdfKey)) {
+                    pdfClose();
+                    android.os.ParcelFileDescriptor fd;
+                    if (book != null) {
+                        File f = new File(pdfDir(), safeId(book) + ".pdf");
+                        if (!f.exists()) return pdfError(404, "absent");
+                        fd = android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                    } else {
+                        Uri tree = folderTree(lib);
+                        if (tree == null || doc == null) return pdfError(404, "dossier");
+                        fd = getContentResolver().openFileDescriptor(DocumentsContract.buildDocumentUriUsingTree(tree, doc), "r");
+                        if (fd == null) return pdfError(404, "dossier");
+                    }
+                    pdfFd = fd;
+                    pdfR = new android.graphics.pdf.PdfRenderer(fd);
+                    pdfKey = key;
+                }
+                if (n < 1 || n > pdfR.getPageCount()) return pdfError(404, "page");
+                android.graphics.pdf.PdfRenderer.Page pg = pdfR.openPage(n - 1);
+                try {
+                    float ratio = pg.getHeight() / (float) Math.max(1, pg.getWidth());
+                    // limite mémoire : une page ne dépasse pas ~6 millions de points
+                    if ((long) w * (long) (w * ratio) > 6_000_000L) w = (int) Math.sqrt(6_000_000.0 / ratio);
+                    int h = Math.max(1, Math.round(w * ratio));
+                    android.graphics.Bitmap bm = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                    bm.eraseColor(Color.WHITE);
+                    pg.render(bm, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(w * h / 4);
+                    bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, bo);
+                    bm.recycle();
+                    java.util.Map<String, String> hd = new java.util.HashMap<>();
+                    hd.put("Cache-Control", "no-store");
+                    return new WebResourceResponse("image/jpeg", null, 200, "OK", hd, new java.io.ByteArrayInputStream(bo.toByteArray()));
+                } finally { pg.close(); }
+            } catch (Throwable e) {
+                pdfClose(); // PDF protégé, abîmé ou illisible par Android : la page sera dessinée par l'autre moteur
+                return pdfError(500, e.getClass().getSimpleName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /** Copie d'un livre ajouté à la main, pour que le moteur d'Android puisse l'ouvrir. */
+    class PdfBridge {
+        private java.io.FileOutputStream out; private File tmp, dest;
+        @JavascriptInterface public boolean has(String id) { return new File(pdfDir(), safeId(id) + ".pdf").exists(); }
+        @JavascriptInterface public boolean begin(String id) {
+            try { dest = new File(pdfDir(), safeId(id) + ".pdf"); tmp = new File(pdfDir(), safeId(id) + ".tmp"); out = new java.io.FileOutputStream(tmp); return true; }
+            catch (Exception e) { return false; }
+        }
+        @JavascriptInterface public boolean append(String b64) {
+            try { out.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT)); return true; } catch (Exception e) { return false; }
+        }
+        @JavascriptInterface public boolean finish() {
+            try { out.close(); return tmp.renameTo(dest); } catch (Exception e) { return false; }
+        }
+        @JavascriptInterface public void remove(String id) {
+            synchronized (pdfLock) { if (("b:" + id).equals(pdfKey)) pdfClose(); }
+            new File(pdfDir(), safeId(id) + ".pdf").delete();
         }
     }
 

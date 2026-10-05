@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 26
         targetSdk 34
-        versionCode 46
-        versionName '5.5'
+        versionCode 47
+        versionName '5.6'
     }
 
     signingConfigs {

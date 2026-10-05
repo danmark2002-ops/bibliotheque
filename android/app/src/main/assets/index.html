@@ -1092,8 +1092,43 @@ window.LocalAPI = (() => {
       g.fillText(it.str, 0, 0); g.restore();
     }
   }
+  // ---------- Moteur PDF d'Android (PDFium) : le plus fiable sur téléphone ----------
+  const nativeBad = new Set(); const copying = new Map();
+  const b64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(blob); });
+  function nativeCopy(id) { // livre ajouté à la main : une copie que le moteur d'Android peut ouvrir (une seule fois)
+    if (window.AndroidPdf.has(id)) return Promise.resolve(true);
+    if (!copying.has(id)) copying.set(id, (async () => {
+      const rec = await get('blob', id); if (!rec?.file) return false;
+      if (!AndroidPdf.begin(id)) return false;
+      const CH = 3 * 256 * 1024;
+      for (let i = 0; i < rec.file.size; i += CH) if (!AndroidPdf.append(await b64(rec.file.slice(i, i + CH)))) return false;
+      return AndroidPdf.finish();
+    })().finally(() => copying.delete(id)));
+    return copying.get(id);
+  }
+  async function nativeFetch(q, n, width) {
+    const r = await fetch(`/__pdfpage?${q}&n=${n}&w=${Math.round(width)}`);
+    if (!r.ok) return null;
+    const bmp = await createImageBitmap(await r.blob());
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    c.getContext('2d').drawImage(bmp, 0, 0); bmp.close?.();
+    return c;
+  }
+  async function nativeRender(id, n, width) {
+    if (!window.AndroidPdf || nativeBad.has(id)) return null;
+    try {
+      const m = await get('meta', id); if (!m || m.kind !== 'pdf') return null;
+      let c = null;
+      if (m.src && m.src.startsWith('saf:')) c = await nativeFetch(`lib=${encodeURIComponent(m.lib || 'main')}&doc=${encodeURIComponent(m.src.slice(4))}`, n, width);
+      if (!c && await nativeCopy(id)) c = await nativeFetch(`book=${encodeURIComponent(id)}`, n, width);
+      if (!c) nativeBad.add(id); // PDF qu'Android ne sait pas ouvrir : pdf.js prend le relais
+      return c;
+    } catch { nativeBad.add(id); return null; }
+  }
   // Rendu vérifié : si la page contient du texte mais sort (presque) vide, on la redessine autrement
   async function smartRender(id, n, width) {
+    const nat = await nativeRender(id, n, width);
+    if (nat) return nat;
     const path = drawMode.get(id) === 'path';
     const doc = await pdfDoc(id, path);
     let c = await renderPage(doc, n, width);
@@ -1741,6 +1776,7 @@ window.LocalAPI = (() => {
       if (m === 'DELETE') {
         if (meta.src) { try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); if (!ig.includes(meta.src)) { ig.push(meta.src); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } } catch {} }
         await del('meta', meta.id); await del('blob', meta.id); await del('prog', meta.id); docs.delete(meta.id);
+        try { window.AndroidPdf?.remove(meta.id); } catch {}
         const u = coverUrls.get(meta.id); if (u) { URL.revokeObjectURL(u); coverUrls.delete(meta.id); }
         return { ok: true };
       }
