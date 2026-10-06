@@ -2706,7 +2706,7 @@ async function uploadFiles(files, { lib: target } = {}) {
     files = files.filter((f) => !pics.includes(f));
     const box = h('div', { class: 'up' }, h('b', {}, `Livre en photos · ${pics.length} page${pics.length > 1 ? 's' : ''}`), h('span', { class: 'muted' }, 'Préparation…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
     $('#uploads')?.append(box);
-    try { const m = await LocalAPI.uploadImages(pics, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? 'main' : curLib().id) }); added.push(m); box.remove(); toast(`« ${m.title} » est sur l'étagère · touche ⋮ puis « Convertir en texte » pour le lire en texte`); }
+    try { const m = await LocalAPI.uploadImages(pics, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? firstLibId() : curLib().id) }); added.push(m); box.remove(); toast(`« ${m.title} » est sur l'étagère · touche ⋮ puis « Convertir en texte » pour le lire en texte`); }
     catch (e) { $('span', box).textContent = e.message; setTimeout(() => box.remove(), 6000); }
   }
   const aud = window.LocalAPI ? files.filter((f) => AUDIO_EXT.test(f.name)) : [];
@@ -2714,15 +2714,15 @@ async function uploadFiles(files, { lib: target } = {}) {
     files = files.filter((f) => !aud.includes(f));
     const box = h('div', { class: 'up' }, h('b', {}, `Livre audio · ${aud.length} pistes`), h('span', { class: 'muted' }, 'Lecture…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
     $('#uploads')?.append(box);
-    try { const m = await LocalAPI.uploadAudio(aud, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? 'main' : curLib().id) }); added.push(m); box.remove(); toast(`« ${m.title} » est sur l'étagère`); }
+    try { const m = await LocalAPI.uploadAudio(aud, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? firstLibId() : curLib().id) }); added.push(m); box.remove(); toast(`« ${m.title} » est sur l'étagère`); }
     catch (e) { $('span', box).textContent = e.message; setTimeout(() => box.remove(), 6000); }
   }
   for (const f of files) {
-    if (window.LocalAPI?.findDup) { const d = await LocalAPI.findDup(f, target || (S.lib === 'all' ? 'main' : curLib().id)); if (d) { toast(`« ${d.title} » est déjà sur l'étagère`); added.push(d); continue; } }
+    if (window.LocalAPI?.findDup) { const d = await LocalAPI.findDup(f, target || (S.lib === 'all' ? firstLibId() : curLib().id)); if (d) { toast(`« ${d.title} » est déjà sur l'étagère`); added.push(d); continue; } }
     const box = h('div', { class: 'up' }, h('b', {}, f.name), h('span', { class: 'muted' }, 'Envoi…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
     $('#uploads')?.append(box);
     try {
-      if (window.LocalAPI) added.push(await LocalAPI.upload(f, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? 'main' : curLib().id) }));
+      if (window.LocalAPI) added.push(await LocalAPI.upload(f, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = msg; }, { lib: target || (S.lib === 'all' ? firstLibId() : curLib().id) }));
       else await new Promise((res, rej) => {
         const x = new XMLHttpRequest(); x.open('POST', '/api/books');
         x.setRequestHeader('X-Filename', encodeURIComponent(f.name));
@@ -2962,7 +2962,7 @@ const DECORS = [['noyer', 'Noyer'], ['chene', 'Chêne clair'], ['acajou', 'Acajo
 const DECOR_SWATCH = { noyer: '#6d4427', chene: '#cfa977', acajou: '#7a2f22', ebene: '#2a2a30', ardoise: '#3e5566', olivier: '#5d6233', bouleau: '#d9d4c7' };
 const FOLDER = { busy: false };
 const hasNativeFolder = () => !!window.AndroidFolder;
-function libs() {
+function libsRaw() {
   let l = store.get('libs', null);
   if (!l || !l.length) {
     let name = 'Ma Bibliothèque'; try { name = localStorage.getItem('bib.libname') || name; } catch {}
@@ -2970,7 +2970,14 @@ function libs() {
   }
   return l;
 }
-const saveLibs = (l) => store.set('libs', l);
+// Seulement les bibliothèques visibles : une bibliothèque supprimée n'apparaît plus nulle part
+function libs() {
+  const r = libsRaw(); const v = r.filter((x) => !x.gone);
+  if (v.length) return v;
+  const m = r.find((x) => x.id === 'main') || r[0]; delete m.gone; store.set('libs', r); return [m];
+}
+const saveLibs = (l) => store.set('libs', l.concat(libsRaw().filter((x) => x.gone && !l.some((y) => y.id === x.id))));
+const firstLibId = () => libs()[0].id;
 S.lib = store.get('lib', 'main');
 const curLib = () => (S.lib === 'all' ? null : libs().find((x) => x.id === S.lib) || libs()[0]);
 const libName = () => (curLib() ? curLib().name : 'Toutes les bibliothèques');
@@ -3138,7 +3145,7 @@ function tabMenu(id) {
   const lib = libs().find((x) => x.id === id); if (!lib) return;
   const f = folderOf(id);
   const n = S.books.filter((b) => !b.trashed && (b.lib || 'main') === id).length;
-  const canDelete = !!f || id !== 'main';
+  const canDelete = true;
   const item = (ic, label, sub, fn, danger) => h('button', { class: 'addbig' + (danger ? ' danger' : ''), onclick: () => { close(); fn(); } },
     h('span', { class: 'addic' }, icon(ic)), h('span', { class: 'addtx' }, h('b', {}, label), sub ? h('small', {}, sub) : null));
   const close = sheet(lib.name, h('div', {},
@@ -3146,7 +3153,7 @@ function tabMenu(id) {
     h('div', { class: 'sharechoices' },
       f ? item('refresh', 'Actualiser', 'Chercher les nouveaux livres du dossier', () => { if (S.lib !== id) switchLib(id); scanFolder(id); }) : null,
       item('pencil', 'Modifier', 'Nom, décor, dossier', () => editLib(id)),
-      canDelete ? item('trash', 'Supprimer', f ? 'Le dossier, avec ou sans ses livres' : 'Cette bibliothèque', () => (f ? removeFolder(id) : removeLib(id)), true) : null)));
+      canDelete ? item('trash', 'Supprimer', 'La bibliothèque, son dossier et ses livres', () => removeFolder(id), true) : null)));
 }
 // Deuxième fenêtre, contre les accidents
 function confirmDelete(title, text, yes, fn) {
@@ -3157,64 +3164,49 @@ function confirmDelete(title, text, yes, fn) {
       h('button', { class: 'btn', onclick: () => close() }, 'Annuler'),
       h('button', { class: 'btn danger solid', onclick: () => { close(); fn(); } }, icon('trash'), yes))));
 }
-// Bibliothèque sans dossier (autre que la principale)
-function removeLib(id) {
-  const L = libs(); const lib = L.find((x) => x.id === id); if (!lib || id === 'main') return;
-  const books = S.books.filter((b) => (b.lib || 'main') === id); const n = books.filter((b) => !b.trashed).length; const s = n > 1 ? 's' : '';
-  const dest = visibleLibs().find((x) => x.id !== id) || L.find((x) => x.id === 'main');
-  const drop = async (withBooks) => {
-    for (const b of books) { try { withBooks ? await api('/api/books/' + b.id, { method: 'DELETE' }) : await post('/api/books/' + b.id, { lib: dest.id }, 'PATCH'); } catch {} }
-    forgetFolder(id); saveLibs(libs().filter((x) => x.id !== id)); await loadBooks(); switchLib(S.lib === id ? dest.id : S.lib);
-    toast('Bibliothèque supprimée');
-  };
-  if (!n) return confirmDelete('Êtes-vous sûr ?', `Supprimer la bibliothèque « ${lib.name} » ?`, 'Oui, supprimer', () => drop(true));
-  const close = sheet('Supprimer « ' + lib.name + ' »', h('div', {}, h('div', { class: 'sharechoices' },
-    h('button', { class: 'addbig danger', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer « ${lib.name} » et ses ${n} livre${s} ? Ils quitteront l'application.`, 'Oui, supprimer', () => drop(true)); } },
-      h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, `Supprimer avec ses ${n} livre${s}`))),
-    h('button', { class: 'addbig', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer « ${lib.name} » ? Ses ${n} livre${s} iront dans « ${dest.name} ».`, 'Oui, supprimer', () => drop(false)); } },
-      h('span', { class: 'addic' }, icon('book')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer en gardant les livres'), h('small', {}, `Ils iront dans « ${dest.name} »`))))));
-}
-// ---- Supprimer un dossier source : avec ses livres, ou en gardant les livres ----
+// ---- Supprimer une bibliothèque : son dossier, tous ses livres et son onglet ----
 // Les fichiers du téléphone ne sont jamais touchés : seuls les livres de l'application sont retirés.
 function forgetFolder(libId) { if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } }
 function removeFolder(libId) {
-  const L = libs(); const lib = L.find((l) => l.id === libId); const f = folderOf(libId); if (!lib || !f) return;
-  const inLibBooks = S.books.filter((b) => (b.lib || 'main') === libId);
-  const fromFolder = inLibBooks.filter((b) => /^(saf|web):/.test(b.src || ''));
-  const others = inLibBooks.length - fromFolder.length;
-  const n = fromFolder.length; const s = n > 1 ? 's' : '';
-  const dropLib = others === 0 && libs().length > 1; // la bibliothèque ne contient que ce dossier : son onglet disparaît avec lui
-  const close = sheet('Supprimer « ' + f.name + ' »', h('div', {},
-    h('p', {}, `Ce dossier a ajouté ${n} livre${s} à « ${lib.name} ».`),
+  const lib = libsRaw().find((l) => l.id === libId); if (!lib) return;
+  const f = folderOf(libId);
+  const all = S.books.filter((b) => (b.lib || 'main') === libId);
+  const n = all.filter((b) => !b.trashed).length; const s = n > 1 ? 's' : '';
+  const last = libs().length === 1;
+  const close = sheet('Supprimer « ' + lib.name + ' »', h('div', {},
     h('p', { class: 'hint' }, 'Les fichiers restent sur ton téléphone : seule la Bibliothèque les oublie.'),
     h('div', { class: 'sharechoices' },
-      h('button', { class: 'addbig danger', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', n ? `Supprimer le dossier « ${f.name} » et ses ${n} livre${s} ? Ils quitteront l'application.` : `Supprimer le dossier « ${f.name} » ?`, 'Oui, supprimer', () => doRemove(true)); } },
-        h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, n ? `Supprimer le dossier et ses ${n} livre${s}` : 'Supprimer le dossier'),
-          h('small', {}, dropLib ? `L'onglet « ${lib.name} » disparaît aussi.` : others ? `Les ${others} livre${others > 1 ? 's' : ''} ajouté${others > 1 ? 's' : ''} à la main reste${others > 1 ? 'nt' : ''}.` : 'La bibliothèque reste, vide.'))),
-      n ? h('button', { class: 'addbig', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer le dossier « ${f.name} » ? Ses ${n} livre${s} resteront sur l'étagère.`, 'Oui, supprimer', () => doRemove(false)); } },
-        h('span', { class: 'addic' }, icon('folder')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer seulement le dossier'), h('small', {}, `Les ${n} livre${s} reste${n > 1 ? 'nt' : ''} sur l'étagère ; il n'y aura simplement plus d'actualisation.`))) : null)));
-  async function doRemove(withBooks) {
-    forgetFolder(libId);
-    if (withBooks && n) {
-      const box = h('div', { class: 'up' }, h('b', {}, `Suppression de « ${f.name} »`), h('span', { class: 'muted' }, '…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
-      $('#uploads')?.append(box);
-      const srcs = new Set();
-      for (let i = 0; i < n; i++) {
-        const b = fromFolder[i]; srcs.add(b.src);
-        try { await api('/api/books/' + b.id, { method: 'DELETE' }); } catch {}
-        $('i', box).style.width = Math.round(((i + 1) / n) * 100) + '%'; $('span', box).textContent = `${i + 1} sur ${n}`;
-      }
-      // sinon ces livres seraient refusés si tu rajoutes un jour ce dossier
-      try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
-      box.remove();
+      h('button', { class: 'addbig danger', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer la bibliothèque « ${lib.name} »${f ? ', son dossier' : ''}${n ? ` et ses ${n} livre${s}` : ''} ? Elle disparaîtra de l'application.`, 'Oui, supprimer', () => deleteLibrary(libId)); } },
+        h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer la bibliothèque'),
+          h('small', {}, [f ? 'le dossier' : '', n ? `les ${n} livre${s}` : '', last ? '' : 'l\'onglet'].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1') + (last ? ' (c\'est ta seule bibliothèque : elle reste, vide)' : '')))),
+      f && n ? h('button', { class: 'addbig', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer le dossier « ${f.name} » ? La bibliothèque et ses ${n} livre${s} restent, sans actualisation.`, 'Oui, supprimer', () => { forgetFolder(libId); renderLibrary(); toast('Dossier supprimé, livres gardés'); }); } },
+        h('span', { class: 'addic' }, icon('folder')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer seulement le dossier'), h('small', {}, `La bibliothèque et ses ${n} livre${s} restent.`))) : null)));
+}
+async function deleteLibrary(libId) {
+  const lib = libsRaw().find((l) => l.id === libId); if (!lib) return;
+  const all = S.books.filter((b) => (b.lib || 'main') === libId); // tous : dossier, ajoutés à la main, poubelle
+  forgetFolder(libId);
+  if (all.length) {
+    const box = h('div', { class: 'up' }, h('b', {}, `Suppression de « ${lib.name} »`), h('span', { class: 'muted' }, '…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+    $('#uploads')?.append(box);
+    const srcs = new Set();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].src) srcs.add(all[i].src);
+      try { await api('/api/books/' + all[i].id, { method: 'DELETE' }); } catch {}
+      $('i', box).style.width = Math.round(((i + 1) / all.length) * 100) + '%'; $('span', box).textContent = `${i + 1} sur ${all.length}`;
     }
-    if (withBooks && dropLib) {
-      if (libId !== 'main') saveLibs(libs().filter((x) => x.id !== libId)); // la principale reste en réserve, sans onglet
-      await loadBooks(); const next = visibleLibs().find((x) => x.id !== libId) || libs()[0]; switchLib(S.lib === libId ? next.id : S.lib);
-    }
-    else { await loadBooks(); renderLibrary(); }
-    toast(withBooks && n ? `Dossier et ${n} livre${s} supprimés` : 'Dossier supprimé, livres gardés');
+    // sinon ces livres seraient refusés si tu rajoutes un jour ce dossier
+    try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
+    box.remove();
   }
+  const raw = libsRaw();
+  if (libs().length > 1) {
+    if (libId === 'main') raw.find((x) => x.id === 'main').gone = true; // la principale garde sa place, invisible
+    store.set('libs', libId === 'main' ? raw : raw.filter((x) => x.id !== libId));
+  } else { const x = raw.find((y) => y.id === libId); x.name = 'Ma Bibliothèque'; store.set('libs', raw); } // la dernière reste, vide
+  await loadBooks();
+  switchLib(S.lib === libId || S.lib === 'all' ? libs()[0].id : S.lib);
+  toast(`« ${lib.name} » supprimée`);
 }
 
 // ================= Partager une bibliothèque entière =================
@@ -3359,14 +3351,11 @@ async function importReceived(r) {
 
 // Onglets des bibliothèques, sous le titre : on passe de l'une à l'autre d'un geste
 // La bibliothèque principale vidée de son dossier et de ses livres n'a plus d'onglet (s'il en reste d'autres)
-function mainHidden() {
-  const l = libs(); return l.length > 1 && !folderMap().main && !S.books.some((b) => !b.trashed && (b.lib || 'main') === 'main');
-}
-function visibleLibs() { return libs().filter((x) => !(x.id === 'main' && mainHidden())); }
+const visibleLibs = () => libs();
 function libTabs() {
   const l = visibleLibs(); const m = folderMap();
   if (!l.length || (l.length < 2 && !m[l[0].id])) return null;
-  if (S.lib === 'main' && mainHidden()) setTimeout(() => switchLib(l[0].id), 0);
+  if (S.lib !== 'all' && !l.some((x) => x.id === S.lib)) setTimeout(() => switchLib(l[0].id), 0);
   const tab = (id, name, decor) => {
     const el = h('button', { class: 'libtab' + (S.lib === id ? ' sel' : ''), onclick: () => { if (el._long) { el._long = false; return; } if (S.lib !== id) switchLib(id); else if (id !== 'all') tabMenu(id); } },
       h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }), h('span', {}, name),
@@ -3415,13 +3404,7 @@ function editLib(id) {
       f ? h('button', { class: 'btn danger', onclick: () => { save(); close(); removeFolder(id); } }, icon('trash'), 'Supprimer le dossier') : null)),
     window.AndroidShare ? h('div', { class: 'field' }, 'Partage', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); shareLibrary(id); } }, icon('share'), 'Envoyer à quelqu\'un'))) : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
-      id !== 'main' ? h('button', { class: 'btn danger', onclick: async () => {
-        const main = l.find((x) => x.id === 'main');
-        if (!confirm(`Supprimer la bibliothèque « ${lib.name} » ? Ses livres iront dans « ${main.name} ».`)) return;
-        for (const b of S.books.filter((x) => x.lib === id)) await post('/api/books/' + b.id, { lib: 'main' }, 'PATCH');
-        if (hasNativeFolder()) AndroidFolder.forget(id); else { const m = folderMap(); delete m[id]; store.set('folders', m); }
-        saveLibs(l.filter((x) => x.id !== id)); close(); await loadBooks(); switchLib('main'); toast('Bibliothèque supprimée');
-      } }, 'Supprimer') : h('span'),
+      h('button', { class: 'btn danger', onclick: () => { save(); close(); removeFolder(id); } }, icon('trash'), 'Supprimer'),
       h('button', { class: 'btn primary', onclick: () => { save(); close(); applyDecor(); renderLibrary(); } }, 'Enregistrer'))));
   function save() { lib.name = name.value.trim().slice(0, 60) || lib.name; lib.decor = decor; saveLibs(l); if (id === 'main') { try { localStorage.setItem('bib.libname', lib.name); } catch {} } }
   // annuler sans enregistrer remet le décor en place
