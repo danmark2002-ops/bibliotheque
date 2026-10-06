@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 26
         targetSdk 36
-        versionCode 63
-        versionName '7.2'
+        versionCode 64
+        versionName '7.3'
     }
 
     signingConfigs {
@@ -46,4 +46,6 @@ dependencies {
     // Google Cast : envoyer une vidéo du Professeur sur la télé en un clic
     implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
     implementation 'androidx.mediarouter:mediarouter:1.7.0'
+    // Page de Google pour la clé IA gratuite, ouverte en panneau sous les instructions
+    implementation 'androidx.browser:browser:1.8.0'
 }

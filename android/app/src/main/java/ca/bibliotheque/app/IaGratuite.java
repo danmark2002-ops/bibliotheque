@@ -86,8 +86,8 @@ final class IaGratuite {
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
             if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
-            if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
-            if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Vérifie-la dans le Professeur (Clé Gemini → Changer la clé).");
+            if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
+            if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 429) { Thread.sleep(urgent ? 4000 : 20000); throw new Exception("quota gratuit momentanément atteint"); }
             // serveurs surchargés (503, 500…) : on passe au modèle suivant, souvent moins encombré
             if (code >= 500) { model = (model + 1) % MODELS.length; throw new Exception("surchargé (" + code + ")"); }
@@ -100,6 +100,24 @@ final class IaGratuite {
             if (parts != null) for (int i = 0; i < parts.length(); i++) if (!parts.getJSONObject(i).optBoolean("thought")) sb.append(parts.getJSONObject(i).optString("text", ""));
             return sb.toString();
         }
+    }
+
+    /** Vérifie une clé : null si Google l'accepte, sinon un message. En-tête d'abord, puis dans l'adresse (clés AQ.). */
+    static String check(String key) throws Exception {
+        String base = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1";
+        int code = get(base, key);
+        if (code == 400 || code == 401 || code == 403) code = get(base + "&key=" + java.net.URLEncoder.encode(key, "UTF-8"), "");
+        if (code == 200) return null;
+        return code == 400 || code == 401 || code == 403 ? "Google refuse cette clé." : "Réponse inattendue de Google (" + code + ").";
+    }
+
+    private static int get(String url, String key) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setConnectTimeout(15000); c.setReadTimeout(30000);
+            if (!key.isEmpty()) c.setRequestProperty("x-goog-api-key", key);
+            return c.getResponseCode();
+        } finally { c.disconnect(); }
     }
 
     private static String[] http(String url, String key, String json) throws Exception {

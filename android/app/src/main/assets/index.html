@@ -1028,6 +1028,22 @@ body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
 .ignored .ignrow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ignored .ignrow .btn { flex: none; height: 34px; }
 
+/* ---------- IA gratuite : les 4 touchers, au-dessus de la page de Google ouverte en bas ---------- */
+.kg-panel { position: fixed; left: 0; right: 0; top: 0; height: 36vh; min-height: 250px; z-index: 9999; background: var(--panel); color: var(--ink); padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; font-family: var(--font-ui); }
+.kg-head { font-weight: 600; font-size: 14px; opacity: .75; margin-bottom: 4px; }
+.kg-step { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.3; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.kg-step:last-child { border-bottom: 0; }
+.kg-num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--brass); color: var(--brass-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; margin-top: 1px; }
+.kg-chip { display: inline-block; border: 1px solid #c4c7c5; border-radius: 14px; padding: 1px 9px; background: #fff; color: #1f1f1f; font: 500 14px Roboto, Arial, sans-serif; white-space: nowrap; vertical-align: 1px; box-shadow: 0 0 0 2px rgba(217, 48, 37, .6); }
+.kg-chip.sq { padding: 2px 4px 0; border-radius: 6px; line-height: 0; }
+.kg-chip.x { padding: 3px 7px; line-height: 1; font-weight: 700; }
+.kg-where { opacity: .65; font-size: 13px; white-space: nowrap; }
+.kg-list { padding-left: 22px; margin: 8px 0; }
+.kg-list li { margin: 5px 0; }
+.kg-big { font-size: 46px; text-align: center; margin-top: 4px; }
+.kg-spin { width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--brass); border-radius: 50%; margin: 18px auto 8px; animation: kgspin .9s linear infinite; }
+@keyframes kgspin { to { transform: rotate(360deg); } }
+
 </style>
 </head>
 <body>
@@ -3686,6 +3702,9 @@ function openSettings() {
     h('div', { class: 'field' }, local && !lib ? 'Décor de la vue « Toutes ensemble »' : 'Décor', picker),
     owner && (!local || lib) ? h('label', { class: 'field' }, 'Nom de la bibliothèque', nameIn) : null,
     owner && !local ? h('label', { class: 'field' }, 'Nouveau mot de passe', pw) : null,
+    window.AndroidAI && KeyGuide.ok() ? h('div', { class: 'field' }, 'IA gratuite (Gemini)', h('div', { class: 'actions' },
+      Prof.hasKey() ? h('span', { class: 'muted' }, 'Activée ✓') : null,
+      h('button', { class: 'btn', onclick: () => { close(); KeyGuide.start(); } }, icon('spark'), Prof.hasKey() ? 'Changer la clé' : 'Activer l\'IA gratuite'))) : null,
     TTS.supported() ? h('div', { class: 'field' }, 'Lecture audio', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { close(); openVoices(); } }, icon('voice'), 'Voix et ton : ' + Voice.label()))) : null,
     local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
@@ -4074,27 +4093,132 @@ function openSummary(b) {
 }
 function summaryChoices(b) {
   const keyIn = h('input', { type: 'password', placeholder: 'sk-ant-…', value: claudeKey(), autocomplete: 'off' });
+  const hasKey = !!window.AndroidAI && Prof.hasKey();
+  const canGuide = !!window.AndroidAI && KeyGuide.ok();
   const close = sheet('Résumé IA', h('div', {},
     h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
-    h('div', { class: 'aiopt' },
-      h('h4', {}, 'Résumé gratuit'),
+    hasKey ? h('div', { class: 'aiopt' },
+      h('h4', {}, 'Résumé par ton IA gratuite'),
+      h('p', {}, 'Gemini lit le livre en entier et rédige le résumé, avec des phrases clés qui disent ce que le livre nous apprend. Si Gemini n\'est pas disponible, l\'IA du téléphone ou le résumé automatique prend le relais.'),
+      h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé'))
+    : canGuide ? h('div', { class: 'aiopt' },
+      h('h4', {}, 'Activer l\'IA gratuite'),
+      h('p', {}, 'Un vrai résumé rédigé par Gemini, l\'IA gratuite de Google. Il faut une clé gratuite : 4 touchers, moins d\'une minute, une seule fois.'),
+      h('button', { class: 'btn primary', onclick: () => { close(); KeyGuide.start(() => makeFreeSummary(b)); } }, icon('spark'), 'Activer l\'IA gratuite')) : null,
+    !hasKey ? h('div', { class: 'aiopt' },
+      h('h4', {}, canGuide ? 'Sans clé' : 'Résumé gratuit'),
       h('p', {}, window.AndroidAI
-        ? (Prof.hasKey()
-          ? 'Gratuit. Écrit par l\'IA intégrée au téléphone si elle existe, sinon par Gemini avec ta clé gratuite, avec des phrases clés qui disent ce que le livre nous apprend.'
-          : 'Fait sur ton téléphone, sans Internet ni compte. Avec l\'IA intégrée de Google (Gemini Nano) si le téléphone l\'a ; sinon, un résumé automatique choisit les passages clés du livre. Ajoute ta clé Gemini gratuite (dans le Professeur) pour un vrai résumé rédigé.')
+        ? 'Fait sur ton téléphone, sans Internet ni compte : avec l\'IA intégrée de Google (Gemini Nano) si le téléphone l\'a ; sinon, un résumé automatique choisit les passages clés du livre.'
         : 'Un résumé automatique choisit les passages clés du livre, directement sur l\'appareil.'),
-      h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')),
+      h('button', { class: canGuide ? 'btn' : 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')) : null,
     h('div', { class: 'aiopt' },
       h('h4', {}, 'Avec ton application d\'IA'),
       h('p', {}, 'Claude, Gemini, ChatGPT… Le livre lui est envoyé avec une demande de résumé déjà écrite.'),
       h('button', { class: 'btn', onclick: () => { close(); openWith(b, 'ai', SUMMARY_PROMPT); } }, icon('share'), 'Choisir l\'application')),
-    h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
+    // Claude (payant) : gardé seulement pour qui avait déjà mis sa clé
+    claudeKey() ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
       h('div', { class: 'aiopt', style: { marginTop: '10px' } },
         h('h4', {}, 'Avec Claude (payant)'),
-        h('p', {}, `Résumé plus poussé, avec une clé d'API Claude (console.anthropic.com → API Keys), facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
+        h('p', {}, `Avec ta clé d'API Claude, facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
         h('label', { class: 'field' }, 'Clé d\'API Claude', keyIn),
-        h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude')))));
+        h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude'))) : null));
 }
+
+// ---------- IA gratuite : la clé Gemini de la personne, obtenue en 4 touchers ----------
+// La page des clés de Google s'ouvre en panneau dans le bas de l'écran ; les 4 touchers restent écrits en haut.
+// Quand la personne ferme la page avec le X, l'application lit la clé copiée, la vérifie auprès de Google et l'enregistre.
+// Chaque personne utilise SA clé gratuite : l'auteur de l'application n'a rien à payer ni à gérer.
+const KeyGuide = {
+  ok: () => !!(window.AndroidAI?.openKeyPage && AndroidAI.clip),
+  then: null, active: false, checking: false, lastTried: '',
+  find(t) {
+    t = String(t || '').trim();
+    const m = t.match(/AIza[0-9A-Za-z_\-]{30,}/) || t.match(/\bAQ\.[A-Za-z0-9_\-.]{20,}/); // ancien et nouveau format de Google
+    if (m) return m[0];
+    return /^[A-Za-z0-9_\-.]{30,200}$/.test(t) ? t : '';
+  },
+  // then : ce que la personne voulait faire (relancé après le ✅)
+  start(then) {
+    this.then = then || null;
+    if (!this.ok()) return this.manual('');
+    try { AndroidAI.keyWarm(); } catch {}
+    const close = sheet('IA gratuite en 1 minute', h('div', {},
+      h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut seulement une « clé » : un code personnel qui dit à Google que c\'est toi.'),
+      h('ol', { class: 'kg-list' },
+        h('li', {}, 'La page de Google s\'ouvre en bas de l\'écran.'),
+        h('li', {}, 'Les 4 touchers à faire restent écrits en haut.'),
+        h('li', {}, 'Tu fermes la page avec le X : l\'application trouve la clé toute seule.')),
+      h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur ce téléphone. ℹ️ Avec l\'offre gratuite, Google peut utiliser les textes envoyés pour améliorer son IA.'),
+      h('div', { class: 'actions', style: { marginTop: '14px', justifyContent: 'space-between' } },
+        h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'J\'ai déjà une clé'),
+        h('button', { class: 'btn primary', onclick: () => { close(); this.open(); } }, icon('spark'), 'C\'est parti'))));
+  },
+  open() {
+    this.panel()?.remove();
+    document.body.append(h('div', { class: 'kg-panel', id: 'kgPanel' },
+      h('div', { class: 'kg-head' }, 'Dans la page de Google en bas, fais ces 4 touchers :'),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '1'), h('span', {}, 'Appuie sur ', h('span', { class: 'kg-chip' }, 'Créer une clé API'), ' ', h('span', { class: 'kg-where' }, 'en haut à droite'))),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '2'), h('span', {}, 'Une fenêtre s\'ouvre : appuie sur ', h('span', { class: 'kg-chip' }, 'Créer une clé'), ' ', h('span', { class: 'kg-where' }, 'en bas à droite'))),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '3'), h('span', {}, 'Va au bout de la ligne ', h('b', {}, 'Clé API'), ' et appuie sur le petit carré ', h('span', { class: 'kg-chip sq', html: '<svg width="15" height="15" viewBox="0 0 24 24" fill="#3c4043"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>' }), ' Ça fait une copie.')),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '4'), h('span', {}, 'Quand tu as fini, appuie sur le ', h('span', { class: 'kg-chip x' }, '✕'), ' ', h('span', { class: 'kg-where' }, 'en haut à gauche'), ' pour fermer la page. C\'est tout !'))));
+    this.active = true;
+    AndroidAI.openKeyPage();
+  },
+  panel: () => document.getElementById('kgPanel'),
+  // l'application reprend la main (page fermée par le X) : on regarde ce qui a été copié
+  look() {
+    if (!this.active || this.checking) return;
+    let open = false; try { open = AndroidAI.keyPageOpen(); } catch {}
+    const k = this.find(AndroidAI.clip());
+    if (k && k !== this.lastTried) return this.verify(k);
+    if (!open) { this.active = false; this.panel()?.remove(); this.notFound(k ? 'Google a refusé la clé copiée. Copie-la de nouveau, sans rien ajouter.' : 'Je n\'ai pas trouvé de clé dans ce que tu as copié.'); }
+  },
+  verify(k) {
+    this.checking = true; this.lastTried = k; this.active = false; this.panel()?.remove();
+    const close = sheet('Clé trouvée !', h('div', {}, h('div', { class: 'kg-spin' }), h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Vérification auprès de Google…')));
+    window.__keyChecked = (j) => {
+      window.__keyChecked = null; this.checking = false; close();
+      let r = {}; try { r = JSON.parse(j); } catch {}
+      if (!r.ok) return this.notFound((r.msg || 'Google refuse cette clé.') + ' Copie-la de nouveau depuis la page de Google.');
+      AndroidAI.setGeminiKey(k);
+      const then = this.then; this.then = null;
+      const c2 = sheet('IA activée', h('div', {},
+        h('div', { class: 'kg-big' }, '✅'),
+        h('p', { style: { textAlign: 'center' } }, 'C\'est fait. Le Professeur, les vidéos, les résumés et les synthèses utilisent maintenant ton IA gratuite.'),
+        h('div', { class: 'actions', style: { marginTop: '14px', justifyContent: 'center' } },
+          h('button', { class: 'btn primary', onclick: () => { c2(); then && then(); } }, 'Continuer'))));
+    };
+    AndroidAI.checkGeminiKey(k);
+  },
+  notFound(why) {
+    const close = sheet('Pas encore de clé copiée', h('div', {},
+      h('p', {}, why),
+      h('ol', { class: 'kg-list' },
+        h('li', {}, 'Retourne sur la page de Google.'),
+        h('li', {}, 'Dans la liste, ta clé est la ligne bleue qui commence par « … ».'),
+        h('li', {}, 'Appuie sur le petit carré sur la même ligne, puis ferme la page avec le X.')),
+      h('div', { class: 'actions', style: { marginTop: '14px', justifyContent: 'space-between' } },
+        h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'Coller la clé moi-même'),
+        h('button', { class: 'btn primary', onclick: () => { close(); this.open(); } }, 'Retourner sur la page'))));
+  },
+  manual(err) {
+    const inp = h('input', { type: 'password', placeholder: 'AQ.… ou AIza…', autocomplete: 'off' });
+    const close = sheet('Coller la clé', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Touche longuement la case, puis « Coller ».'),
+      h('label', { class: 'field' }, 'Clé', inp),
+      err ? h('p', { style: { color: 'var(--danger)' } }, err) : null,
+      h('div', { class: 'actions', style: { marginTop: '14px' } },
+        h('button', { class: 'btn primary', onclick: () => {
+          const k = this.find(inp.value);
+          if (!k) { close(); return this.manual('Ce n\'est pas une clé (elle commence par AQ. ou AIza).'); }
+          close();
+          if (AndroidAI.checkGeminiKey) { this.lastTried = ''; this.verify(k); } else { AndroidAI.setGeminiKey(k); toast('Clé enregistrée'); const t = this.then; this.then = null; t && t(); }
+        } }, 'Valider'))));
+    setTimeout(() => inp.focus(), 50);
+  },
+};
+window.__focusBack = () => { if (KeyGuide.active) setTimeout(() => KeyGuide.look(), 250); };
+window.__keyPageClosed = () => { if (KeyGuide.active) setTimeout(() => KeyGuide.look(), 400); };
 
 // ---------- Le Professeur bizarroïde ----------
 // L'IA du téléphone (Gemini Nano) réécrit chaque partie du livre en une explication enjouée, à dire à voix haute.
@@ -4255,21 +4379,8 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
   },
   clean0: (t) => String(t || '').replace(/\r/g, '').replace(/^```\w*\n?|```$/g, '').trim(),
   hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
-  // la clé Gemini gratuite, demandée une seule fois
-  askKey(then) {
-    const inp = h('input', { type: 'password', placeholder: 'AIza… ou AQ.…', autocomplete: 'off' });
-    const close = sheet('Clé Gemini gratuite', h('div', {},
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Le Professeur utilise Gemini de Google. Colle ici ta clé gratuite (aistudio.google.com → Clés API). Elle reste seulement sur ce téléphone.'),
-      h('label', { class: 'field' }, 'Clé', inp),
-      h('div', { class: 'actions', style: { marginTop: '14px' } },
-        h('button', { class: 'btn primary', onclick: () => {
-          const k = inp.value.trim();
-          // Google utilise plusieurs formats de clés (AIza…, AQ.…) : on accepte toute clé plausible
-          if (!/^[\w.-]{20,}$/.test(k)) return toast('Cette clé ne semble pas complète : recopie-la en entier, sans espace.');
-          AndroidAI.setGeminiKey(k); close(); toast('Clé enregistrée'); then && then();
-        } }, icon('prof'), 'Enregistrer'))));
-    setTimeout(() => inp.focus(), 50);
-  },
+  // la clé Gemini gratuite : parcours guidé (une seule fois)
+  askKey(then) { KeyGuide.start(then); },
   async go(b) {
     const eng = await this.pickEngine(() => {});
     if (eng === 'online' && !this.hasKey()) { this.askKey(() => this.open(b)); return false; }
@@ -4312,7 +4423,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
       ready && info.done ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
         h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); AndroidAuto.profPause(); this.prepare(b, true); } }, icon('refresh'), 'Refaire le cours'))) : null,
       this.voicePicker(),
-      this.engine === 'online' ? h('details', { class: 'more' }, h('summary', {}, 'Clé Gemini'),
+      this.engine === 'online' ? h('details', { class: 'more' }, h('summary', {}, 'IA gratuite (clé Gemini)'),
         h('div', { style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: () => { close(); this.askKey(); } }, icon('refresh'), 'Changer la clé'))) : null), { wide: true });
   },
 };
@@ -4628,7 +4739,14 @@ async function computeSummary(b, say) {
     const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
     if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
     let text = null, model = 'auto';
-    if (window.AndroidAI) {
+    if (window.AndroidAI?.generateOnline && Prof.hasKey()) { // ta clé gratuite : Gemini lit le livre en entier
+      say('Gemini rédige le résumé… (environ une minute)');
+      try {
+        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 900000)}\n</livre>`));
+        model = 'gemini';
+      } catch (e) { say('Gemini indisponible (' + e.message + ') : IA du téléphone…'); text = null; }
+    }
+    if (!text && window.AndroidAI) {
       say('Recherche de l\'IA du téléphone…');
       let st = await nanoStatus();
       if (st === 'downloadable' || st === 'downloading') {
@@ -4636,13 +4754,6 @@ async function computeSummary(b, say) {
         try { await nanoDownload((bytes) => say(`Téléchargement de l'IA du téléphone… ${Math.round(bytes / 1e6)} Mo`)); st = 'available'; } catch (e) { st = 'unavailable'; }
       }
       if (st === 'available') { text = await nanoSummary(b, t.text, say); model = 'gemini-nano'; }
-    }
-    if (!text && window.AndroidAI?.generateOnline && Prof.hasKey()) {
-      say('Gemini rédige le résumé… (environ une minute)');
-      try {
-        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 400000)}\n</livre>`));
-        model = 'gemini';
-      } catch (e) { say('Gemini indisponible (' + e.message + ') : résumé automatique…'); text = null; }
     }
     if (!text) { say('Résumé automatique…'); await new Promise((r) => setTimeout(r, 30)); text = autoSummary(t.text, b.title); }
     const summary = { text, date: Date.now(), model, truncated: t.truncated };

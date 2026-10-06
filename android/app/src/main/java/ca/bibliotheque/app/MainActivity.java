@@ -47,6 +47,11 @@ public class MainActivity extends Activity {
     private static final int FILE_REQUEST = 4242;
     private static final int FOLDER_REQUEST = 4243;
     private static final int LISTEN_REQUEST = 4244;
+    private static final int KEY_REQUEST = 4245;
+    // Page de Google pour la clé IA gratuite : ouverte en panneau Chrome, la fermeture (X) déclenche la lecture de la clé copiée
+    private androidx.browser.customtabs.CustomTabsSession keySession;
+    private String keyBrowser;
+    volatile boolean keyPageOpen = false;
     private static final String FOLDER_PATH = "/__dossier";
     private static final String RECU_PATH = "/__recu";
     private static final String WEB_PATH = "/__web";
@@ -1460,6 +1465,31 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public boolean hasGeminiKey() { return !IaGratuite.key(MainActivity.this).isEmpty(); }
 
+        /** Parcours guidé de la clé gratuite : page de Google en panneau, lecture de la copie, vérification */
+        @JavascriptInterface public void keyWarm() { runOnUiThread(MainActivity.this::keyWarmup); }
+        @JavascriptInterface public void openKeyPage() { MainActivity.this.openKeyPage(); }
+        @JavascriptInterface public boolean keyPageOpen() { return keyPageOpen; }
+        @JavascriptInterface
+        public String clip() {
+            try {
+                android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                android.content.ClipData d = cm.getPrimaryClip();
+                if (d == null || d.getItemCount() == 0) return "";
+                CharSequence t = d.getItemAt(0).coerceToText(MainActivity.this);
+                return t == null ? "" : t.toString();
+            } catch (Exception e) { return ""; }
+        }
+        /** Vérifie la clé auprès de Google. Réponse : window.__keyChecked({ok, msg}) */
+        @JavascriptInterface
+        public void checkGeminiKey(String key) {
+            new Thread(() -> {
+                JSONObject r = new JSONObject();
+                try { String msg = IaGratuite.check(key); r.put("ok", msg == null); r.put("msg", msg == null ? "" : msg); }
+                catch (Exception e) { try { r.put("ok", false); r.put("msg", "Pas de connexion Internet ?"); } catch (Exception ignored) {} }
+                js("__keyChecked", r.toString());
+            }).start();
+        }
+
         /** Le micro, pour poser des questions au Professeur dans l'auto (demandé une seule fois). */
         @JavascriptInterface
         public void askMic() {
@@ -1500,7 +1530,51 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // le presse-papiers ne se lit qu'au premier plan : on le signale dès que l'application reprend la main
+        if (hasFocus && web != null) js("__focusBack", "");
+    }
+
+    /** Prépare Chrome (connexion au service des onglets) pour ouvrir vite la page des clés de Google */
+    void keyWarmup() {
+        if (keyBrowser != null) return;
+        try {
+            keyBrowser = androidx.browser.customtabs.CustomTabsClient.getPackageName(this, java.util.Arrays.asList("com.android.chrome"));
+            if (keyBrowser == null) keyBrowser = androidx.browser.customtabs.CustomTabsClient.getPackageName(this, null);
+            if (keyBrowser == null) { keyBrowser = ""; return; }
+            androidx.browser.customtabs.CustomTabsClient.bindCustomTabsService(this, keyBrowser, new androidx.browser.customtabs.CustomTabsServiceConnection() {
+                @Override public void onCustomTabsServiceConnected(android.content.ComponentName n, androidx.browser.customtabs.CustomTabsClient c) {
+                    try { c.warmup(0); } catch (Exception ignored) {}
+                    keySession = c.newSession(new androidx.browser.customtabs.CustomTabsCallback());
+                }
+                @Override public void onServiceDisconnected(android.content.ComponentName n) { keySession = null; }
+            });
+        } catch (Exception e) { keyBrowser = ""; }
+    }
+
+    void openKeyPage() {
+        runOnUiThread(() -> {
+            Uri url = Uri.parse("https://aistudio.google.com/apikey");
+            try {
+                androidx.browser.customtabs.CustomTabsIntent.Builder b = keySession != null
+                        ? new androidx.browser.customtabs.CustomTabsIntent.Builder(keySession) : new androidx.browser.customtabs.CustomTabsIntent.Builder();
+                b.setInitialActivityHeightPx((int) (getResources().getDisplayMetrics().heightPixels * 0.64), androidx.browser.customtabs.CustomTabsIntent.ACTIVITY_HEIGHT_ADJUSTABLE);
+                b.setToolbarCornerRadiusDp(16);
+                androidx.browser.customtabs.CustomTabsIntent ci = b.build();
+                if (keyBrowser != null && !keyBrowser.isEmpty()) ci.intent.setPackage(keyBrowser);
+                ci.intent.setData(url);
+                keyPageOpen = true;
+                startActivityForResult(ci.intent, KEY_REQUEST);
+            } catch (Exception e) {
+                try { keyPageOpen = true; startActivity(new Intent(Intent.ACTION_VIEW, url)); } catch (Exception ignored) { keyPageOpen = false; }
+            }
+        });
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == KEY_REQUEST) { keyPageOpen = false; js("__keyPageClosed", ""); return; }
         if (requestCode == FOLDER_REQUEST) {
             String out = "";
             String lib = pickingFor == null ? "main" : pickingFor;
