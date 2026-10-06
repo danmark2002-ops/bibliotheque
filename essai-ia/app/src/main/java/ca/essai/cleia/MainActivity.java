@@ -44,11 +44,13 @@ public class MainActivity extends Activity {
     CustomTabsSession session;
     String browserPkg;
     boolean tabOpen = false;
+    volatile boolean pendingCheck = false;
 
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences("essai", MODE_PRIVATE);
+        pendingCheck = getIntent() != null && getIntent().getBooleanExtra("verifier", false);
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#f6f3ee"));
         setContentView(web);
@@ -182,14 +184,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void clear() { prefs.edit().remove("key").apply(); }
         @JavascriptInterface public boolean tabOpen() { return tabOpen; }
         /** Ferme la page de Google (ouverte par nous) et redonne la main à l'application */
+        /** Ferme la page de Google comme le X, puis redonne la main à l'application (pour lire la copie) */
         @JavascriptInterface public void closeTab() {
             runOnUiThread(() -> {
-                try { finishActivity(7); } catch (Exception ignored) {}
-                // et si la page vit ailleurs : on ramène l'application devant, ce qui la masque
-                try { startActivity(new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)); } catch (Exception ignored) {}
                 tabOpen = false;
+                try { finishActivity(7); } catch (Exception ignored) {}
+                web.postDelayed(() -> {
+                    if (hasWindowFocus()) return; // la page est fermée, l'application a la main
+                    // La page résiste : on relance l'application par-dessus, ce qui la referme pour de bon
+                    Intent i = new Intent(MainActivity.this, MainActivity.class).putExtra("verifier", true)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                    overridePendingTransition(0, 0);
+                }, 500);
             });
         }
+        /** Vrai une seule fois si l'application vient d'être relancée pour lire la clé */
+        @JavascriptInterface public boolean pending() { boolean p = pendingCheck; pendingCheck = false; return p; }
 
         /** Essai réel : Gemini répond avec la clé de la personne. Réponse : onAnswer({text} ou {error}) */
         @JavascriptInterface

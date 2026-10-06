@@ -32,7 +32,7 @@
   .err { color: var(--red); }
 
   /* ---------- Guide en haut de l'écran, la page de Google dans le panneau du bas ---------- */
-  #guide { padding: 10px 14px 8px; height: 36vh; min-height: 230px; display: none; flex-direction: column; }
+  #guide { padding: 10px 14px 10px; height: 36vh; min-height: 250px; display: none; flex-direction: column; }
   #guide.on { display: flex; }
   .gtop { display: flex; justify-content: space-between; align-items: center; font: 600 13px system-ui; color: var(--muted); }
   .pips { display: flex; gap: 5px; }
@@ -47,6 +47,14 @@
   .gnav .btn { margin-top: 6px; padding: 11px 10px; font-size: 15.5px; }
   .gnav .btn.prev { flex: 0 0 64px; }
 
+  .ghead { font: 600 14px system-ui; color: var(--muted); margin-bottom: 4px; }
+  .gstep { display: flex; gap: 10px; align-items: flex-start; font-size: 15.5px; line-height: 1.3; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .gstep:last-of-type { border-bottom: 0; }
+  .num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 13px system-ui; margin-top: 1px; }
+  .chip { display: inline-block; border: 1px solid #c4c7c5; border-radius: 14px; padding: 1px 9px; background: #fff; font: 500 14px Roboto, Arial, sans-serif; white-space: nowrap; vertical-align: 1px; box-shadow: 0 0 0 2px rgba(217,48,37,.55); }
+  .chip.sq { padding: 2px 4px 0; border-radius: 6px; line-height: 0; }
+  .where { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  #gdone { margin-top: auto; }
   /* Éléments imités de la page de Google */
   .gbtn { display: inline-block; background: var(--blue); color: #fff; border-radius: 18px; padding: 7px 12px; font-weight: 500; white-space: nowrap; }
   .gbtn.flat { background: #fff; color: var(--blue); border: 1px solid #dadce0; }
@@ -101,9 +109,9 @@
     <b>Ce qui va se passer :</b>
     <ol class="steps">
       <li>La page de Google s'ouvre en bas de l'écran.</li>
-      <li>Les instructions restent ici, en haut, étape par étape.</li>
+      <li>Les 3 touchers à faire restent écrits ici, en haut.</li>
       <li>Tu appuies sur « Créer une clé API », « Créer une clé », puis sur les deux petits rectangles pour copier.</li>
-      <li>Tu reviens : l'application trouve la clé toute seule.</li>
+      <li>Tu appuies sur le bouton vert : la page se ferme et l'application trouve la clé toute seule.</li>
     </ol>
   </div>
   <p class="muted">✔ Gratuit, aucune carte de crédit.<br>✔ La clé reste seulement sur ce téléphone.<br>ℹ️ Avec l'offre gratuite, Google peut utiliser les textes envoyés pour améliorer son IA.</p>
@@ -114,12 +122,11 @@
 
 <!-- ===== Guide affiché en haut pendant que la page de Google est ouverte en bas ===== -->
 <section id="guide">
-  <div class="gtop"><span id="gnum">Étape 1 sur 5</span><span class="pips" id="pips"></span></div>
-  <div class="gbody"><div class="gtext" id="gtext"></div><div class="mock" id="gmock"></div></div>
-  <div class="gnav">
-    <button class="btn prev" onclick="step(-1)">◀</button>
-    <button class="btn primary" id="gnext" onclick="step(1)">Étape suivante ▶</button>
-  </div>
+  <div class="ghead">Dans la page de Google en bas, fais ces 3 touchers :</div>
+  <div class="gstep"><span class="num">1</span><span>Appuie sur <span class="chip">Créer une clé API</span> <span class="where">en haut à droite</span></span></div>
+  <div class="gstep"><span class="num">2</span><span>Une fenêtre s'ouvre : appuie sur <span class="chip">Créer une clé</span> <span class="where">en bas à droite</span></span></div>
+  <div class="gstep"><span class="num">3</span><span>Va au bout de la ligne <b>Clé API</b> et appuie sur le petit carré <span class="chip sq"><svg width="15" height="15" viewBox="0 0 24 24" fill="#3c4043"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></span> Ça fait une copie.</span></div>
+  <button class="btn go" id="gdone" onclick="finishGuide()">Appuie ici quand tu as fini</button>
 </section>
 
 <!-- ===== Vérification ===== -->
@@ -147,7 +154,7 @@
       <li>Appuie sur les <b>deux petits rectangles</b> sur la même ligne.</li>
     </ol>
   </div>
-  <button class="btn primary" onclick="openGoogle(true)">Retourner sur la page de Google</button>
+  <button class="btn primary" onclick="openGoogle()">Retourner sur la page de Google</button>
   <button class="btn small" onclick="show('manual')">Coller la clé moi-même</button>
   <button class="btn small" onclick="show('home')">Plus tard</button>
 </section>
@@ -163,15 +170,8 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
-const STEPS = [
-  { t: 'Sur la page « Clés API » en bas, appuie sur <b>« Créer une clé API »</b> (en haut à droite).<small>Google demande ton compte ou d\'accepter des conditions ? Fais-le d\'abord. <a href="#" onclick="finishGuide();return false">J\'ai déjà copié une clé</a></small>',
-    m: '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px"><b style="font-size:13px;white-space:nowrap">Clés API</b><span class="gbtn flat ring">Créer une clé API</span></div><div style="font-size:11px;color:#5f6368;margin-top:10px;border:1px solid #dadce0;border-radius:8px;padding:4px 6px">Tous les projets ▾</div>' },
-  { t: 'Une fenêtre « Créer une clé » s\'ouvre. Ne change rien : appuie sur <b>« Créer une clé »</b> (en bas à droite).',
-    m: '<div style="font-size:13px;margin-bottom:6px">Créer une clé</div><div style="font-size:10.5px;color:#5f6368;border:1px solid #dadce0;border-radius:6px;padding:4px 5px;margin-bottom:4px">Gemini API Key</div><div style="font-size:10.5px;color:#5f6368;border:1px solid #dadce0;border-radius:6px;padding:4px 5px;margin-bottom:8px">Default Gemini Project ▾</div><div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:11.5px"><span>Annuler</span><span class="gbtn flat ring" style="padding:5px 9px">Créer une clé</span></div>' },
-  { t: 'Dans « Détails de la clé API », appuie sur les <b>deux petits rectangles</b> au bout de la ligne <b>Clé API</b> (la première). Puis le bouton vert.',
-    m: '<div style="font-size:12.5px;margin-bottom:6px">Détails de la clé API</div><div style="font-size:10.5px;color:#5f6368">Clé API</div><div class="keyrow" style="background:none;padding:2px 0 6px"><span>AQ.Ab8RN6JoD1Bx…</span><span class="copy ring round"><svg width="16" height="16" viewBox="0 0 24 24" fill="#3c4043"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></span></div><div style="font-size:10.5px;color:#9aa0a6">Nom</div><div style="font-size:10.5px;color:#9aa0a6">Gemini API Key</div><span class="arrow">⬆</span>' },
-];
-let cur = 0, mode = 'home', checking = false, lastTried = '';
+
+let mode = 'home', checking = false, lastTried = '';
 
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
@@ -187,28 +187,15 @@ function refresh() {
   $('#activate').style.display = k ? 'none' : '';
   $('#tryCard').style.display = k ? '' : 'none';
 }
-function renderStep() {
-  const s = STEPS[cur];
-  $('#gnum').textContent = `Étape ${cur + 1} sur ${STEPS.length}`;
-  $('#pips').innerHTML = STEPS.map((_, i) => `<i class="${i <= cur ? 'on' : ''}"></i>`).join('');
-  $('#gtext').innerHTML = s.t; $('#gmock').innerHTML = s.m;
-  const last = cur === STEPS.length - 1;
-  $('#gnext').textContent = last ? '✓ J\'ai copié la clé' : 'Étape suivante ▶';
-  $('#gnext').className = 'btn ' + (last ? 'go' : 'primary');
-}
-function step(d) {
-  if (d > 0 && cur === STEPS.length - 1) return finishGuide();
-  cur = Math.max(0, Math.min(STEPS.length - 1, cur + d)); renderStep();
-}
-function openGoogle(again) {
-  cur = again ? STEPS.length - 1 : 0; renderStep();
+function openGoogle() {
+  $('#gdone').textContent = 'Appuie ici quand tu as fini'; $('#gdone').disabled = false;
   show('guide');
   App.openGoogle(true);
 }
 // Dernière étape : on ferme la page de Google nous-mêmes (pas besoin du X), puis on lit la clé copiée
 let wantKey = false;
 function finishGuide() {
-  wantKey = true; $('#gnext').textContent = 'Un instant…';
+  wantKey = true; $('#gdone').textContent = 'Un instant…'; $('#gdone').disabled = true;
   App.closeTab();
   setTimeout(() => { if (wantKey) { wantKey = false; lookForKey(true); } }, 1500);
 }
@@ -259,6 +246,7 @@ function ask() {
 }
 window.goBack = () => { if (mode !== 'home' && mode !== 'checking') { show('home'); return true; } return false; };
 refresh();
+if (App.pending && App.pending()) { mode = 'guide'; wantKey = true; setTimeout(() => { if (wantKey) { wantKey = false; lookForKey(true); } }, 1200); }
 </script>
 </body>
 </html>
