@@ -1509,6 +1509,16 @@ function openSettings() {
       Prof.hasKey() ? h('span', { class: 'muted' }, 'Activée ✓') : null,
       h('button', { class: 'btn', onclick: () => { close(); KeyGuide.start(); } }, icon('spark'), Prof.hasKey() ? 'Changer la clé' : 'Activer l\'IA gratuite'))) : null,
     TTS.supported() ? h('div', { class: 'field' }, 'Lecture audio', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { close(); openVoices(); } }, icon('voice'), 'Voix et ton : ' + Voice.label()))) : null,
+    // Pour les habitués seulement : caché dans « Options avancées », fermé par défaut
+    window.AndroidAI ? h('details', { class: 'more' }, h('summary', {}, 'Options avancées'),
+      h('div', { class: 'aiopt', style: { marginTop: '10px' } },
+        h('h4', {}, 'Clé Claude (payante)'),
+        h('p', { class: 'muted' }, 'Facultatif, pour les habitués. Ajoute « Résumer avec Claude » dans le Résumé IA. Clé à créer sur console.anthropic.com → API Keys ; chaque résumé est facturé sur ton compte Claude.'),
+        (() => { const ck = h('input', { type: 'password', placeholder: 'sk-ant-…', value: claudeKey(), autocomplete: 'off' });
+          return h('div', {}, h('label', { class: 'field' }, 'Clé d\'API Claude', ck),
+            h('div', { class: 'actions' },
+              claudeKey() ? h('button', { class: 'btn', onclick: () => { store.set('claudeKey', ''); close(); toast('Clé Claude retirée'); } }, 'Retirer') : null,
+              h('button', { class: 'btn', onclick: () => { const k = ck.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); toast('Clé Claude enregistrée'); } }, 'Enregistrer'))); })())) : null,
     local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
