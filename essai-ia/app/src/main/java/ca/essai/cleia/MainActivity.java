@@ -98,11 +98,22 @@ public class MainActivity extends Activity {
         web.evaluateJavascript("window.goBack ? goBack() : false", v -> { if (!"true".equals(v)) finish(); });
     }
 
+    /** Essaie la clé en en-tête, puis dans l'adresse (selon le format, Google accepte l'une ou l'autre) */
     static String http(String method, String url, String key, String body) throws Exception {
+        String r = http1(method, url, key, body, false);
+        int code = Integer.parseInt(r.substring(0, r.indexOf('\n')));
+        if (code == 400 || code == 401 || code == 403) {
+            String r2 = http1(method, url, key, body, true);
+            if (r2.startsWith("200")) return r2;
+        }
+        return r;
+    }
+    static String http1(String method, String url, String key, String body, boolean inQuery) throws Exception {
+        if (inQuery) url += (url.contains("?") ? "&" : "?") + "key=" + java.net.URLEncoder.encode(key, "UTF-8");
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setRequestMethod(method);
         c.setConnectTimeout(15000); c.setReadTimeout(90000);
-        c.setRequestProperty("x-goog-api-key", key);
+        if (!inQuery) c.setRequestProperty("x-goog-api-key", key);
         if (body != null) {
             c.setDoOutput(true);
             c.setRequestProperty("content-type", "application/json");
@@ -171,7 +182,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void clear() { prefs.edit().remove("key").apply(); }
         @JavascriptInterface public boolean tabOpen() { return tabOpen; }
         /** Ferme la page de Google (ouverte par nous) et redonne la main à l'application */
-        @JavascriptInterface public void closeTab() { runOnUiThread(() -> { try { finishActivity(7); } catch (Exception ignored) {} tabOpen = false; }); }
+        @JavascriptInterface public void closeTab() {
+            runOnUiThread(() -> {
+                try { finishActivity(7); } catch (Exception ignored) {}
+                // et si la page vit ailleurs : on ramène l'application devant, ce qui la masque
+                try { startActivity(new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)); } catch (Exception ignored) {}
+                tabOpen = false;
+            });
+        }
 
         /** Essai réel : Gemini répond avec la clé de la personne. Réponse : onAnswer({text} ou {error}) */
         @JavascriptInterface
