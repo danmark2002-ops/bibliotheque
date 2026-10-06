@@ -740,12 +740,6 @@ button.librow small { display: block; color: var(--ink-3); font-size: 13px; }
 .cattx small { display: block; color: var(--ink-2); font-size: 12.5px; }
 .catbuy { margin-top: 12px; }
 .btn.on { border-color: var(--brass); }
-/* ---------- Tout le téléphone : choix des dossiers ---------- */
-.foundlist { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
-.foundrow { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--glass-line); cursor: pointer; }
-.foundrow input { margin-top: 3px; width: 18px; height: 18px; accent-color: var(--brass); flex: none; }
-.foundrow b { display: block; font-size: 14px; word-break: break-word; }
-.foundrow small { display: block; color: var(--ink-2); font-size: 12px; line-height: 1.4; }
 /* ---------- Voix et ton ---------- */
 .vh { font: 600 13px/1 Inter, sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); margin: 6px 0 10px; }
 .vh + .tonegrid { margin-bottom: 18px; }
@@ -765,14 +759,13 @@ button.librow small { display: block; color: var(--ink-3); font-size: 13px; }
 .player .chip svg { width: 15px; height: 15px; vertical-align: -3px; }
 svg.rot-r { transform: rotate(-90deg); }
 
-/* Recherche dans tout le téléphone */
+/* Panneau de progression (conversion en texte) */
 .scanpanel { position: fixed; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 60; max-width: 520px; margin: 0 auto; padding: 14px 16px; border-radius: 18px; background: var(--panel, #221a14); border: 1px solid var(--glass-line); box-shadow: 0 18px 50px rgba(0,0,0,.45); color: var(--ink); }
 .scanpanel b { display: block; font: 600 16px/1.2 var(--font-display); margin-bottom: 4px; }
 .scanpanel > span { display: block; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .scanpanel .bar { height: 6px; border-radius: 4px; background: rgba(255,255,255,.08); margin: 10px 0 6px; overflow: hidden; }
 .scanpanel .bar i { display: block; height: 100%; background: var(--brass); border-radius: 4px; transition: width .3s; }
 .scanpanel.paused .bar i { opacity: .45; }
-.scandir { display: block; color: var(--ink-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; min-height: 1.3em; }
 .scanpanel .actions { margin-top: 10px; justify-content: flex-end; }
 
 /* Minuterie, prononciation */
@@ -991,6 +984,20 @@ svg.rot-r { transform: rotate(-90deg); }
   .book:hover, .book:focus-visible, .book:active { transform: none; }
   .book:hover .cover, .book:focus-visible .cover { transform: none; box-shadow: 4px 6px 12px -3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4); }
 }
+
+/* ---------- Premium ---------- */
+.premium p { margin: 0 0 12px; color: var(--ink-2); }
+.pfeats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.pfeat { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--glass-line); }
+.pfeat.hi { border-color: var(--brass); background: rgba(212,171,106,.08); }
+.pfeat .pic { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgba(212,171,106,.14); color: var(--brass); }
+.pfeat .pic svg { width: 18px; height: 18px; }
+.pfeat b { display: block; font-size: 15px; }
+.pfeat small { display: block; color: var(--ink-2); font-size: 12.5px; line-height: 1.35; }
+.pbuy { display: flex; flex-direction: column; gap: 8px; align-items: stretch; margin-bottom: 12px; }
+.pbuy .btn.big { height: 50px; justify-content: center; font-size: 16px; }
+.pbuy small { color: var(--ink-3); font-size: 12px; text-align: center; }
+.pbadge { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--brass); vertical-align: 2px; }
 
 </style>
 </head>
@@ -2200,6 +2207,7 @@ document.documentElement.dataset.decor = store.get('decor', 'noyer');
 
 // ================= Démarrage =================
 async function boot() {
+  Premium.init();
   try { S.me = await api('/api/me'); } catch { S.me = { role: null }; }
   document.title = S.me.library || 'Bibliothèque';
   if (!S.me.role) return renderAuth();
@@ -2522,7 +2530,8 @@ function openDrawer() {
     item({ k: 'authors' }, NAV.authors[0], NAV.authors[1]),
     fmts.map((k) => item({ k: 'fmt', v: k }, FMT[k], 'layers')),
     h('div', { class: 'dline' }),
-    item({ k: 'trash' }, 'Poubelle', 'trash'));
+    item({ k: 'trash' }, 'Poubelle', 'trash'),
+    window.AndroidBilling && Premium.st.play ? h('button', { class: 'ditem', onclick: () => { close(); Premium.offer(); } }, icon('spark'), h('span', {}, Premium.ok() ? 'Premium activé ✓' : 'Bibliothèque Premium')) : null);
   const scrim = h('div', { class: 'scrim drawer-scrim', onclick: (e) => { if (e.target === scrim) close(); } }, panel);
   document.body.append(scrim);
 }
@@ -2728,6 +2737,47 @@ function webLib() {
   if (!lib) { lib = { id: 'web' + Date.now().toString(36), name: 'Livres du web', decor: 'olivier', web: true }; l.push(lib); saveLibs(l); }
   return lib;
 }
+
+// ================= Version Premium (achat unique sur Google Play) =================
+// L'essentiel reste gratuit. Premium débloque le Professeur, les résumés IA, les tons expressifs,
+// la conversion photo → texte (un livre offert pour essayer) et le partage de bibliothèques.
+// Copies installées hors de Google Play (APK, version web) : tout est débloqué.
+const PREMIUM_FEATS = [
+  ['prof', 'prof', 'Le Professeur bizarroïde', 'Pose tes questions sur le livre, il t’explique en vidéo'],
+  ['summary', 'spark', 'Résumés IA', 'Le résumé de chaque livre en un toucher'],
+  ['tones', 'voice', 'Tons de voix expressifs', 'Conteur, Enjoué, Passionné'],
+  ['ocr', 'type', 'Photo → texte illimité', 'Convertis tous tes livres photographiés en vrai texte'],
+  ['share', 'share', 'Partage de bibliothèques', 'Envoie une bibliothèque entière à un proche'],
+];
+const PREMIUM_TONES = new Set(['conteur', 'enjoue', 'passionne']);
+const Premium = {
+  st: { play: false, premium: false, price: '', pending: false, ready: false },
+  close: null,
+  init() { try { if (window.AndroidBilling) this.st = { ...this.st, ...JSON.parse(AndroidBilling.state()) }; } catch {} },
+  ok() { return !window.AndroidBilling || !this.st.play || !!this.st.premium; },
+  need(what) { if (this.ok()) return true; this.offer(what); return false; },
+  badge() { return this.ok() ? null : h('span', { class: 'pbadge' }, '★'); },
+  offer(what) {
+    stopAllAudio?.();
+    const st = this.st;
+    const feats = h('div', { class: 'pfeats' }, PREMIUM_FEATS.map(([k, ic, t, d]) => h('div', { class: 'pfeat' + (k === what ? ' hi' : '') }, h('span', { class: 'pic' }, icon(ic)), h('span', {}, h('b', {}, t), h('small', {}, d)))));
+    const buy = h('button', { class: 'btn primary big', disabled: st.ready ? null : true, onclick: () => { try { AndroidBilling.buy(); } catch { toast('Achat impossible pour l’instant'); } } },
+      st.pending ? 'Paiement en attente…' : st.price ? `Débloquer Premium · ${st.price}` : 'Prix en cours de chargement…');
+    this.close = sheet('Bibliothèque Premium', h('div', { class: 'premium' },
+      h('p', {}, 'Lire, écouter et ranger tes livres reste gratuit, sans publicité. Premium ajoute :'), feats,
+      h('div', { class: 'pbuy' }, buy, h('small', {}, 'Paiement unique par Google Play, valable pour toujours sur tes appareils Android avec le même compte Google.')),
+      h('button', { class: 'btn small', onclick: () => { try { AndroidBilling.restore(); toast('Vérification de tes achats…'); } catch {} } }, 'J’ai déjà payé : restaurer mon achat')));
+    if (window.AndroidBilling && !st.ready) try { AndroidBilling.restore(); } catch {}
+  },
+};
+window.__premium = (j) => {
+  let x; try { x = JSON.parse(j); } catch { return; }
+  const was = Premium.ok(); Premium.st = { ...Premium.st, ...x };
+  if (!was && Premium.ok()) { Premium.close?.(); Premium.close = null; toast('Merci ! Bibliothèque Premium est activée'); if (!$('.reader')) renderLibrary(); return; }
+  if (x.event === 'pending') toast('Paiement en attente : Premium s’activera dès qu’il sera confirmé');
+  if (x.event === 'error') toast('Le paiement n’a pas abouti');
+  if (Premium.close && $('.premium')) { Premium.close(); Premium.close = null; if (!Premium.ok()) Premium.offer(); } // prix ou état mis à jour
+};
 // ================= Menu « Ajouter » =================
 // Deux grands choix évidents (un livre, un dossier), puis les autres façons ; les catalogues viennent après
 function openAddMenu() {
@@ -2740,62 +2790,13 @@ function openAddMenu() {
       big('file', 'Un livre', 'Choisis un ou plusieurs fichiers sur le téléphone : PDF, EPUB, Kindle, Word, texte…', pickFiles),
       big('folder', 'Un dossier entier', f ? `Tous les livres d'un autre dossier, dans une nouvelle bibliothèque. Celle-ci suit déjà « ${f.name} ».` : 'Tous les livres d\'un dossier, d\'un coup. Les nouveaux s\'ajouteront quand tu actualises.', () => (lib && !f ? chooseFolder(lib.id, { adopt: true }) : addFolderLib()))),
     h('div', { class: 'addrow' },
-      window.AndroidFolder?.askPhoneAccess ? small('scan', 'Tout le téléphone', scanPhone) : null,
       window.AndroidWeb ? small('link', 'Depuis un lien', addFromLink) : null,
       small('paste', 'Coller un texte', pasteText)),
     window.AndroidWeb ? h('button', { class: 'addfind', onclick: () => { close(); openCatalogues(); } },
       icon('globe'), h('span', {}, h('b', {}, 'Trouver des livres'), h('small', {}, 'Des milliers de livres gratuits en français')), chevR()) : null,
     lib ? h('p', { class: 'hint', style: { marginTop: '14px' } }, `Ils iront dans « ${lib.name} ».`) : null));
 }
-// « Tout le téléphone » : une bibliothèque à part, remplie avec les livres trouvés partout dans le téléphone
-async function scanPhone() {
-  if (!AndroidFolder.phoneAccess()) {
-    const ok = await new Promise((res) => {
-      const close = sheet('Chercher dans tout le téléphone', h('div', {},
-        h('p', {}, 'L\'application va chercher tous les livres (PDF, EPUB, Word, texte…) rangés n\'importe où dans le téléphone : Téléchargements, documents WhatsApp, Drive hors ligne…'),
-        h('p', { class: 'muted' }, 'Android va te demander d\'autoriser « l\'accès à tous les fichiers ». Active l\'interrupteur, puis reviens ici. Rien ne quitte le téléphone.'),
-        h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
-          h('button', { class: 'btn', onclick: () => { close(); res(false); } }, 'Annuler'),
-          h('button', { class: 'btn primary', onclick: async () => { close(); res(!!(await nativeCall('__phoneAccess', () => AndroidFolder.askPhoneAccess()))); } }, 'Autoriser'))));
-    });
-    if (!ok) return toast('Sans autorisation, choisis plutôt un dossier');
-  }
-  const m = folderMap();
-  let lib = libs().find((l) => m[l.id]?.phone);
-  if (!lib) {
-    const l = libs(); const used = new Set(l.map((x) => x.decor));
-    const decor = ['ardoise', 'olivier', 'ebene', 'chene', 'acajou', 'bouleau', 'noyer'].find((k) => !used.has(k)) || 'ardoise';
-    lib = { id: 'lib' + Date.now().toString(36), name: 'Tout le téléphone', decor };
-    l.push(lib); saveLibs(l); AndroidFolder.setPhone(lib.id);
-  }
-  switchLib(lib.id);
-  await scanFolder(lib.id, null, { review: true, elsewhere: true });
-}
-// Après la recherche : on montre les dossiers trouvés, l'utilisateur coche ceux à garder
-function reviewFound(entries) {
-  return new Promise((res) => {
-    const groups = new Map();
-    for (const e of entries) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : 'Stockage principal'; if (!groups.has(d)) groups.set(d, []); groups.get(d).push(e); }
-    const junk = /(facture|invoice|re[çc]u|receipt|relev[ée]|statement|billet|ticket|boarding|commande|order|scan|cv|resume|contrat|bail|impot|tax)/i;
-    const rows = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).map(([d, list]) => {
-      const cb = h('input', { type: 'checkbox', checked: !list.every((e) => junk.test(e.name)) });
-      const size = list.reduce((a, e) => a + (e.size || 0), 0);
-      return { cb, list, el: h('label', { class: 'foundrow' }, cb, h('span', {}, h('b', {}, d.split('/').slice(-2).join(' › ')), h('small', {}, `${list.length} fichier${list.length > 1 ? 's' : ''} · ${fmtSize(size)} · ${list.slice(0, 3).map((e) => e.name.replace(/\.[^.]+$/, '')).join(', ')}${list.length > 3 ? '…' : ''}`))) };
-    });
-    let done = false; const finish = (v) => { if (done) return; done = true; close(); res(v); };
-    const close = sheet(`${entries.length} livre${entries.length > 1 ? 's' : ''} trouvé${entries.length > 1 ? 's' : ''}`, h('div', {},
-      h('p', { class: 'muted', style: { marginTop: '-4px' } }, 'Décoche les dossiers qui ne contiennent pas de livres (factures, papiers…).'),
-      h('div', { class: 'actions', style: { margin: '0 0 10px' } },
-        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = true; }) }, 'Tout cocher'),
-        h('button', { class: 'btn', onclick: () => rows.forEach((r) => { r.cb.checked = false; }) }, 'Tout décocher')),
-      h('div', { class: 'foundlist' }, rows.map((r) => r.el)),
-      h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '16px' } },
-        h('button', { class: 'btn', onclick: () => finish([]) }, 'Annuler'),
-        h('button', { class: 'btn primary', onclick: () => finish(rows.filter((r) => r.cb.checked).flatMap((r) => r.list)) }, icon('plus'), 'Ajouter les dossiers cochés'))), { wide: true });
-    const obs = new MutationObserver(() => { if (!document.body.contains(rows[0]?.el)) { obs.disconnect(); finish([]); } });
-    if (rows.length) obs.observe(document.body, { childList: true, subtree: true }); else finish([]);
-  });
-}
+
 function addFromLink() {
   const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
   const go = () => { const u = inp.value.trim(); if (!/^https?:\/\/\S+/i.test(u)) return toast('Colle une adresse qui commence par https://'); close();
@@ -3044,22 +3045,16 @@ function scanFolder(libId, webFiles, opts) {
   FOLDER.queue = run.catch(() => 0);
   return run;
 }
-async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}) {
+async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
-  let entries, ctl = null;
+  let entries;
   FOLDER.busy = true; renderLibrary();
   try {
-    const phone = !!folderOf(libId)?.phone && !!window.AndroidFolder?.scanPause;
-    if (phone) ctl = scanPanel(lib.name);
     if (hasNativeFolder()) {
-      let box = null;
-      if (!phone) { box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box); }
-      else window.__scanProgress = (j) => { try { const x = JSON.parse(j); ctl.set(x.pct, `${Math.floor(x.pct)} % du téléphone · ${x.found} livre${x.found > 1 ? 's' : ''} trouvé${x.found > 1 ? 's' : ''}`, x.dir); } catch {} };
+      const box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box);
       const r = await nativeCall('__folderScanned', () => AndroidFolder.scan(libId));
-      box?.remove(); window.__scanProgress = null;
-      if (r?.cancelled) { ctl?.done(); toast('Recherche annulée'); return 0; }
-      if (!r || r.error) { ctl?.done(); toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
-      if (ctl) ctl.set(100, `Recherche terminée · ${r.files.length} livre${r.files.length > 1 ? 's' : ''} trouvé${r.files.length > 1 ? 's' : ''}`, '');
+      box.remove();
+      if (!r || r.error) { toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
       entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, get: async () => {
         const resp = await fetch('/__dossier?lib=' + encodeURIComponent(libId) + '&id=' + encodeURIComponent(f.id));
         if (!resp.ok) throw new Error('Fichier illisible');
@@ -3077,10 +3072,6 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
     }
     const k = await LocalAPI.known(libId);
     let fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
-    if (elsewhere) { // déjà dans une autre bibliothèque : on ne le copie pas une deuxième fois
-      const have = new Set(S.books.filter((b) => !b.trashed && b.fname).map((b) => b.fname + '|' + b.size));
-      fresh = fresh.filter((e) => !have.has(e.name + '|' + e.size));
-    }
     { // les pistes audio d'un même dossier forment un seul livre
       const byDir = new Map(), rest = [];
       for (const e of fresh) { if (AUDIO_EXT.test(e.name) && !/\.m4b$/i.test(e.name)) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : ''; if (!byDir.has(d)) byDir.set(d, []); byDir.get(d).push(e); } else rest.push(e); }
@@ -3090,12 +3081,10 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
       }
       fresh = rest.sort((a, b) => a.path.localeCompare(b.path, 'fr'));
     }
-    if (review && fresh.length) { ctl?.hide(); FOLDER.busy = false; renderLibrary(); fresh = await reviewFound(fresh); if (!fresh.length) { ctl?.done(); return 0; } FOLDER.busy = true; ctl?.show(); }
     const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
-    if (!fresh.length) { ctl?.done(); if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
+    if (!fresh.length) { if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
     for (let i = 0; i < fresh.length; i++) {
-      if (ctl) { await ctl.wait(); if (ctl.cancelled) { toast(`Ajout arrêté : ${ok} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}`); break; } ctl.set((i / fresh.length) * 100, `Ajout des livres · ${i + 1} sur ${fresh.length}`, fresh[i].path); }
       const e = fresh[i];
       const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, `${lib.name} : livre ${i + 1} sur ${fresh.length}`), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
       $('#uploads')?.append(box);
@@ -3114,25 +3103,8 @@ async function scanOne(libId, webFiles, { quiet, adopt, review, elsewhere } = {}
     if (!quiet) toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
     return ok;
   } finally {
-    ctl?.done(); FOLDER.busy = false; await loadBooks(); renderLibrary();
+    FOLDER.busy = false; await loadBooks(); renderLibrary();
   }
-}
-// Panneau de la recherche dans tout le téléphone : pourcentage, pause, reprise, annulation
-function scanPanel(name) {
-  const bar = h('i', { style: { width: '0%' } }), txt = h('span', {}, 'Recherche dans le téléphone…'), dir = h('small', { class: 'scandir' }, '');
-  const pauseBtn = h('button', { class: 'btn', onclick: () => {
-    c.paused = !c.paused; if (c.paused) AndroidFolder.scanPause(); else AndroidFolder.scanResume();
-    pauseBtn.replaceChildren(icon(c.paused ? 'play' : 'pause'), c.paused ? 'Reprendre' : 'Pause'); el.classList.toggle('paused', c.paused);
-    txt.textContent = c.paused ? 'En pause · ' + txt.textContent : txt.textContent.replace(/^En pause · /, '');
-  } }, icon('pause'), 'Pause');
-  const el = h('div', { class: 'scanpanel' }, h('b', {}, name), txt, h('div', { class: 'bar' }, bar), dir,
-    h('div', { class: 'actions' }, pauseBtn, h('button', { class: 'btn danger', onclick: () => { if (!confirm('Annuler la recherche ? Les livres déjà ajoutés restent.')) return; c.cancelled = true; c.paused = false; AndroidFolder.scanCancel(); } }, icon('close'), 'Annuler')));
-  document.body.append(el);
-  const c = { paused: false, cancelled: false,
-    set(pct, t, d) { bar.style.width = Math.max(0, Math.min(100, pct)) + '%'; if (t) txt.textContent = (c.paused ? 'En pause · ' : '') + t; dir.textContent = d || ''; },
-    wait: () => new Promise((res) => { const tick = () => (c.paused && !c.cancelled ? setTimeout(tick, 200) : res()); tick(); }),
-    hide() { el.hidden = true; }, show() { el.hidden = false; }, done() { el.remove(); } };
-  return c;
 }
 function openFolder(libId = curLib()?.id) {
   if (!libId) return openLibraries();
@@ -3151,10 +3123,48 @@ function openFolder(libId = curLib()?.id) {
     ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
     !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
-    f ? h('details', { class: 'more' }, h('summary', {}, 'Autres options pour ce dossier'),
-      h('div', { class: 'actions', style: { marginTop: '10px' } },
-        h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer le dossier'),
-        h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier'))) : null));
+    f ? h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'space-between' } },
+      h('button', { class: 'btn danger', onclick: () => { close(); removeFolder(libId); } }, icon('trash'), 'Supprimer ce dossier'),
+      h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer')) : null));
+}
+// ---- Supprimer un dossier source : avec ses livres, ou en gardant les livres ----
+// Les fichiers du téléphone ne sont jamais touchés : seuls les livres de l'application sont retirés.
+function forgetFolder(libId) { if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } }
+function removeFolder(libId) {
+  const L = libs(); const lib = L.find((l) => l.id === libId); const f = folderOf(libId); if (!lib || !f) return;
+  const inLibBooks = S.books.filter((b) => (b.lib || 'main') === libId);
+  const fromFolder = inLibBooks.filter((b) => /^(saf|web):/.test(b.src || ''));
+  const others = inLibBooks.length - fromFolder.length;
+  const n = fromFolder.length; const s = n > 1 ? 's' : '';
+  const dropLib = libId !== 'main' && others === 0; // la bibliothèque ne contient que ce dossier : elle disparaît avec lui
+  const close = sheet('Supprimer « ' + f.name + ' »', h('div', {},
+    h('p', {}, `Ce dossier a ajouté ${n} livre${s} à « ${lib.name} ».`),
+    h('p', { class: 'hint' }, 'Les fichiers restent sur ton téléphone : seule la Bibliothèque les oublie.'),
+    h('div', { class: 'sharechoices' },
+      h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(true); } },
+        h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, n ? `Supprimer le dossier et ses ${n} livre${s}` : 'Supprimer le dossier'),
+          h('small', {}, dropLib ? `L'onglet « ${lib.name} » disparaît aussi.` : others ? `Les ${others} livre${others > 1 ? 's' : ''} ajouté${others > 1 ? 's' : ''} à la main reste${others > 1 ? 'nt' : ''}.` : 'La bibliothèque reste, vide.'))),
+      n ? h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(false); } },
+        h('span', { class: 'addic' }, icon('folder')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer seulement le dossier'), h('small', {}, `Les ${n} livre${s} reste${n > 1 ? 'nt' : ''} sur l'étagère ; il n'y aura simplement plus d'actualisation.`))) : null)));
+  async function doRemove(withBooks) {
+    forgetFolder(libId);
+    if (withBooks && n) {
+      const box = h('div', { class: 'up' }, h('b', {}, `Suppression de « ${f.name} »`), h('span', { class: 'muted' }, '…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+      $('#uploads')?.append(box);
+      const srcs = new Set();
+      for (let i = 0; i < n; i++) {
+        const b = fromFolder[i]; srcs.add(b.src);
+        try { await api('/api/books/' + b.id, { method: 'DELETE' }); } catch {}
+        $('i', box).style.width = Math.round(((i + 1) / n) * 100) + '%'; $('span', box).textContent = `${i + 1} sur ${n}`;
+      }
+      // sinon ces livres seraient refusés si tu rajoutes un jour ce dossier
+      try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
+      box.remove();
+    }
+    if (withBooks && dropLib) { saveLibs(libs().filter((x) => x.id !== libId)); await loadBooks(); switchLib(S.lib === libId ? 'main' : S.lib); }
+    else { await loadBooks(); renderLibrary(); }
+    toast(withBooks && n ? `Dossier et ${n} livre${s} supprimés` : 'Dossier supprimé, livres gardés');
+  }
 }
 
 // ================= Partager une bibliothèque entière =================
@@ -3168,6 +3178,7 @@ function shareLibraryPick() {
     h('button', { class: 'libpick', onclick: () => { close(); shareLibrary(l.id); } }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[l.decor] || '#555' } }), h('span', { class: 'libtxt' }, h('b', {}, l.name)))))));
 }
 function shareLibrary(id) {
+  if (!Premium.need('share')) return;
   const lib = libs().find((x) => x.id === id); if (!lib) return;
   const books = S.books.filter((b) => !b.trashed && (b.lib || 'main') === id);
   if (!books.length) return toast('Cette bibliothèque est vide');
@@ -3335,7 +3346,8 @@ function editLib(id) {
   const close = sheet('Bibliothèque', h('div', {},
     h('label', { class: 'field' }, 'Nom', name),
     h('div', { class: 'field' }, 'Décor', seg),
-    h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'))),
+    h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'),
+      f ? h('button', { class: 'btn danger', onclick: () => { save(); close(); removeFolder(id); } }, icon('trash'), 'Supprimer le dossier') : null)),
     window.AndroidShare ? h('div', { class: 'field' }, 'Partage', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); shareLibrary(id); } }, icon('share'), 'Envoyer à quelqu\'un'))) : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       id !== 'main' ? h('button', { class: 'btn danger', onclick: async () => {
@@ -3607,6 +3619,7 @@ function stopAllAudio() {
   try { if (window.AndroidAuto?.profStop) AndroidAuto.profStop(); } catch {}
 }
 function openSummary(b) {
+  if (!Premium.need('summary')) return;
   stopAllAudio();
   const s = b.summary;
   if (s?.text) {
@@ -3827,6 +3840,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
     return true;
   },
   async open(b) {
+    if (!Premium.need('prof')) return;
     if ((await this.go(b)) === false) return;
     const info = this.info(b.id);
     const q = h('textarea', { placeholder: 'Ta question au Professeur…' });
@@ -4360,7 +4374,7 @@ const TONES = [
 const VOICE_NAMES = ['Camille', 'Dominique', 'Sacha', 'Alex', 'Charlie', 'Morgan', 'Lou', 'Eden', 'Noa', 'Claude', 'Ariel', 'Jo', 'Sam', 'Andréa', 'Maxime', 'Gaby'];
 const REGION = { CA: 'Québec', FR: 'France', BE: 'Belgique', CH: 'Suisse', LU: 'Luxembourg' };
 const Voice = {
-  tone: () => store.get('tone', 'naturel'),
+  tone: () => { const t = store.get('tone', 'naturel'); return PREMIUM_TONES.has(t) && !Premium.ok() ? 'naturel' : t; },
   toneOf: (k) => TONES.find((t) => t[0] === k) || TONES[2],
   current: () => store.get('voice', ''),
   list() {
@@ -4494,8 +4508,9 @@ function openVoices() {
     next();
   };
   const tones = h('div', { class: 'tonegrid' }, TONES.map(([k, name, desc]) => h('button', { class: 'tonecard' + (k === tone ? ' sel' : ''), onclick: (e) => {
+    if (PREMIUM_TONES.has(k) && !Premium.need('tones')) return;
     tone = k; store.set('tone', k); if (window.__reader?.toneBtn) window.__reader.toneBtn.replaceChildren(icon('voice'), ' ', Voice.toneOf(k)[1]); $$('.tonecard', tones).forEach((x) => x.classList.remove('sel')); e.currentTarget.classList.add('sel'); preview(cur, k);
-  } }, h('b', {}, name), h('small', {}, desc))));
+  } }, h('b', {}, name, PREMIUM_TONES.has(k) ? Premium.badge() : null), h('small', {}, desc))));
   const row = (v) => h('div', { class: 'vrow' + ((v ? v.name : '') === cur ? ' sel' : '') },
     h('button', { class: 'vpick', onclick: (e) => {
       cur = v ? v.name : ''; store.set('voice', cur); if (window.__reader) window.__reader.voice = cur;
@@ -4643,6 +4658,7 @@ const Ocr = {
   },
   async run(b, from = 1) {
     if (this.jobs[b.id]) return toast('La conversion est déjà en cours');
+    if (!Premium.ok()) { const free = store.get('ocrFree', ''); if (free && free !== b.id) { Premium.offer('ocr'); return; } store.set('ocrFree', b.id); } // un livre offert pour essayer
     const total = b.pages; const pages = await LocalAPI.ocrGet(b.id); while (pages.length < total) pages.push(null);
     const ctl = progressPanel(`Conversion en texte · ${b.title}`); this.jobs[b.id] = ctl;
     const order = []; for (let i = 0; i < total; i++) order.push(((from - 1 + i) % total) + 1); // à partir de la page en cours

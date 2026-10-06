@@ -3120,10 +3120,48 @@ function openFolder(libId = curLib()?.id) {
     ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
     !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
-    f ? h('details', { class: 'more' }, h('summary', {}, 'Autres options pour ce dossier'),
-      h('div', { class: 'actions', style: { marginTop: '10px' } },
-        h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer le dossier'),
-        h('button', { class: 'btn danger', onclick: () => { if (!confirm('Oublier ce dossier ? Les livres déjà ajoutés restent dans la bibliothèque.')) return; if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } close(); renderLibrary(); toast('Dossier oublié'); } }, 'Oublier'))) : null));
+    f ? h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'space-between' } },
+      h('button', { class: 'btn danger', onclick: () => { close(); removeFolder(libId); } }, icon('trash'), 'Supprimer ce dossier'),
+      h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer')) : null));
+}
+// ---- Supprimer un dossier source : avec ses livres, ou en gardant les livres ----
+// Les fichiers du téléphone ne sont jamais touchés : seuls les livres de l'application sont retirés.
+function forgetFolder(libId) { if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } }
+function removeFolder(libId) {
+  const L = libs(); const lib = L.find((l) => l.id === libId); const f = folderOf(libId); if (!lib || !f) return;
+  const inLibBooks = S.books.filter((b) => (b.lib || 'main') === libId);
+  const fromFolder = inLibBooks.filter((b) => /^(saf|web):/.test(b.src || ''));
+  const others = inLibBooks.length - fromFolder.length;
+  const n = fromFolder.length; const s = n > 1 ? 's' : '';
+  const dropLib = libId !== 'main' && others === 0; // la bibliothèque ne contient que ce dossier : elle disparaît avec lui
+  const close = sheet('Supprimer « ' + f.name + ' »', h('div', {},
+    h('p', {}, `Ce dossier a ajouté ${n} livre${s} à « ${lib.name} ».`),
+    h('p', { class: 'hint' }, 'Les fichiers restent sur ton téléphone : seule la Bibliothèque les oublie.'),
+    h('div', { class: 'sharechoices' },
+      h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(true); } },
+        h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, n ? `Supprimer le dossier et ses ${n} livre${s}` : 'Supprimer le dossier'),
+          h('small', {}, dropLib ? `L'onglet « ${lib.name} » disparaît aussi.` : others ? `Les ${others} livre${others > 1 ? 's' : ''} ajouté${others > 1 ? 's' : ''} à la main reste${others > 1 ? 'nt' : ''}.` : 'La bibliothèque reste, vide.'))),
+      n ? h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(false); } },
+        h('span', { class: 'addic' }, icon('folder')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer seulement le dossier'), h('small', {}, `Les ${n} livre${s} reste${n > 1 ? 'nt' : ''} sur l'étagère ; il n'y aura simplement plus d'actualisation.`))) : null)));
+  async function doRemove(withBooks) {
+    forgetFolder(libId);
+    if (withBooks && n) {
+      const box = h('div', { class: 'up' }, h('b', {}, `Suppression de « ${f.name} »`), h('span', { class: 'muted' }, '…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+      $('#uploads')?.append(box);
+      const srcs = new Set();
+      for (let i = 0; i < n; i++) {
+        const b = fromFolder[i]; srcs.add(b.src);
+        try { await api('/api/books/' + b.id, { method: 'DELETE' }); } catch {}
+        $('i', box).style.width = Math.round(((i + 1) / n) * 100) + '%'; $('span', box).textContent = `${i + 1} sur ${n}`;
+      }
+      // sinon ces livres seraient refusés si tu rajoutes un jour ce dossier
+      try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
+      box.remove();
+    }
+    if (withBooks && dropLib) { saveLibs(libs().filter((x) => x.id !== libId)); await loadBooks(); switchLib(S.lib === libId ? 'main' : S.lib); }
+    else { await loadBooks(); renderLibrary(); }
+    toast(withBooks && n ? `Dossier et ${n} livre${s} supprimés` : 'Dossier supprimé, livres gardés');
+  }
 }
 
 // ================= Partager une bibliothèque entière =================
@@ -3305,7 +3343,8 @@ function editLib(id) {
   const close = sheet('Bibliothèque', h('div', {},
     h('label', { class: 'field' }, 'Nom', name),
     h('div', { class: 'field' }, 'Décor', seg),
-    h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'))),
+    h('div', { class: 'field' }, 'Dossier source', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); openFolder(id); } }, icon('folder'), f ? f.name : 'Choisir un dossier'),
+      f ? h('button', { class: 'btn danger', onclick: () => { save(); close(); removeFolder(id); } }, icon('trash'), 'Supprimer le dossier') : null)),
     window.AndroidShare ? h('div', { class: 'field' }, 'Partage', h('div', { class: 'actions' }, h('button', { class: 'btn', onclick: () => { save(); close(); shareLibrary(id); } }, icon('share'), 'Envoyer à quelqu\'un'))) : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       id !== 'main' ? h('button', { class: 'btn danger', onclick: async () => {
