@@ -84,6 +84,7 @@ public class LivreService extends MediaBrowserService {
     private android.speech.tts.Voice defaultVoice, profVoice;
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
+    private String pendingQ; // question entendue, en attente du choix « flash » ou « pro »
     private boolean fromCar; // lecture lancée depuis l'auto : elle continue même si l'application du téléphone se ferme
     private boolean profDone = true, waitingMore; // cours encore en préparation : on attend la partie suivante
     private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur. Ne suppose jamais où il se trouve ni ce qu'il fait (route, volant, maison…) : n'en parle pas.";
@@ -614,13 +615,33 @@ public class LivreService extends MediaBrowserService {
 
     private void heard(String q) {
         if (!asking) return;
+        if (pendingQ != null) { // réponse à « flash ou pro ? » : sans réponse claire, on va au plus rapide
+            String pq = pendingQ; pendingQ = null;
+            String c = q == null ? "" : q.toLowerCase(java.util.Locale.ROOT);
+            answer(pq, c.matches(".*\\b(pro|prof|professionnel|profonde?|complexe|complète?|détaillée?|longue)\\b.*"));
+            return;
+        }
+        if (q != null && !q.trim().isEmpty()) {
+            String c = q.toLowerCase(java.util.Locale.ROOT).trim();
+            // choix déjà dit dans la question : « … en pro », « réponse flash : … »
+            if (c.matches(".*\\b(réponse|en|mode) pro\\b.*") || c.endsWith(" pro")) { answer(q, true); return; }
+            if (c.matches(".*\\bflash\\b.*")) { answer(q, false); return; }
+            pendingQ = q;
+            say("Réponse flash, ou réponse pro ?", "listen");
+            return;
+        }
         if (q == null || q.trim().isEmpty()) {
             asking = false;
             setInter("Hmm, je ne t'ai pas bien entendu. Tu pourras réessayer avec le bouton Question. Je reprends le cours !");
             play();
             return;
         }
-        say("Ah ! Bonne question… Laisse-moi réfléchir un instant.", "wait");
+        answer(q, false);
+    }
+
+    /** pro : Gemini Pro, réponse plus approfondie (plus lente) ; sinon Flash, réponse rapide */
+    private void answer(String q, boolean pro) {
+        say(pro ? "Réponse pro ! Laisse-moi y réfléchir en profondeur…" : "Réponse flash, c'est parti !", "wait");
         final String id = bookId.substring(5), title = this.title.replace("🎓 ", "");
         final int part = idx < marks.size() ? marks.get(idx) : 0;
         new Thread(() -> {
@@ -631,9 +652,11 @@ public class LivreService extends MediaBrowserService {
                 if (parts != null) for (int k = Math.max(0, part - 1); k <= Math.min(part, parts.length() - 1); k++) ctx.append(parts.optString(k)).append("\n\n");
                 answer = IaGratuite.ask(LivreService.this, PERSONA, "L'auditeur t'interrompt pendant ton explication du livre « " + title + " » pour te poser une question.\n"
                     + "Voici ce que tu étais en train d'expliquer :\n" + ctx
-                    + "\nRéponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n"
+                    + (pro ? "\nRéponds de façon approfondie et nuancée, en 6 à 12 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n"
+                           : "\nRéponds en 3 à 6 phrases, avec entrain, comme à voix haute : pas de listes ni de symboles.\n")
                     + "Si la réponse n'est pas dans le livre, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.\n"
-                    + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q, true);
+                    + "Termine en annonçant, en quelques mots, que tu reprends le cours.\n\nQuestion : " + q, true, false, pro);
+                if (pro && !IaGratuite.lastModel.contains("pro")) answer = "Pro est à court pour l'instant, alors voici la réponse flash. " + answer;
                 answer = answer.replaceAll("(?m)^\\s*#+.*$", "").replaceAll("(?m)^\\s*[-*•]\\s+", "").replaceAll("\\*\\*?|__|`", "");
             } catch (Exception e) {
                 answer = e instanceof IaGratuite.Fatal ? e.getMessage() + " Je reprends le cours !"
