@@ -1010,3 +1010,5 @@ body.selmode .uploads { bottom: 150px; }
 .room { padding-bottom: 20px; }
 body.selmode .room { padding-bottom: 170px; }
 body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
+.check.autoscan { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px; align-items: flex-start; }
+.check.autoscan span { display: grid; gap: 3px; } .check.autoscan small { color: var(--ink-3); font-size: 12px; }

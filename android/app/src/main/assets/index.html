@@ -1022,6 +1022,8 @@ body.selmode .uploads { bottom: 150px; }
 .room { padding-bottom: 20px; }
 body.selmode .room { padding-bottom: 170px; }
 body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
+.check.autoscan { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px; align-items: flex-start; }
+.check.autoscan span { display: grid; gap: 3px; } .check.autoscan small { color: var(--ink-3); font-size: 12px; }
 
 </style>
 </head>
@@ -2244,6 +2246,7 @@ async function boot() {
   renderLibrary();
   checkReceived(); // une bibliothèque partagée a peut-être ouvert l'application
   maintenance();
+  setTimeout(() => AutoScan.run(true), 2500); // nouveaux livres dans les dossiers depuis la dernière fois
 }
 // Faux livre : le fichier n'est qu'une page de publicité d'un site de téléchargement
 function baitSheet(b, fromEl, opts) {
@@ -3070,6 +3073,22 @@ async function addFolderLib() {
   switchLib(lib.id);
 }
 // Actualiser : la bibliothèque affichée, ou toutes celles qui ont un dossier
+// Recherche automatique : à l'ouverture de l'application et quand on y revient, chaque dossier est vérifié
+// sans rien afficher ; seuls les nouveaux livres sont ajoutés (avec leur barre d'avancement)
+const AutoScan = {
+  on: () => store.get('autoScan', true),
+  last: 0,
+  async run(force) {
+    if (!this.on() || !hasNativeFolder() || S.me?.role !== 'owner' || FOLDER.busy || window.__reader) return;
+    if (!force && Date.now() - this.last < 3 * 60e3) return; // pas plus d'une fois toutes les 3 minutes
+    const list = libsWithFolder(); if (!list.length) return;
+    this.last = Date.now();
+    let total = 0;
+    for (const l of list) total += (await scanFolder(l.id, null, { quiet: true, silent: true })) || 0;
+    if (total) toast(`${total} nouveau${total > 1 ? 'x' : ''} livre${total > 1 ? 's' : ''} ajouté${total > 1 ? 's' : ''} depuis tes dossiers`);
+  },
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(() => AutoScan.run(), 1200); });
 async function refreshFolders() {
   if (S.lib !== 'all') return scanFolder(curLib().id);
   const list = libsWithFolder(); if (!list.length) return toast('Aucune bibliothèque n\'a de dossier source');
@@ -3085,16 +3104,16 @@ function scanFolder(libId, webFiles, opts) {
   FOLDER.queue = run.catch(() => 0);
   return run;
 }
-async function scanOne(libId, webFiles, { quiet, adopt } = {}) {
+async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
   let entries;
   FOLDER.busy = true; renderLibrary();
   try {
     if (hasNativeFolder()) {
-      const box = h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box);
+      const box = silent ? h('i') : h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box);
       const r = await nativeCall('__folderScanned', () => AndroidFolder.scan(libId));
       box.remove();
-      if (!r || r.error) { toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
+      if (!r || r.error) { if (!silent) toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
       entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, get: async () => {
         const resp = await fetch('/__dossier?lib=' + encodeURIComponent(libId) + '&id=' + encodeURIComponent(f.id));
         if (!resp.ok) throw new Error('Fichier illisible');
@@ -3163,6 +3182,8 @@ function openFolder(libId = curLib()?.id) {
     ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
     !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
+    f && hasNativeFolder() ? h('label', { class: 'check autoscan' }, h('input', { type: 'checkbox', checked: AutoScan.on(), onchange: (e) => { store.set('autoScan', e.target.checked); toast(e.target.checked ? 'Les nouveaux livres seront ajoutés automatiquement' : 'Recherche automatique arrêtée : utilise 🔄'); } }),
+      h('span', {}, h('b', {}, 'Ajouter automatiquement les nouveaux livres'), h('small', {}, 'Vérifié à l\'ouverture de l\'application et quand tu y reviens.'))) : null,
     f ? h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'space-between' } },
       h('button', { class: 'btn danger', onclick: () => { close(); removeFolder(libId); } }, icon('trash'), 'Supprimer ce dossier'),
       h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer')) : null));
