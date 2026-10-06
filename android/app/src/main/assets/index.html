@@ -2667,6 +2667,7 @@ const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g,
 const Glide = { last: 0, tap: 0, down: false, wait: [],
   busy() { return this.down || Date.now() - this.last < 350; },
   later(fn) { this.wait.push(fn); this.kick(); },
+  async idle() { do await new Promise((r) => setTimeout(r, this.busy() ? 400 : 30)); while (this.busy()); }, // attend que l'étagère soit immobile
   kick() { clearTimeout(this.t); this.t = setTimeout(() => { if (this.busy()) return this.kick(); const w = this.wait.splice(0); w.forEach((f) => f()); }, 400); },
 };
 addEventListener('scroll', () => { Glide.last = Date.now(); }, { passive: true, capture: true });
@@ -3711,6 +3712,7 @@ const AutoSync = {
     if (this.running) { this.again = true; return; }
     this.running = true;
     try {
+      await Glide.idle(); // jamais pendant un défilement : ce travail passe après le doigt
       await this.pullProgress();
       this.writeCatalog();
       const done = store.get('autoDone', {});
@@ -3718,6 +3720,7 @@ const AutoSync = {
       for (const b of live) {
         const ck = `${b.title}|${b.author}|${b.color}|${b.coverUrl ? 1 : 0}`;
         const d = done[b.id] || {};
+        if (d.c !== ck || !d.t) await Glide.idle();
         if (d.c !== ck) { if (await this.exportCover(b)) { d.c = ck; done[b.id] = d; store.set('autoDone', done); this.writeCatalog(); } }
         if (!d.t) { if (await this.exportText(b)) { d.t = 1; done[b.id] = d; store.set('autoDone', done); this.writeCatalog(); } }
         if (document.hidden) break; // on reprendra au retour dans l'application
@@ -3739,7 +3742,9 @@ const AutoSync = {
       id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
       cover: done[b.id]?.c ? `covers/${b.id}.${b.coverUrl ? 'jpg' : 'png'}` : '',
       last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1, prof: prof.has(b.id) }));
-    AndroidAuto.writeText('catalog.json', JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1), updated: Date.now() }));
+    const body = JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1) });
+    if (body === this.lastCat) return; this.lastCat = body; // rien de changé : on n'écrit pas
+    AndroidAuto.writeText('catalog.json', body.slice(0, -1) + ',"updated":' + Date.now() + '}');
   },
   async pullProgress() {
     let prog = {}; try { prog = JSON.parse(AndroidAuto.readText('progress.json') || '{}'); } catch {}
@@ -3762,7 +3767,7 @@ const AutoSync = {
       for (let n = 1; n <= b.pages; n++) {
         let t = ''; try { t = (await api(`/api/books/${b.id}/text/${n}`)).text || ''; } catch {}
         for (const x of sentences(t)) u.push([x, n]);
-        if (n % 4 === 0) await new Promise((r) => setTimeout(r, 25)); // laisse respirer l'application
+        await Glide.idle(); // laisse respirer l'application, et attend la fin d'un défilement
       }
     } else {
       const paras = await LocalAPI.paragraphs(b.id); let offset = 0;
