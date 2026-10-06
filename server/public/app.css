@@ -950,7 +950,7 @@ svg.rot-r { transform: rotate(-90deg); }
 /* ---------- Défilement fluide sur téléphone ----------
    Les effets coûteux (flou d'arrière-plan, livres qui se soulèvent au toucher) sont recalculés à chaque image pendant le défilement :
    sur écran tactile on les remplace par des équivalents fixes, et les rayons hors de l'écran ne sont pas dessinés. */
-.shelf { content-visibility: auto; contain-intrinsic-size: auto 300px; padding-bottom: 48px !important; margin-bottom: -48px; } /* marge pour les petites icônes sous la planche */
+/* Les rayons sont tous dessinés d'avance : les dessiner au moment où ils arrivent à l'écran (content-visibility) faisait sauter le défilement sur Android */
 .cover { contain: paint; }
 @media (hover: none), (pointer: coarse) {
   .btn, .hero, .brow { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -958,7 +958,7 @@ svg.rot-r { transform: rotate(-90deg); }
   .btn.primary { background: linear-gradient(180deg, var(--brass), var(--brass-2)); }
   .hero { background: linear-gradient(120deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); }
   .brow { background: rgba(255,255,255,.05); }
-  .book, .cover { transition: none; }
+  .book, .cover, .ti { transition: none; }
   .case { box-shadow: inset 0 0 0 7px var(--side), inset 0 0 0 8px rgba(0,0,0,.25); }
   .case::before { content: ''; position: absolute; left: 7px; right: 7px; top: 7px; height: 70px; background: linear-gradient(180deg, rgba(0,0,0,.45), transparent); pointer-events: none; z-index: 0; border-radius: 4px 4px 0 0; }
   .plank { box-shadow: 0 1px 0 rgba(0,0,0,.25); }

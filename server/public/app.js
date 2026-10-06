@@ -479,7 +479,17 @@ function caseFor(groups, owner) {
 }
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+// Couvertures : chargées « paresseusement » pour un démarrage rapide, puis toutes préparées au repos —
+// sinon chacune se charge pendant le défilement et l'étagère saccade.
+let warmTimer = 0;
+function warmCovers() {
+  clearTimeout(warmTimer);
+  warmTimer = setTimeout(() => (window.requestIdleCallback || ((f) => setTimeout(f, 0)))(() => {
+    for (const img of document.querySelectorAll('.room img[loading="lazy"]')) img.loading = 'eager';
+  }, { timeout: 2000 }), 600);
+}
 function renderLibrary(opts = {}) {
+  warmCovers();
   const owner = S.me.role === 'owner';
   const local = !!window.LocalAPI;
   if (local && !store.get('libnames16', false)) { // une fois : la bibliothèque prend le nom de son dossier
