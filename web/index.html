@@ -3947,7 +3947,7 @@ function synthChoices(books) {
     h('p', {}, 'Ce que chacun dit, ce qu\'ils ont en commun, où ils divergent, ce que l\'un apporte à l\'autre, et les phrases clés de l\'ensemble. Elle sera rangée dans la bibliothèque « Synthèses », prête à lire ou à écouter.'),
     h('div', { class: 'sharechoices' },
       h('button', { class: 'addbig', onclick: () => { close(); makeSynthesis(books); } },
-        h('span', { class: 'addic' }, icon('merge')), h('span', { class: 'addtx' }, h('b', {}, 'Faire la synthèse'), h('small', {}, window.AndroidAI ? 'Gratuite, sur le téléphone (IA du téléphone si disponible, sinon synthèse automatique)' : 'Gratuite, synthèse automatique sur l\'appareil'))),
+        h('span', { class: 'addic' }, icon('merge')), h('span', { class: 'addtx' }, h('b', {}, 'Faire la synthèse'), h('small', {}, window.AndroidAI && !AndroidAI.web ? 'Gratuite, sur le téléphone (IA du téléphone si disponible, sinon synthèse automatique)' : 'Gratuite, synthèse automatique sur l\'appareil'))),
       h('button', { class: 'addbig', onclick: () => { close(); shareMany(books, `Fais une synthèse croisée des livres ci-joints (${list}).\n${SYNTH_PROMPT}`); } },
         h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Avec ton application d\'IA'), h('small', {}, 'ChatGPT, Claude, Gemini… Les livres partent avec la demande déjà écrite.'))))));
 }
@@ -4120,7 +4120,7 @@ function summaryChoices(b) {
       h('button', { class: 'btn primary', onclick: () => { close(); KeyGuide.start(() => makeFreeSummary(b)); } }, icon('spark'), 'Activer l\'IA gratuite')) : null,
     !hasKey ? h('div', { class: 'aiopt' },
       h('h4', {}, canGuide ? 'Sans clé' : 'Résumé gratuit'),
-      h('p', {}, window.AndroidAI
+      h('p', {}, window.AndroidAI && !AndroidAI.web
         ? 'Fait sur ton téléphone, sans Internet ni compte : avec l\'IA intégrée de Google (Gemini Nano) si le téléphone l\'a ; sinon, un résumé automatique choisit les passages clés du livre.'
         : 'Un résumé automatique choisit les passages clés du livre, directement sur l\'appareil.'),
       h('button', { class: canGuide ? 'btn' : 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')) : null,
@@ -4137,12 +4137,70 @@ function summaryChoices(b) {
         h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude'))) : null));
 }
 
+// ---------- IA gratuite dans la version web (iPhone, navigateur) ----------
+// Sans application Android, le navigateur parle directement à Gemini avec la clé gratuite de la personne
+// (gardée seulement dans ce navigateur). Pro d'abord, Flash en relais : mêmes règles que sur Android.
+if (!window.AndroidAI) window.AndroidAI = (() => {
+  const K = 'bib.geminiKey', P = 'bib.proPause';
+  const PRO = ['gemini-pro-latest', 'gemini-2.5-pro'], FLASH = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest'];
+  const get = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+  const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const base = 'https://generativelanguage.googleapis.com/v1beta/models';
+  async function call(url, key, body) { // clé en en-tête, puis dans l'adresse (selon le format de la clé)
+    const opt = (hdr) => ({ method: body ? 'POST' : 'GET', headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(hdr ? { 'x-goog-api-key': key } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    let r = await fetch(url, opt(true));
+    if ([400, 401, 403].includes(r.status)) { const r2 = await fetch(url + (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key), opt(false)); if (r2.ok) r = r2; }
+    return r;
+  }
+  async function ask(system, prompt, json, tell) {
+    const key = get(K, ''); if (!key) throw new Error('Il manque la clé Gemini gratuite (Réglages → IA gratuite).');
+    const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: json ? 16384 : 8192, ...(json ? { responseMimeType: 'application/json' } : {}) } };
+    if (system) body.systemInstruction = { parts: [{ text: system }] };
+    const read = async (r) => { const j = await r.json(); return (j.candidates?.[0]?.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join('').trim(); };
+    if (Date.now() > +get(P, 0)) { // 1) Pro
+      for (let m = 0, t = 0; m < PRO.length && t < 3; t++) {
+        let r; try { r = await call(`${base}/${PRO[m]}:generateContent`, key, body); } catch { break; }
+        if (r.ok) { const x = await read(r); if (x) return { text: x, model: PRO[m] }; break; }
+        if (r.status === 404) { m++; t--; continue; }
+        if (r.status === 429 && t < 2) { tell('Gemini Pro est occupé : nouvel essai dans 40 s…'); await sleep(40000); tell('Gemini Pro : nouvel essai…'); continue; }
+        if (r.status >= 500 && t < 2) { await sleep(6000); continue; }
+        tell('Gemini Pro est à court pour aujourd\'hui : Gemini Flash prend le relais…'); set(P, Date.now() + 6 * 3600e3); break;
+      }
+    }
+    let last = 'pas de réponse';
+    for (let m = 0, t = 0; m < FLASH.length && t < 6; t++) { // 2) Flash
+      let r; try { r = await call(`${base}/${FLASH[m]}:generateContent`, key, body); } catch { last = 'pas de connexion Internet'; await sleep(4000); continue; }
+      if (r.ok) { const x = await read(r); if (x) return { text: x, model: FLASH[m] }; last = 'réponse vide'; continue; }
+      if (r.status === 404) { m++; continue; }
+      if ([400, 401, 403].includes(r.status)) throw new Error('La clé Gemini est refusée. Refais « Activer l\'IA gratuite » dans les Réglages.');
+      if (r.status === 429) { last = 'quota gratuit momentanément atteint'; tell('Gemini est occupé : nouvel essai dans 20 s…'); await sleep(20000); continue; }
+      last = 'erreur ' + r.status; await sleep(5000);
+    }
+    throw new Error('Gemini ne répond pas (' + last + ').');
+  }
+  const gen = (json) => (id, system, prompt) => ask(system, prompt, json, (msg) => window.__aiProgress?.(JSON.stringify({ id, msg })))
+    .then((r) => window.__aiResult?.(JSON.stringify({ id, text: r.text, model: r.model })), (e) => window.__aiResult?.(JSON.stringify({ id, error: e.message })));
+  return {
+    web: true,
+    status() { setTimeout(() => window.__aiStatus?.('unavailable'), 0); },
+    download() { setTimeout(() => window.__aiDownload?.('error:indisponible'), 0); },
+    generate(id) { setTimeout(() => window.__aiResult?.(JSON.stringify({ id, error: 'IA du téléphone indisponible' })), 0); },
+    generateOnline: gen(false), generateUrgent: gen(false), generateJson: gen(true),
+    hasGeminiKey: () => !!get(K, ''), setGeminiKey: (k) => set(K, String(k || '').trim()),
+    checkGeminiKey(k) {
+      call(base + '?pageSize=1', k).then((r) => window.__keyChecked?.(JSON.stringify({ ok: r.ok, msg: r.ok ? '' : [400, 401, 403].includes(r.status) ? 'Google refuse cette clé.' : 'Réponse inattendue de Google (' + r.status + ').' })),
+        () => window.__keyChecked?.(JSON.stringify({ ok: false, msg: 'Pas de connexion Internet ?' })));
+    },
+  };
+})();
+
 // ---------- IA gratuite : la clé Gemini de la personne, obtenue en 4 touchers ----------
 // La page des clés de Google s'ouvre en panneau dans le bas de l'écran ; les 4 touchers restent écrits en haut.
 // Quand la personne ferme la page avec le X, l'application lit la clé copiée, la vérifie auprès de Google et l'enregistre.
 // Chaque personne utilise SA clé gratuite : l'auteur de l'application n'a rien à payer ni à gérer.
 const KeyGuide = {
-  ok: () => !!(window.AndroidAI?.openKeyPage && AndroidAI.clip),
+  ok: () => !!((window.AndroidAI?.openKeyPage && AndroidAI.clip) || window.AndroidAI?.web),
   then: null, active: false, checking: false, lastTried: '',
   find(t) {
     t = String(t || '').trim();
@@ -4154,6 +4212,7 @@ const KeyGuide = {
   start(then) {
     this.then = then || null;
     if (!this.ok()) return this.manual('');
+    if (AndroidAI.web) return this.startWeb();
     try { AndroidAI.keyWarm(); } catch {}
     const close = sheet('IA gratuite en 1 minute', h('div', {},
       h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut seulement une « clé » : un code personnel qui dit à Google que c\'est toi.'),
@@ -4176,6 +4235,35 @@ const KeyGuide = {
       h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '4'), h('span', {}, 'Quand tu as fini, appuie sur le ', h('span', { class: 'kg-chip x' }, '✕'), ' ', h('span', { class: 'kg-where' }, 'en haut à gauche'), ' pour fermer la page. C\'est tout !'))));
     this.active = true;
     AndroidAI.openKeyPage();
+  },
+  // Version web (iPhone…) : la page de Google s'ouvre dans un nouvel onglet ; en revenant, « Coller ma clé »
+  startWeb() {
+    const steps = () => h('div', {},
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '1'), h('span', {}, 'Appuie sur ', h('span', { class: 'kg-chip' }, 'Créer une clé API'), ' ', h('span', { class: 'kg-where' }, 'en haut à droite'))),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '2'), h('span', {}, 'Une fenêtre s\'ouvre : appuie sur ', h('span', { class: 'kg-chip' }, 'Créer une clé'), ' ', h('span', { class: 'kg-where' }, 'en bas à droite'))),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '3'), h('span', {}, 'Va au bout de la ligne ', h('b', {}, 'Clé API'), ' et appuie sur le petit carré ', h('span', { class: 'kg-chip sq', html: '<svg width="15" height="15" viewBox="0 0 24 24" fill="#3c4043"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>' }), ' Ça fait une copie.')),
+      h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '4'), h('span', {}, 'Reviens ici, à la Bibliothèque, et appuie sur ', h('b', {}, 'Coller ma clé'), '.')));
+    const close = sheet('IA gratuite en 1 minute', h('div', {},
+      h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut seulement une « clé » : un code personnel qui dit à Google que c\'est toi. La page de Google va s\'ouvrir ; fais-y ces touchers :'),
+      steps(),
+      h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur cet appareil. ℹ️ Avec l\'offre gratuite, Google peut utiliser les textes envoyés pour améliorer son IA.'),
+      h('div', { class: 'actions', style: { marginTop: '14px', justifyContent: 'space-between' } },
+        h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'J\'ai déjà une clé'),
+        h('button', { class: 'btn primary', onclick: () => { close(); window.open('https://aistudio.google.com/apikey', '_blank'); this.pasteSheet(steps); } }, icon('spark'), 'Ouvrir la page de Google'))));
+  },
+  pasteSheet(steps) {
+    const close = sheet('Coller ma clé', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Après avoir copié ta clé sur la page de Google, reviens ici :'),
+      h('button', { class: 'btn primary', style: { width: '100%', justifyContent: 'center', padding: '16px', fontSize: '17px' }, onclick: async () => {
+        let txt = '';
+        try { txt = await navigator.clipboard.readText(); } catch { txt = ''; }
+        const k = this.find(txt);
+        close();
+        if (k) { this.lastTried = ''; this.verify(k); } else this.manual(txt ? 'Ce qui est copié n\'est pas une clé : recopie la clé sur la page de Google (le petit carré au bout de la ligne Clé API).' : '');
+      } }, icon('copy'), 'Coller ma clé'),
+      h('p', { class: 'muted', style: { marginTop: '10px' } }, 'Si l\'iPhone affiche une petite bulle « Coller », appuie dessus.'),
+      h('details', { class: 'more' }, h('summary', {}, 'Revoir les étapes'), h('div', { style: { marginTop: '8px' } }, steps(),
+        h('button', { class: 'btn', style: { marginTop: '8px' }, onclick: () => window.open('https://aistudio.google.com/apikey', '_blank') }, 'Rouvrir la page de Google')))));
   },
   panel: () => document.getElementById('kgPanel'),
   // l'application reprend la main (page fermée par le X) : on regarde ce qui a été copié
