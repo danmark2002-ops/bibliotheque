@@ -1452,7 +1452,7 @@ public class MainActivity extends Activity {
         private void online(String id, String system, String prompt, boolean urgent, boolean json) {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
-                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent, json)); }
+                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent, json)); res.put("model", IaGratuite.lastModel); }
                 catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
                 js("__aiResult", res.toString());
             }).start();

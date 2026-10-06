@@ -24,6 +24,12 @@ final class IaGratuite {
     // le premier modèle disponible est utilisé (les noms changent avec le temps)
     private static final String[] MODELS = {"gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.0-flash"};
     private static int model = 0;
+    // Gemini Pro d'abord (meilleur), tant que la clé y a droit ; s'il refuse ou que son quota est épuisé, Flash prend le relais
+    private static final String[] PRO = {"gemini-pro-latest", "gemini-2.5-pro"};
+    private static int pro = 0;
+    private static long proPausedUntil = 0;
+    /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
+    static volatile String lastModel = "";
 
     private IaGratuite() { }
 
@@ -43,12 +49,25 @@ final class IaGratuite {
     static String ask(Context c, String system, String prompt, boolean urgent, boolean json) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
+        // 1) Gemini Pro, une tentative (ses quotas gratuits sont petits : en cas de refus, pause puis Flash)
+        // (pas pour une question posée en direct au Professeur : Flash répond plus vite)
+        if (!urgent && System.currentTimeMillis() > proPausedUntil && pro < PRO.length) {
+            try {
+                String r = once(k, system, prompt, urgent, json, PRO[pro]);
+                if (r != null && !r.trim().isEmpty()) { lastModel = PRO[pro]; return r.trim(); }
+            } catch (ProRefused e) {
+                if (e.code == 404) { pro++; }                                            // nom retiré : le suivant la prochaine fois
+                else if (e.code == 429) proPausedUntil = System.currentTimeMillis() + 15 * 60_000L; // quota de Pro épuisé : Flash pendant 15 min
+                else proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;         // Pro pas permis pour cette clé
+            } catch (Exception ignored) { }
+        }
+        // 2) Flash
         Exception err = null;
         int tries = urgent ? 5 : 8;
         for (int t = 0; t < tries; t++) {
             try {
-                String r = once(k, system, prompt, urgent, json);
-                if (r != null && !r.trim().isEmpty()) return r.trim();
+                String r = once(k, system, prompt, urgent, json, null);
+                if (r != null && !r.trim().isEmpty()) { lastModel = MODELS[model]; return r.trim(); }
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
             catch (Exception e) { err = e; }
@@ -67,7 +86,10 @@ final class IaGratuite {
         }
     }
 
-    private static String once(String key, String system, String prompt, boolean urgent, boolean json) throws Exception {
+    /** Pro a refusé (code HTTP) : on passe à Flash sans insister */
+    static final class ProRefused extends Exception { final int code; ProRefused(int c) { super("pro " + c); code = c; } }
+
+    private static String once(String key, String system, String prompt, boolean urgent, boolean json, String force) throws Exception {
         JSONObject body = new JSONObject();
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
@@ -77,7 +99,7 @@ final class IaGratuite {
         body.put("generationConfig", gc);
         while (true) {
             if (!urgent) pace();
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + (force != null ? force : MODELS[model]) + ":generateContent";
             String[] res = http(url, key, body.toString());
             int code = Integer.parseInt(res[0]);
             // certains formats de clés passent mieux dans l'adresse que dans l'en-tête : second essai
@@ -85,6 +107,7 @@ final class IaGratuite {
                 String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body.toString());
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
+            if (force != null && code >= 400) throw new ProRefused(code);
             if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");

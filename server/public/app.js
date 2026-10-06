@@ -1796,7 +1796,7 @@ async function makeSynthesis(books) {
     }
     if (!body && window.AndroidAI?.generateOnline && Prof.hasKey()) {
       say('Gemini rédige la synthèse…');
-      try { body = Prof.clean0(await onlineAsk('', `${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(20000)}`)); model = 'gemini'; } catch { body = null; }
+      try { body = Prof.clean0(await onlineAsk('', `${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(20000)}`)); model = /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini'; } catch { body = null; }
     }
     if (!body) { say('Synthèse automatique…'); body = autoSynthesis(used, sums); }
     const titles = used.map((b) => b.title);
@@ -1895,7 +1895,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini' ? 'Gemini' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -1912,7 +1912,7 @@ function summaryChoices(b) {
     h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
     hasKey ? h('div', { class: 'aiopt' },
       h('h4', {}, 'Résumé par ton IA gratuite'),
-      h('p', {}, 'Gemini lit le livre en entier et rédige le résumé, avec des phrases clés qui disent ce que le livre nous apprend. Si Gemini n\'est pas disponible, l\'IA du téléphone ou le résumé automatique prend le relais.'),
+      h('p', {}, 'Gemini (Pro si ta clé y a droit, sinon Flash) lit le livre en entier et rédige le résumé, avec des phrases clés qui disent ce que le livre nous apprend. Si Gemini n\'est pas disponible, l\'IA du téléphone ou le résumé automatique prend le relais.'),
       h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé'))
     : canGuide ? h('div', { class: 'aiopt' },
       h('h4', {}, 'Activer l\'IA gratuite'),
@@ -2494,7 +2494,7 @@ function onlineAsk(system, prompt, urgent, json) {
   const id = 'o' + (++nanoSeq);
   const wait = (window.__aiWait ||= {});
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
-  return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); (json && AndroidAI.generateJson ? AndroidAI.generateJson : urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
+  return new Promise((res, rej) => { wait[id] = (r) => { if (r.model) window.__lastModel = r.model; return r.error ? rej(new Error(r.error)) : res((r.text || '').trim()); }; (json && AndroidAI.generateJson ? AndroidAI.generateJson : urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {
@@ -2556,7 +2556,7 @@ async function computeSummary(b, say) {
       say('Gemini rédige le résumé… (environ une minute)');
       try {
         text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 900000)}\n</livre>`));
-        model = 'gemini';
+        model = /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini';
       } catch (e) { say('Gemini indisponible (' + e.message + ') : IA du téléphone…'); text = null; }
     }
     if (!text && window.AndroidAI) {
