@@ -4643,10 +4643,11 @@ ${text}
           ready ? h('button', { class: 'btn', onclick: () => { const r = AndroidVideo.save(b.id, b.title); toast(r || 'Vidéo enregistrée dans ta Galerie (Films › Bibliotheque)'); } }, icon('download'), 'Télécharger') : null,
           ready ? h('button', { class: 'btn', onclick: () => AndroidVideo.share(b.id, b.title) }, icon('share'), 'Partager') : null,
           ready && Tele.on() ? h('button', { class: 'btn', onclick: () => { close(); Tele.open(b.id); } }, icon('tvplay'), 'Sur la télé') : null,
-          !ready && !busy ? h('button', { class: 'btn primary', onclick: () => { close(); this.create(b); } }, icon('film'), 'Créer la vidéo') : null)),
+          !ready && !busy ? h('button', { class: 'btn primary', onclick: () => { close(); this.create(b); } }, icon('film'), 'Créer la vidéo') : null,
+          // bien en vue : refaire avec les dernières améliorations (images, son…)
+          ready && !busy ? h('button', { class: 'btn', onclick: () => { close(); this.create(b); } }, icon('refresh'), 'Refaire la vidéo') : null)),
       ready ? h('details', { class: 'more' }, h('summary', {}, 'Autres options'),
         h('div', { class: 'prof-row', style: { marginTop: '10px' } },
-          h('button', { class: 'btn', onclick: () => { close(); this.create(b); } }, icon('refresh'), 'Refaire la vidéo'),
           h('button', { class: 'btn', onclick: () => { AndroidVideo.remove(b.id); close(); toast('Vidéo supprimée'); } }, icon('trash'), 'Supprimer'))) : null), { wide: true });
   },
 };
