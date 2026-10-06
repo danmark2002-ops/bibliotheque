@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Condensé vidéo d'un livre, fabriqué entièrement sur le téléphone :
- * scénario (écrit par Gemini côté application) → images libres (Wikimedia Commons, Openverse)
+ * scénario (écrit par Gemini côté application) → images libres (Wikimedia Commons, Openverse), choisies par Gemini
  * → voix du Professeur phrase par phrase → montage MP4 (H.264 + AAC) avec zoom lent, phrase choc et sous-titres.
  */
 final class VideoMaker {
@@ -97,17 +97,30 @@ final class VideoMaker {
                 p.on("images", (double) i / scenes.size(), "Recherche des images… scène " + (i + 1) + " sur " + scenes.size());
                 Scene s = scenes.get(i);
                 List<File> got = new ArrayList<>();
+                List<String> gotUrl = new ArrayList<>();
                 List<String> cands = new ArrayList<>();
                 for (String q : s.queries) for (String u : searchImages(q)) if (!cands.contains(u)) cands.add(u);
-                for (int pass = 0; pass < 2 && got.size() < 2; pass++) {
+                // on télécharge jusqu'à 8 candidates, puis Gemini les regarde et garde les 2 qui illustrent le mieux la scène
+                for (int pass = 0; pass < 2 && got.size() < PICK_FROM; pass++) {
                     for (String url : cands) {
-                        if (got.size() >= 2) break;
-                        if (used.contains(url) || (pass == 0 && seenBefore.contains(key(url)))) continue;
+                        if (got.size() >= PICK_FROM) break;
+                        if (used.contains(url) || gotUrl.contains(url) || (pass == 0 && seenBefore.contains(key(url)))) continue;
                         File f = new File(work, "img-" + i + "-" + got.size() + ".jpg");
-                        if (downloadImage(url, f)) { used.add(url); got.add(f); }
+                        if (downloadImage(url, f)) { got.add(f); gotUrl.add(url); }
                         else used.add(url);
                     }
                 }
+                if (got.size() > 2) {
+                    p.on("images", (double) i / scenes.size(), "Gemini choisit les meilleures images… scène " + (i + 1) + " sur " + scenes.size());
+                    int[] best = pickBest(ctx, s, got);
+                    if (best != null) {
+                        List<File> g2 = new ArrayList<>(); List<String> u2 = new ArrayList<>();
+                        for (int k : best) if (k >= 0 && k < got.size() && !g2.contains(got.get(k))) { g2.add(got.get(k)); u2.add(gotUrl.get(k)); }
+                        for (int k = 0; k < got.size() && g2.size() < 2; k++) if (!g2.contains(got.get(k))) { g2.add(got.get(k)); u2.add(gotUrl.get(k)); }
+                        got = g2; gotUrl = u2;
+                    }
+                }
+                for (int k = 0; k < Math.min(2, gotUrl.size()); k++) used.add(gotUrl.get(k));
                 if (!got.isEmpty()) s.img1 = got.get(0);
                 if (got.size() > 1) s.img2 = got.get(1);
             }
@@ -151,6 +164,36 @@ final class VideoMaker {
             if (!y.isEmpty()) out.add(y);
         }
         return out;
+    }
+
+    // ------------------------------------------------------------------ choix des images par Gemini (gratuit)
+    private static final int PICK_FROM = 8;
+
+    /** Montre à Gemini les images candidates (petites vignettes) avec la narration ; il rend les 2 meilleures, dans l'ordre. */
+    private static int[] pickBest(Context ctx, Scene s, List<File> imgs) {
+        try {
+            List<byte[]> thumbs = new ArrayList<>();
+            for (File f : imgs) {
+                BitmapFactory.Options o = new BitmapFactory.Options(); o.inSampleSize = 4;
+                Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
+                if (b == null) { thumbs.add(new byte[0]); continue; }
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                b.compress(Bitmap.CompressFormat.JPEG, 70, out); b.recycle();
+                thumbs.add(out.toByteArray());
+            }
+            String prompt = "Tu es directeur artistique pour une vidéo qui résume un livre. Voici une scène :\n"
+                + "Phrase choc : " + s.phrase + "\nNarration : " + String.join(" ", s.sentences)
+                + "\n\nVoici " + imgs.size() + " images candidates, numérotées de 0 à " + (imgs.size() - 1) + " dans l'ordre."
+                + " Choisis les 2 images qui illustrent le mieux et le plus précisément CETTE narration (sujet, idée, époque, ambiance),"
+                + " les plus belles et nettes. Écarte les images hors sujet, floues, avec beaucoup de texte, des logos, des schémas illisibles ou des cadres."
+                + " Réponds seulement en JSON : {\"best\":[numéro, numéro]}";
+            String r = IaGratuite.pickImages(ctx, prompt, thumbs);
+            JSONArray a = new JSONObject(r.substring(r.indexOf('{'), r.lastIndexOf('}') + 1)).optJSONArray("best");
+            if (a == null || a.length() == 0) return null;
+            int[] out = new int[Math.min(2, a.length())];
+            for (int k = 0; k < out.length; k++) out[k] = a.optInt(k, -1);
+            return out;
+        } catch (Throwable e) { return null; } // sans réponse : on garde les premières trouvées, comme avant
     }
 
     // ------------------------------------------------------------------ images libres

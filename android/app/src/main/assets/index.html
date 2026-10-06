@@ -4547,7 +4547,7 @@ ${summary}
 Pour chaque scène :
 - "phrase" : une phrase choc que TU formules (jamais recopiée du livre), 15 mots au plus, qui dit le message de la scène.
 - "narration" : le texte dit à voix haute, vivant et passionné (exclamations, questions à l'auditeur, images frappantes), en tutoyant l'auditeur, sans supposer où il se trouve. Pas de listes ni de symboles.
-- "images" : 3 recherches d'images courtes en ANGLAIS (2 à 4 mots), propres à CETTE scène : des choses concrètes et photographiables tirées de son contenu précis (lieux, objets, personnes au travail, phénomènes, époques). Varie d'une scène à l'autre et évite les images passe-partout (cerveau, livres, ciel étoilé, galaxie, ampoule, points d'interrogation).
+- "images" : 4 recherches d'images courtes en ANGLAIS (2 à 4 mots), propres à CETTE scène : 3 choses concrètes et photographiables tirées de son contenu précis (lieux, objets, personnes au travail, phénomènes, époques), et 1 œuvre évocatrice pour l'idée abstraite de la scène (ex. « surreal painting time », « vintage engraving laboratory », « symbolic illustration unity »). Varie d'une scène à l'autre et évite les images passe-partout (cerveau, livres, ciel étoilé, galaxie, ampoule, points d'interrogation). Les images trouvées seront ensuite triées par une IA qui les regarde : vise juste plutôt que large.
 Reste fidèle aux idées de l'auteur : présente-les telles qu'il les formule, sans les juger ni les ramener à un autre cadre.
 Dans les textes, n'utilise jamais de guillemets droits ("). Pour citer, utilise les guillemets français « ».
 Réponds UNIQUEMENT avec du JSON valide, sans texte autour, de la forme :
@@ -4567,7 +4567,7 @@ ${text}
     catch { j = JSON.parse(t.replace(/,\s*([}\]])/g, '$1').replace(/[\u201C\u201D]/g, '«')); } // petites fautes courantes
     if (!Array.isArray(j.scenes) || !j.scenes.length) throw new Error('Le scénario de Gemini est vide. Réessaie.');
     j.scenes = j.scenes.filter((s) => s && typeof s.narration === 'string' && s.narration.trim()).map((s) => ({
-      phrase: String(s.phrase || '').trim(), narration: Prof.clean(String(s.narration)), images: (Array.isArray(s.images) ? s.images : []).map(String).slice(0, 3) }));
+      phrase: String(s.phrase || '').trim(), narration: Prof.clean(String(s.narration)), images: (Array.isArray(s.images) ? s.images : []).map(String).slice(0, 4) }));
     return j;
   },
   async create(b) {

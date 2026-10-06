@@ -142,6 +142,40 @@ final class IaGratuite {
         }
     }
 
+    /** Gemini regarde des images (vignettes JPEG) et répond en JSON. Flash : rapide, et garde le quota de Pro pour l'écriture. */
+    static String pickImages(Context c, String prompt, java.util.List<byte[]> jpegs) throws Exception {
+        String k = key(c);
+        if (k.isEmpty()) throw new Fatal("pas de clé");
+        JSONArray parts = new JSONArray();
+        for (int i = 0; i < jpegs.size(); i++) {
+            if (jpegs.get(i).length == 0) continue;
+            parts.put(new JSONObject().put("text", "Image " + i + " :"));
+            parts.put(new JSONObject().put("inline_data", new JSONObject().put("mime_type", "image/jpeg").put("data", android.util.Base64.encodeToString(jpegs.get(i), android.util.Base64.NO_WRAP))));
+        }
+        parts.put(new JSONObject().put("text", prompt));
+        JSONObject body = new JSONObject().put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", parts)))
+            .put("generationConfig", new JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"));
+        for (int t = 0; t < 3; t++) {
+            pace();
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
+            String[] res = http(url, k, body.toString());
+            int code = Integer.parseInt(res[0]);
+            if (code == 401 || code == 403 || code == 400) { String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(k, "UTF-8"), "", body.toString()); if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; } }
+            if (code == 200) {
+                JSONArray cands = new JSONObject(res[1]).optJSONArray("candidates");
+                if (cands == null || cands.length() == 0) throw new Exception("aucune réponse");
+                JSONArray ps = cands.getJSONObject(0).getJSONObject("content").optJSONArray("parts");
+                StringBuilder sb = new StringBuilder();
+                if (ps != null) for (int i = 0; i < ps.length(); i++) if (!ps.getJSONObject(i).optBoolean("thought")) sb.append(ps.getJSONObject(i).optString("text", ""));
+                return sb.toString();
+            }
+            if (code == 404 && model + 1 < MODELS.length) { model++; continue; }
+            if (code == 429 || code >= 500) { Thread.sleep(15000); continue; }
+            throw new Exception("erreur " + code);
+        }
+        throw new Exception("Gemini occupé");
+    }
+
     /** Vérifie une clé : null si Google l'accepte, sinon un message. En-tête d'abord, puis dans l'adresse (clés AQ.). */
     static String check(String key) throws Exception {
         String base = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1";
