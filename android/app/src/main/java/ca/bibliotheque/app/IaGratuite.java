@@ -49,17 +49,26 @@ final class IaGratuite {
     static String ask(Context c, String system, String prompt, boolean urgent, boolean json) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
-        // 1) Gemini Pro, une tentative (ses quotas gratuits sont petits : en cas de refus, pause puis Flash)
+        // 1) Gemini Pro d'abord (la pause de 6 h survit à la fermeture de l'application)
+        proPausedUntil = Math.max(proPausedUntil, c.getSharedPreferences("ia", Context.MODE_PRIVATE).getLong("proPause", 0));
         // (pas pour une question posée en direct au Professeur : Flash répond plus vite)
         if (!urgent && System.currentTimeMillis() > proPausedUntil && pro < PRO.length) {
-            try {
-                String r = once(k, system, prompt, urgent, json, PRO[pro]);
-                if (r != null && !r.trim().isEmpty()) { lastModel = PRO[pro]; return r.trim(); }
-            } catch (ProRefused e) {
-                if (e.code == 404) { pro++; }                                            // nom retiré : le suivant la prochaine fois
-                else if (e.code == 429) proPausedUntil = System.currentTimeMillis() + 15 * 60_000L; // quota de Pro épuisé : Flash pendant 15 min
-                else proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;         // Pro pas permis pour cette clé
-            } catch (Exception ignored) { }
+            // Pro est limité à quelques demandes par minute : sur « trop de demandes », on patiente et on réessaie
+            // (2 fois, 40 s) ; si Pro refuse encore, son quota est épuisé : Flash pendant 6 heures.
+            for (int t = 0; t < 3 && pro < PRO.length; t++) {
+                try {
+                    String r = once(k, system, prompt, urgent, json, PRO[pro]);
+                    if (r != null && !r.trim().isEmpty()) { lastModel = PRO[pro]; return r.trim(); }
+                    break;
+                } catch (ProRefused e) {
+                    if (e.code == 404) { pro++; t--; continue; }                     // nom retiré : le suivant
+                    if (e.code == 429 && t < 2) { Thread.sleep(40_000L); continue; }  // limite par minute : on patiente
+                    if (e.code >= 500 && t < 2) { Thread.sleep(8_000L); continue; }   // surchargé : on réessaie
+                    proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;      // épuisé ou non permis : Flash 6 h
+                    c.getSharedPreferences("ia", Context.MODE_PRIVATE).edit().putLong("proPause", proPausedUntil).apply();
+                    break;
+                } catch (Exception e) { break; }
+            }
         }
         // 2) Flash
         Exception err = null;
