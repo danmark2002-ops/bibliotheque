@@ -1034,6 +1034,47 @@ function openFolder(libId = curLib()?.id) {
       h('button', { class: 'btn danger', onclick: () => { close(); removeFolder(libId); } }, icon('trash'), 'Supprimer ce dossier'),
       h('button', { class: 'btn', onclick: () => { if (!confirm(`Remplacer le dossier de « ${lib.name} » ? Les livres déjà là restent, et les nouveaux viendront du dossier choisi.`)) return; close(); chooseFolder(libId); } }, 'Remplacer')) : null));
 }
+// ---- Menu d'un onglet : actualiser, modifier, supprimer ----
+function tabMenu(id) {
+  const lib = libs().find((x) => x.id === id); if (!lib) return;
+  const f = folderOf(id);
+  const n = S.books.filter((b) => !b.trashed && (b.lib || 'main') === id).length;
+  const canDelete = !!f || id !== 'main';
+  const item = (ic, label, sub, fn, danger) => h('button', { class: 'addbig' + (danger ? ' danger' : ''), onclick: () => { close(); fn(); } },
+    h('span', { class: 'addic' }, icon(ic)), h('span', { class: 'addtx' }, h('b', {}, label), sub ? h('small', {}, sub) : null));
+  const close = sheet(lib.name, h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${n} livre${n > 1 ? 's' : ''}${f ? ' · dossier « ' + f.name + ' »' : ''}`),
+    h('div', { class: 'sharechoices' },
+      f ? item('refresh', 'Actualiser', 'Chercher les nouveaux livres du dossier', () => { if (S.lib !== id) switchLib(id); scanFolder(id); }) : null,
+      item('pencil', 'Modifier', 'Nom, décor, dossier', () => editLib(id)),
+      canDelete ? item('trash', 'Supprimer', f ? 'Le dossier, avec ou sans ses livres' : 'Cette bibliothèque', () => (f ? removeFolder(id) : removeLib(id)), true) : null)));
+}
+// Deuxième fenêtre, contre les accidents
+function confirmDelete(title, text, yes, fn) {
+  const close = sheet(title, h('div', {},
+    h('p', {}, text),
+    h('p', { class: 'hint' }, 'Les fichiers sur ton téléphone ne sont pas effacés.'),
+    h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
+      h('button', { class: 'btn', onclick: () => close() }, 'Annuler'),
+      h('button', { class: 'btn danger solid', onclick: () => { close(); fn(); } }, icon('trash'), yes))));
+}
+// Bibliothèque sans dossier (autre que la principale)
+function removeLib(id) {
+  const L = libs(); const lib = L.find((x) => x.id === id); if (!lib || id === 'main') return;
+  const books = S.books.filter((b) => (b.lib || 'main') === id); const n = books.filter((b) => !b.trashed).length; const s = n > 1 ? 's' : '';
+  const dest = visibleLibs().find((x) => x.id !== id) || L.find((x) => x.id === 'main');
+  const drop = async (withBooks) => {
+    for (const b of books) { try { withBooks ? await api('/api/books/' + b.id, { method: 'DELETE' }) : await post('/api/books/' + b.id, { lib: dest.id }, 'PATCH'); } catch {} }
+    forgetFolder(id); saveLibs(libs().filter((x) => x.id !== id)); await loadBooks(); switchLib(S.lib === id ? dest.id : S.lib);
+    toast('Bibliothèque supprimée');
+  };
+  if (!n) return confirmDelete('Êtes-vous sûr ?', `Supprimer la bibliothèque « ${lib.name} » ?`, 'Oui, supprimer', () => drop(true));
+  const close = sheet('Supprimer « ' + lib.name + ' »', h('div', {}, h('div', { class: 'sharechoices' },
+    h('button', { class: 'addbig danger', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer « ${lib.name} » et ses ${n} livre${s} ? Ils quitteront l'application.`, 'Oui, supprimer', () => drop(true)); } },
+      h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, `Supprimer avec ses ${n} livre${s}`))),
+    h('button', { class: 'addbig', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer « ${lib.name} » ? Ses ${n} livre${s} iront dans « ${dest.name} ».`, 'Oui, supprimer', () => drop(false)); } },
+      h('span', { class: 'addic' }, icon('book')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer en gardant les livres'), h('small', {}, `Ils iront dans « ${dest.name} »`))))));
+}
 // ---- Supprimer un dossier source : avec ses livres, ou en gardant les livres ----
 // Les fichiers du téléphone ne sont jamais touchés : seuls les livres de l'application sont retirés.
 function forgetFolder(libId) { if (hasNativeFolder()) AndroidFolder.forget(libId); else { const m = folderMap(); delete m[libId]; store.set('folders', m); } }
@@ -1043,15 +1084,15 @@ function removeFolder(libId) {
   const fromFolder = inLibBooks.filter((b) => /^(saf|web):/.test(b.src || ''));
   const others = inLibBooks.length - fromFolder.length;
   const n = fromFolder.length; const s = n > 1 ? 's' : '';
-  const dropLib = libId !== 'main' && others === 0; // la bibliothèque ne contient que ce dossier : elle disparaît avec lui
+  const dropLib = others === 0 && libs().length > 1; // la bibliothèque ne contient que ce dossier : son onglet disparaît avec lui
   const close = sheet('Supprimer « ' + f.name + ' »', h('div', {},
     h('p', {}, `Ce dossier a ajouté ${n} livre${s} à « ${lib.name} ».`),
     h('p', { class: 'hint' }, 'Les fichiers restent sur ton téléphone : seule la Bibliothèque les oublie.'),
     h('div', { class: 'sharechoices' },
-      h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(true); } },
+      h('button', { class: 'addbig danger', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', n ? `Supprimer le dossier « ${f.name} » et ses ${n} livre${s} ? Ils quitteront l'application.` : `Supprimer le dossier « ${f.name} » ?`, 'Oui, supprimer', () => doRemove(true)); } },
         h('span', { class: 'addic' }, icon('trash')), h('span', { class: 'addtx' }, h('b', {}, n ? `Supprimer le dossier et ses ${n} livre${s}` : 'Supprimer le dossier'),
           h('small', {}, dropLib ? `L'onglet « ${lib.name} » disparaît aussi.` : others ? `Les ${others} livre${others > 1 ? 's' : ''} ajouté${others > 1 ? 's' : ''} à la main reste${others > 1 ? 'nt' : ''}.` : 'La bibliothèque reste, vide.'))),
-      n ? h('button', { class: 'addbig', onclick: async () => { close(); await doRemove(false); } },
+      n ? h('button', { class: 'addbig', onclick: () => { close(); confirmDelete('Êtes-vous sûr ?', `Supprimer le dossier « ${f.name} » ? Ses ${n} livre${s} resteront sur l'étagère.`, 'Oui, supprimer', () => doRemove(false)); } },
         h('span', { class: 'addic' }, icon('folder')), h('span', { class: 'addtx' }, h('b', {}, 'Supprimer seulement le dossier'), h('small', {}, `Les ${n} livre${s} reste${n > 1 ? 'nt' : ''} sur l'étagère ; il n'y aura simplement plus d'actualisation.`))) : null)));
   async function doRemove(withBooks) {
     forgetFolder(libId);
@@ -1068,7 +1109,10 @@ function removeFolder(libId) {
       try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
       box.remove();
     }
-    if (withBooks && dropLib) { saveLibs(libs().filter((x) => x.id !== libId)); await loadBooks(); switchLib(S.lib === libId ? 'main' : S.lib); }
+    if (withBooks && dropLib) {
+      if (libId !== 'main') saveLibs(libs().filter((x) => x.id !== libId)); // la principale reste en réserve, sans onglet
+      await loadBooks(); const next = visibleLibs().find((x) => x.id !== libId) || libs()[0]; switchLib(S.lib === libId ? next.id : S.lib);
+    }
     else { await loadBooks(); renderLibrary(); }
     toast(withBooks && n ? `Dossier et ${n} livre${s} supprimés` : 'Dossier supprimé, livres gardés');
   }
@@ -1215,11 +1259,26 @@ async function importReceived(r) {
 }
 
 // Onglets des bibliothèques, sous le titre : on passe de l'une à l'autre d'un geste
+// La bibliothèque principale vidée de son dossier et de ses livres n'a plus d'onglet (s'il en reste d'autres)
+function mainHidden() {
+  const l = libs(); return l.length > 1 && !folderMap().main && !S.books.some((b) => !b.trashed && (b.lib || 'main') === 'main');
+}
+function visibleLibs() { return libs().filter((x) => !(x.id === 'main' && mainHidden())); }
 function libTabs() {
-  const l = libs(); const m = folderMap();
-  if (l.length < 2 && !m[l[0].id]) return null;
-  const tab = (id, name, decor) => h('button', { class: 'libtab' + (S.lib === id ? ' sel' : ''), onclick: () => { if (S.lib !== id) switchLib(id); } },
-    h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }), h('span', {}, name));
+  const l = visibleLibs(); const m = folderMap();
+  if (!l.length || (l.length < 2 && !m[l[0].id])) return null;
+  if (S.lib === 'main' && mainHidden()) setTimeout(() => switchLib(l[0].id), 0);
+  const tab = (id, name, decor) => {
+    const el = h('button', { class: 'libtab' + (S.lib === id ? ' sel' : ''), onclick: () => { if (el._long) { el._long = false; return; } if (S.lib !== id) switchLib(id); else if (id !== 'all') tabMenu(id); } },
+      h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }), h('span', {}, name),
+      S.lib === id && id !== 'all' ? h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev')) : null);
+    if (id !== 'all') { // appui long sur n'importe quel onglet : son menu
+      let t; const start = () => { t = setTimeout(() => { el._long = true; tabMenu(id); }, 550); }; const stop = () => clearTimeout(t);
+      el.addEventListener('touchstart', start, { passive: true }); el.addEventListener('touchend', stop); el.addEventListener('touchmove', stop, { passive: true });
+      el.addEventListener('contextmenu', (e) => { e.preventDefault(); tabMenu(id); });
+    }
+    return el;
+  };
   return h('nav', { class: 'libtabs', 'aria-label': 'Bibliothèques' },
     l.map((x) => tab(x.id, x.name, x.decor)),
     l.length > 1 ? tab('all', 'Toutes', store.get('decorAll', 'ebene')) : null,
