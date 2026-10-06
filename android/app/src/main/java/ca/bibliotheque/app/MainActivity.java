@@ -1036,6 +1036,65 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        // ---- Partager plusieurs livres d'un coup (Messenger, Messages, courriel, app d'IA…) ----
+        private final java.util.ArrayList<Uri> multi = new java.util.ArrayList<>();
+        private String multiName;
+
+        @JavascriptInterface
+        public void multiReset() {
+            multi.clear();
+            File dir = new File(getCacheDir(), "partage");
+            if (dir.exists()) { File[] old = dir.listFiles(); if (old != null) for (File f : old) f.delete(); }
+            dir.mkdirs();
+        }
+
+        @JavascriptInterface
+        public boolean multiAddFolderDoc(String lib, String docId) {
+            Uri tree = folderTree(lib);
+            if (tree == null) return false;
+            multi.add(DocumentsContract.buildDocumentUriUsingTree(tree, docId));
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean multiBegin(String name) {
+            try {
+                File dir = new File(getCacheDir(), "partage"); dir.mkdirs();
+                String n = name.replaceAll("[\\/:*?\"<>|]", "_"), base = n, ext = "";
+                int dot = n.lastIndexOf('.'); if (dot > 0) { base = n.substring(0, dot); ext = n.substring(dot); }
+                for (int k = 2; new File(dir, n).exists(); k++) n = base + " (" + k + ")" + ext;
+                multiName = n;
+                outFile = new java.io.FileOutputStream(new File(dir, n));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean multiEnd() {
+            try { outFile.close(); multi.add(Partage.uriFor(multiName)); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface
+        public boolean multiSend(String text) {
+            if (multi.isEmpty()) return false;
+            Intent i = new Intent(multi.size() == 1 ? Intent.ACTION_SEND : Intent.ACTION_SEND_MULTIPLE);
+            i.setType("*/*");
+            if (multi.size() == 1) i.putExtra(Intent.EXTRA_STREAM, multi.get(0));
+            else i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, new java.util.ArrayList<>(multi));
+            if (text != null && !text.isEmpty()) i.putExtra(Intent.EXTRA_TEXT, text);
+            android.content.ClipData clip = android.content.ClipData.newRawUri("livres", multi.get(0));
+            for (int k = 1; k < multi.size(); k++) clip.addItem(new android.content.ClipData.Item(multi.get(k)));
+            i.setClipData(clip);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(i, "Partager " + multi.size() + " livre" + (multi.size() > 1 ? "s" : ""));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            runOnUiThread(() -> {
+                try { startActivity(chooser); js("__openDone", "ok"); }
+                catch (Exception e) { js("__openDone", "Aucune application ne peut recevoir ces fichiers"); }
+            });
+            return true;
+        }
+
         /** Appel à l'API Claude (évite les restrictions du navigateur). Réponse : window.__claudeDone({status, body}). */
         @JavascriptInterface
         public void claude(String key, String body) {

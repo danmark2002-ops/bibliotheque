@@ -57,6 +57,9 @@ const ICONS = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20v-4h-4"/>',
   chev: '<path d="M7 10l5 5 5-5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  checkbox: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.6 2.6 4.8-5.3"/>',
+  merge: '<path d="M6 4v5a6 6 0 0 0 6 6h0a6 6 0 0 0 6-6V4"/><path d="M12 15v5"/><circle cx="6" cy="4" r="1.6" fill="currentColor"/><circle cx="18" cy="4" r="1.6" fill="currentColor"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
   starFill: '<path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor"/>',
@@ -218,7 +221,8 @@ function bookEl(b) {
   el.append(h('span', { class: 'under' }, h('span', { class: 'tag k-' + b.kind }, KIND[b.kind] || b.kind.toUpperCase()),
     b.state === 'lu' ? h('span', { class: 'tag st' }, 'Lu') : b.state === 'alire' ? h('span', { class: 'tag st' }, 'À lire') : pct ? h('span', { class: 'tag pct' }, pct >= 99 ? 'Terminé' : pct + ' %') : null));
   if (S.me.role === 'owner' && window.LocalAPI && !b.trashed) $('.under', el).after(tinyIcons(b));
-  el.addEventListener('click', (e) => { if (e.target.closest('.tiny')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
+  if (Sel.on) { el.classList.add('selecting'); if (Sel.ids.has(b.id)) el.classList.add('picked'); $('.cover', el).append(h('span', { class: 'selbox', 'aria-hidden': 'true' }, icon('check'))); }
+  el.addEventListener('click', (e) => { if (Sel.on) { e.preventDefault(); return selToggle(b, el); } if (e.target.closest('.tiny')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
   ownerGestures(el, b);
   return el;
 }
@@ -247,7 +251,8 @@ function listEl(books) {
           h('span', {}, pr ? (pct >= 99 ? 'Terminé' : `Page ${pr.page} sur ${b.pages} · ${pct} %`) : `${b.pages} page${b.pages > 1 ? "s" : ""} · pas encore lu`)),
         h('div', { class: 'blast' }, b.trashed ? `À la poubelle depuis ${lastRead(b.trashed)}` : pr ? `Dernière lecture : ${lastRead(pr.last)}` : 'Jamais ouvert'),
         S.me.role === 'owner' && window.LocalAPI ? quickBar(b) : null));
-    row.addEventListener('click', (e) => { if (e.target.closest('.qbar')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, thumb); });
+    if (Sel.on) { row.classList.add('selecting'); if (Sel.ids.has(b.id)) row.classList.add('picked'); thumb.append(h('span', { class: 'selbox', 'aria-hidden': 'true' }, icon('check'))); }
+    row.addEventListener('click', (e) => { if (Sel.on) { e.preventDefault(); return selToggle(b, row); } if (e.target.closest('.qbar')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, thumb); });
     ownerGestures(row, b);
     list.append(row);
   }
@@ -532,6 +537,7 @@ function renderLibrary(opts = {}) {
       h('select', { onchange: (e) => { S.sort = e.target.value; store.set('sort', S.sort); renderLibrary(); } },
         Object.entries(SORTS).map(([k, l]) => h('option', { value: k, selected: k === S.sort }, l)))) : null,
     S.nav.k !== 'authors' ? h('button', { class: 'btn icon', title: asList ? 'Voir l\'étagère' : 'Voir la liste', onclick: () => { S.view = asList ? 'shelf' : 'list'; store.set('view', S.view); renderLibrary(); } }, icon(asList ? 'shelf' : 'list')) : null,
+    owner && local && S.nav.k !== 'authors' && S.nav.k !== 'trash' && books.length ? h('button', { class: 'btn icon' + (Sel.on ? ' on' : ''), title: 'Sélectionner plusieurs livres', 'aria-label': 'Sélectionner plusieurs livres', onclick: () => (Sel.on ? selEnd() : selStart()) }, icon('checkbox')) : null,
     owner && S.nav.k !== 'authors' && S.nav.k !== 'trash' && books.length ? h('button', { class: 'btn icon' + (S.organize ? ' on' : ''), title: 'Organiser', onclick: () => { S.organize = !S.organize; renderLibrary(); if (S.organize) toast('Touche un livre pour le modifier'); } }, icon('pencil')) : null,
     S.nav.k === 'trash' && books.length ? h('button', { class: 'btn danger', onclick: async () => { if (!confirm(`Supprimer définitivement les ${books.length} livres de la poubelle ?`)) return; for (const b of books) await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Poubelle vidée'); } }, 'Vider') : null,
   ) : null;
@@ -567,6 +573,7 @@ function renderLibrary(opts = {}) {
   if (!$('#uploads')) document.body.append(h('div', { class: 'uploads', id: 'uploads' }));
   if (!$('#dz')) document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
   AutoSync.schedule();
+  selBarRender();
 }
 function heroEl(b) {
   const pct = Math.round((b.progress.page / b.pages) * 100);
@@ -1522,6 +1529,178 @@ const AutoSync = {
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) AutoSync.schedule(300); });
 
+// ================= Sélection de plusieurs livres =================
+// Une case « Sélectionner » ; l'appui long garde son rôle (le menu du livre)
+const Sel = { on: false, ids: new Set() };
+function selStart() { Sel.on = true; Sel.ids.clear(); S.organize = false; renderLibrary(); toast('Touche les livres à choisir'); }
+function selEnd() { Sel.on = false; Sel.ids.clear(); renderLibrary(); }
+function selBooks() { return [...Sel.ids].map((id) => S.books.find((b) => b.id === id)).filter((b) => b && !b.trashed); } // dans l'ordre où on les a touchés
+function selToggle(b, el) {
+  Sel.ids.has(b.id) ? Sel.ids.delete(b.id) : Sel.ids.add(b.id);
+  el?.classList.toggle('picked', Sel.ids.has(b.id)); selBarRender();
+}
+function selVisible() { return [...document.querySelectorAll('#app .book, #app .brow')].length ? S.books.filter((b) => !b.trashed && inNav(b)) : []; }
+function selBarRender() {
+  let bar = $('#selbar');
+  if (!Sel.on) { bar?.remove(); document.body.classList.remove('selmode'); return; }
+  document.body.classList.add('selmode');
+  const n = Sel.ids.size; const books = selBooks();
+  const allVis = selVisible(); const all = allVis.length && allVis.every((b) => Sel.ids.has(b.id));
+  const act = (ic, label, fn, opts = {}) => h('button', { class: 'selact' + (opts.danger ? ' danger' : ''), disabled: opts.off ? true : null, onclick: fn }, icon(ic), h('span', {}, label));
+  const fresh = h('div', { class: 'selbar', id: 'selbar', role: 'toolbar', 'aria-label': 'Livres choisis' },
+    h('div', { class: 'selhead' },
+      h('button', { class: 'rbtn', 'aria-label': 'Quitter la sélection', onclick: selEnd }, icon('close')),
+      h('b', {}, n ? `${n} livre${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''}` : 'Touche les livres'),
+      h('button', { class: 'selall', onclick: () => { if (all) Sel.ids.clear(); else allVis.forEach((b) => Sel.ids.add(b.id)); renderLibrary(); } }, all ? 'Aucun' : 'Tout')),
+    h('div', { class: 'selacts' },
+      act('share', 'Partager', () => shareMany(books), { off: !n }),
+      act('merge', 'Synthèse', () => synthChoices(books), { off: n < 2 }),
+      act('move', 'Ranger', () => selMove(books), { off: !n }),
+      act(books.length && books.every((b) => b.fav) ? 'starFill' : 'star', 'Favori', () => selFav(books), { off: !n }),
+      act('trash', 'Poubelle', () => selTrash(books), { off: !n, danger: true })));
+  bar ? bar.replaceWith(fresh) : document.body.append(fresh);
+}
+async function selFav(books) {
+  const on = !books.every((b) => b.fav);
+  for (const b of books) await post('/api/books/' + b.id, { fav: on }, 'PATCH');
+  await loadBooks(); renderLibrary(); toast(on ? `${books.length} livre${books.length > 1 ? 's' : ''} en favori` : 'Retirés des favoris');
+}
+function selTrash(books) {
+  const n = books.length;
+  confirmDelete('Êtes-vous sûr ?', `Mettre ${n} livre${n > 1 ? 's' : ''} à la poubelle ? Tu pourras les restaurer.`, 'Oui, à la poubelle', async () => {
+    for (const b of books) await post('/api/books/' + b.id, { trashed: true }, 'PATCH');
+    Sel.ids.clear(); await loadBooks(); renderLibrary(); toast(`${n} livre${n > 1 ? 's' : ''} à la poubelle`);
+  });
+}
+function selMove(books) {
+  const close = sheet(`Ranger ${books.length} livre${books.length > 1 ? 's' : ''}`, h('div', { class: 'libs' }, libs().map((l) => h('div', { class: 'librow' },
+    h('button', { class: 'libpick', onclick: async () => {
+      close(); for (const b of books) await post('/api/books/' + b.id, { lib: l.id }, 'PATCH');
+      await loadBooks(); selEnd(); toast(`Rangés dans « ${l.name} »`);
+    } }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[l.decor] || '#555' } }), h('span', { class: 'libtxt' }, h('b', {}, l.name)))))));
+}
+// Partager plusieurs livres en un seul envoi
+async function shareMany(books, text = '') {
+  if (!books.length) return;
+  const size = books.reduce((a, b) => a + (b.size || 0), 0);
+  const msg = text || (books.length === 1 ? `« ${books[0].title} »` : `${books.length} livres : ` + books.map((b) => `« ${b.title} »`).join(', '));
+  if (size > 25e6) toast(`Gros envoi (${Math.round(size / 1e6)} Mo) : préfère WhatsApp, le courriel ou Drive`);
+  try {
+    if (window.AndroidOpen?.multiReset) {
+      AndroidOpen.multiReset(); let skipped = 0;
+      for (const b of books) {
+        if (b.src && b.src.startsWith('saf:') && AndroidOpen.multiAddFolderDoc(b.lib || 'main', b.src.slice(4))) continue; // fichier d'origine, sans copie
+        const f = await LocalAPI.fileOf(b.id);
+        if (!f || !f.file) { skipped++; continue; }
+        if (!AndroidOpen.multiBegin(f.name)) throw new Error();
+        const CH = 3 * 256 * 1024;
+        for (let i = 0; i < f.file.size; i += CH) if (!AndroidOpen.append(await blobToB64(f.file.slice(i, i + CH)))) throw new Error();
+        AndroidOpen.multiEnd();
+      }
+      if (skipped) toast(`${skipped} livre${skipped > 1 ? 's' : ''} audio en plusieurs fichiers laissé${skipped > 1 ? 's' : ''} de côté`);
+      if (!AndroidOpen.multiSend(msg)) toast('Aucun fichier à partager');
+      return;
+    }
+    const files = [];
+    for (const b of books) { const f = await LocalAPI.fileOf(b.id); if (f?.file) files.push(new File([f.file], f.name, { type: f.file.type || 'application/octet-stream' })); }
+    if (files.length && navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, text: msg }); return; }
+    for (const b of books) await openWith(b, 'view');
+    toast('Livres téléchargés : envoie-les depuis tes fichiers');
+  } catch (e) { if (e?.name !== 'AbortError') toast('Partage impossible'); }
+}
+
+// ================= Synthèse de plusieurs livres =================
+// Rangée dans la bibliothèque « Synthèses », faite exprès ; elle se lit et s'écoute comme un livre
+const SYNTH_MAX = 5;
+const SYNTH_PROMPT = `Écris en français une synthèse croisée de ces livres, avec exactement ces titres :
+## L'essentiel de chaque livre
+(2 ou 3 phrases par livre, son titre en gras au début)
+## Ce qu'ils ont en commun
+## Où ils divergent
+## Ce que l'un apporte à l'autre
+## Phrases clés de l'ensemble
+(5 à 7 phrases ultra concises, 12 mots au plus chacune, une par ligne commençant par « - »)
+Reste fidèle aux livres : présente les idées des auteurs telles qu'ils les formulent, sans les juger ni les ramener à un autre cadre. Pas de préambule.`;
+function synthLib() {
+  let l = libs().find((x) => x.syn);
+  if (!l) { const all = libs(); l = { id: 'syn' + Date.now().toString(36), name: 'Synthèses', decor: 'ardoise', syn: true }; all.push(l); saveLibs(all); }
+  return l;
+}
+function synthChoices(books) {
+  if (books.length < 2) return toast('Choisis au moins 2 livres');
+  if (books.length > SYNTH_MAX) return toast(`${SYNTH_MAX} livres au plus pour une synthèse`);
+  const list = books.map((b) => `« ${b.title} »`).join(', ');
+  const close = sheet('Synthèse de ' + books.length + ' livres', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, list),
+    h('p', {}, 'Ce que chacun dit, ce qu\'ils ont en commun, où ils divergent, ce que l\'un apporte à l\'autre, et les phrases clés de l\'ensemble. Elle sera rangée dans la bibliothèque « Synthèses », prête à lire ou à écouter.'),
+    h('div', { class: 'sharechoices' },
+      h('button', { class: 'addbig', onclick: () => { close(); makeSynthesis(books); } },
+        h('span', { class: 'addic' }, icon('merge')), h('span', { class: 'addtx' }, h('b', {}, 'Faire la synthèse'), h('small', {}, window.AndroidAI ? 'Gratuite, sur le téléphone (IA du téléphone si disponible, sinon synthèse automatique)' : 'Gratuite, synthèse automatique sur l\'appareil'))),
+      h('button', { class: 'addbig', onclick: () => { close(); shareMany(books, `Fais une synthèse croisée des livres ci-joints (${list}).\n${SYNTH_PROMPT}`); } },
+        h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Avec ton application d\'IA'), h('small', {}, 'ChatGPT, Claude, Gemini… Les livres partent avec la demande déjà écrite.'))))));
+}
+function mdSection(md, re) { // lignes d'une section « ## … » d'un résumé
+  const lines = String(md || '').split('\n'); let on = false; const out = [];
+  for (const l of lines) { if (/^#{1,3}\s/.test(l)) { if (on) break; on = re.test(l); continue; } if (on && l.trim()) out.push(l.replace(/^[-•*]\s+|^\d+[.)]\s+/, '').trim()); }
+  return out;
+}
+function autoSynthesis(books, sums) {
+  const sets = sums.map((t) => new Set(words(t)));
+  const freq = new Map(); sums.forEach((t) => words(t).forEach((w) => freq.set(w, (freq.get(w) || 0) + 1)));
+  const shared = [...freq.entries()].filter(([w]) => sets.filter((st) => st.has(w)).length >= 2).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([w]) => w);
+  let md = '## L\'essentiel de chaque livre\n';
+  books.forEach((b, i) => { const ess = mdSection(sums[i], /essentiel/i).slice(0, 3); md += `### ${b.title}\n${(ess.length ? ess : splitSentences(sums[i]).slice(0, 3)).map((x) => '- ' + x).join('\n')}\n`; });
+  md += '\n## Ce qu\'ils ont en commun\n';
+  if (shared.length) {
+    md += `Thèmes partagés : ${shared.join(' · ')}\n`;
+    const both = []; sums.forEach((t, i) => splitSentences(t).forEach((x) => { const w = new Set(words(x)); if (shared.filter((k) => w.has(k)).length >= 2 && both.length < 5) both.push(`${x} (${books[i].title})`); }));
+    if (both.length) md += both.map((x) => '- ' + x).join('\n') + '\n';
+  } else md += 'Ces livres partagent peu de mots-clés : ils abordent des sujets assez différents.\n';
+  const keys = []; sums.forEach((t) => mdSection(t, /phrases? clés?/i).slice(0, 2).forEach((x) => keys.push(x)));
+  if (keys.length) md += `\n## Phrases clés de l'ensemble\n${keys.map((x) => '- ' + x).join('\n')}\n`;
+  md += '\n_Synthèse automatique : sans IA, les points de désaccord entre les livres ne sont pas analysés._';
+  return md;
+}
+async function makeSynthesis(books) {
+  const box = h('div', { class: 'up' }, h('b', {}, 'Synthèse de ' + books.length + ' livres'), h('span', { class: 'muted' }, 'Préparation…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+  $('#uploads')?.append(box);
+  const say = (t) => { $('span', box).textContent = t; };
+  try {
+    const sums = [], used = [];
+    for (const b of books) {
+      let t = b.summary?.text;
+      if (!t) { try { t = (await computeSummary(b, (m) => say(`« ${b.title} » : ${m}`))).text; } catch (e) { toast(`« ${b.title} » laissé de côté : ${e.message}`); continue; } }
+      sums.push(t); used.push(b);
+    }
+    if (used.length < 2) throw new Error('Il faut au moins 2 livres avec du texte lisible pour une synthèse.');
+    const ctx = (max) => used.map((b, i) => `### ${b.title}${b.author ? ' (' + b.author + ')' : ''}\n${sums[i].slice(0, max)}`).join('\n\n');
+    let body = null, model = 'auto';
+    if (window.AndroidAI) {
+      say('Recherche de l\'IA du téléphone…');
+      if ((await nanoStatus()) === 'available') {
+        say('IA du téléphone : rédaction de la synthèse…');
+        try { body = await nanoAskRetry(`${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(Math.floor(5200 / used.length))}`, say); model = 'gemini-nano'; } catch { body = null; }
+      }
+    }
+    if (!body && window.AndroidAI?.generateOnline && Prof.hasKey()) {
+      say('Gemini rédige la synthèse…');
+      try { body = Prof.clean0(await onlineAsk('', `${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(20000)}`)); model = 'gemini'; } catch { body = null; }
+    }
+    if (!body) { say('Synthèse automatique…'); body = autoSynthesis(used, sums); }
+    const titles = used.map((b) => b.title);
+    const title = ('Synthèse : ' + titles.join(' + ')).slice(0, 150);
+    const head = `# ${title}\n\nLivres réunis : ${used.map((b) => `« ${b.title} »${b.author ? ' de ' + b.author : ''}`).join(' ; ')}.\n\n`;
+    const lib = synthLib();
+    say('Rangement dans « Synthèses »…');
+    const fname = ('Synthèse - ' + titles.join(' + ')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 110) + '.md';
+    const meta = await LocalAPI.upload(new File([head + body.replace(/\n{3,}/g, '\n\n')], fname, { type: 'text/markdown' }), () => {}, { lib: lib.id });
+    await post('/api/books/' + meta.id, { title, author: `Synthèse de ${used.length} livres`, summary: { text: body, date: Date.now(), model } }, 'PATCH');
+    box.remove(); await loadBooks(); Sel.on = false; Sel.ids.clear(); switchLib(lib.id);
+    toast('Synthèse rangée dans « Synthèses »');
+    const b = S.books.find((x) => x.id === meta.id); if (b) openBook(b, null);
+  } catch (e) { say(e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 12000); }
+}
+
 // ================= Ouvrir avec une autre application =================
 function blobToB64(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(blob); }); }
 async function openWith(b, mode = 'view', prompt = '') {
@@ -2164,11 +2343,8 @@ async function nanoSummary(b, text, say) {
   return fin.replace(/\n*#{1,3}\s*Phrases clés[\s\S]*$/i, '') + (keys ? `\n\n## Phrases clés\n${keys}` : '');
 }
 
-async function makeFreeSummary(b) {
-  const box = h('div', { class: 'up' }, h('b', {}, 'Résumé : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
-  $('#uploads')?.append(box);
-  const say = (t) => { $('span', box).textContent = t; };
-  try {
+// Résumé gratuit d'un livre, sans fenêtre : IA du téléphone, Gemini en ligne si une clé existe, sinon résumé automatique
+async function computeSummary(b, say) {
     const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
     if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
     let text = null, model = 'auto';
@@ -2191,6 +2367,14 @@ async function makeFreeSummary(b) {
     if (!text) { say('Résumé automatique…'); await new Promise((r) => setTimeout(r, 30)); text = autoSummary(t.text, b.title); }
     const summary = { text, date: Date.now(), model, truncated: t.truncated };
     await post('/api/books/' + b.id, { summary }, 'PATCH');
+    return summary;
+}
+async function makeFreeSummary(b) {
+  const box = h('div', { class: 'up' }, h('b', {}, 'Résumé : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+  $('#uploads')?.append(box);
+  const say = (t) => { $('span', box).textContent = t; };
+  try {
+    const summary = await computeSummary(b, say);
     box.remove(); await loadBooks(); renderLibrary();
     openSummary(S.books.find((x) => x.id === b.id) || { ...b, summary });
   } catch (e) { say(e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 12000); }
@@ -3581,7 +3765,7 @@ window.__autoCmd = (cmd, arg) => {
   return true;
 };
 // Bouton retour Android
-window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); const s = $('.scrim'); if (s) { s.remove(); return true; } return false; };
+window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); if (Sel.on && !$('.scrim')) { selEnd(); return true; } const s = $('.scrim'); if (s) { s.remove(); return true; } return false; };
 
 // ================= Télé : diffusion d'écran (Cast) et navigation à la télécommande =================
 const TV = {
