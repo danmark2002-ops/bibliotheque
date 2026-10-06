@@ -386,8 +386,10 @@ final class VideoMaker {
                         if (res != TextToSpeech.SUCCESS || !done[0].await(60, TimeUnit.SECONDS)) continue;
                         Wav w = readWav(wav);
                         if (w == null || w.data.length == 0) continue;
-                        if (sampleRate == 0) sampleRate = w.rate;
-                        byte[] data = w.rate == sampleRate ? w.data : resample(w.data, w.rate, sampleRate);
+                        // Le son de la vidéo est toujours fabriqué en 48 kHz, la fréquence native des téléphones et des lecteurs :
+                        // la voix du téléphone sort en 22–24 kHz, et la conversion faite au moment de la lecture créait des pétillements.
+                        if (sampleRate == 0) sampleRate = OUT_RATE;
+                        byte[] data = fadeEdges(w.rate == sampleRate ? w.data : resample(w.data, w.rate, sampleRate), sampleRate);
                         if (!titleWritten) { writeSilence(out, usToSamples(titleUs, sampleRate)); writtenSamples += usToSamples(titleUs, sampleRate); titleWritten = true; }
                         if (k == 0) {
                             s.startUs = samplesToUs(writtenSamples, sampleRate);
@@ -461,14 +463,49 @@ final class VideoMaker {
         return null;
     }
 
+    static final int OUT_RATE = 48000;
+
+    /** Rééchantillonnage de qualité (filtre sinc fenêtré, 32 coefficients, 512 phases) : pas d'à-coups ni de repliement. */
     private static byte[] resample(byte[] d, int from, int to) {
-        int n = d.length / 2; int m = (int) ((long) n * to / from);
+        int n = d.length / 2;
+        short[] x = new short[n];
+        ByteBuffer.wrap(d).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(x);
+        final int HALF = 16, PH = 512;
+        double fc = Math.min(1.0, (double) to / from) * 0.94; // coupure un peu sous la moitié de la fréquence la plus basse
+        float[][] tab = new float[PH + 1][2 * HALF];
+        for (int p = 0; p <= PH; p++) {
+            double frac = (double) p / PH; double sum = 0;
+            for (int k = 0; k < 2 * HALF; k++) {
+                double t = (k - HALF + 1) - frac; // position relative du coefficient
+                double sinc = t == 0 ? 1 : Math.sin(Math.PI * fc * t) / (Math.PI * fc * t);
+                double wv = 0.5 + 0.5 * Math.cos(Math.PI * t / HALF); if (Math.abs(t) >= HALF) wv = 0;
+                tab[p][k] = (float) (fc * sinc * wv); sum += tab[p][k];
+            }
+            for (int k = 0; k < 2 * HALF; k++) tab[p][k] /= sum; // gain unitaire
+        }
+        int m = (int) ((long) n * to / from);
         byte[] out = new byte[m * 2];
         for (int i = 0; i < m; i++) {
-            int j = (int) ((long) i * from / to); if (j >= n) j = n - 1;
-            out[2 * i] = d[2 * j]; out[2 * i + 1] = d[2 * j + 1];
+            double pos = (double) i * from / to; int base = (int) Math.floor(pos);
+            float[] c = tab[(int) Math.round((pos - base) * PH)];
+            double acc = 0;
+            for (int k = 0; k < 2 * HALF; k++) { int j = base + k - HALF + 1; if (j >= 0 && j < n) acc += c[k] * x[j]; }
+            int v = (int) Math.round(acc); if (v > 32767) v = 32767; else if (v < -32768) v = -32768;
+            out[2 * i] = (byte) v; out[2 * i + 1] = (byte) (v >> 8);
         }
         return out;
+    }
+
+    /** Début et fin de chaque phrase adoucis (4 ms) : aucun « clic » au raccord avec le silence. */
+    private static byte[] fadeEdges(byte[] d, int rate) {
+        int n = d.length / 2, f = Math.min(n / 2, rate * 4 / 1000);
+        ByteBuffer bb = ByteBuffer.wrap(d).order(ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < f; i++) {
+            double g = (double) i / f;
+            bb.putShort(2 * i, (short) Math.round(bb.getShort(2 * i) * g));
+            int j = n - 1 - i; bb.putShort(2 * j, (short) Math.round(bb.getShort(2 * j) * g));
+        }
+        return d;
     }
 
     // ------------------------------------------------------------------ montage MP4
@@ -557,7 +594,7 @@ final class VideoMaker {
     private static MediaFormat encodeAudio(File pcm, int rate, List<Sample> out) throws Exception {
         MediaFormat af = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 1);
         af.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
-        af.setInteger(MediaFormat.KEY_BIT_RATE, 80_000);
+        af.setInteger(MediaFormat.KEY_BIT_RATE, 128_000); // voix nette à 48 kHz
         af.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
         MediaCodec enc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
         enc.configure(af, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
