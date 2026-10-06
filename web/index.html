@@ -3447,6 +3447,7 @@ function editBook(b) {
   const actRow = local && !b.trashed ? h('div', { class: 'bookacts' },
     window.__reader?.b?.id === b.id ? null : h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon(b.kind === 'audio' ? 'headphones' : 'book'), h('span', {}, b.kind === 'audio' ? 'Écouter' : 'Lire')),
     h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
+    h('button', { class: 'bact', onclick: () => { close(); shareBook(b); } }, icon('share'), h('span', {}, 'Partager')),
     PAGED(b.kind) && Ocr.on() ? (b.ocr === 'done'
       ? h('button', { class: 'bact on', onclick: () => { close(); const v = store.get('view:' + b.id, 'text') === 'text' ? 'photo' : 'text'; store.set('view:' + b.id, v); if (window.__reader?.b?.id === b.id) window.__reader.switchView(v); else toast(v === 'text' ? 'Le livre s\'ouvrira en texte' : 'Le livre s\'ouvrira en photos'); } }, icon('type'), h('span', {}, store.get('view:' + b.id, 'text') === 'text' ? 'Revenir aux photos' : 'Lire en texte'))
       : h('button', { class: 'bact', onclick: () => { close(); Ocr.run(b, window.__reader?.b?.id === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null,
@@ -3612,6 +3613,7 @@ async function openWith(b, mode = 'view', prompt = '') {
       if (b.src && b.src.startsWith('saf:') && AndroidOpen.openFolderDoc(b.lib || 'main', b.src.slice(4), fname, mode, prompt || '')) return;
       const f = await LocalAPI.fileOf(b.id, { asText: mode === 'ai' && b.kind !== 'pdf' && !b.fname?.match(/\.docx$/i) });
       if (!f) return toast('Fichier introuvable');
+      if (!f.file) return toast('Livre en plusieurs fichiers : partage plutôt toute la bibliothèque');
       if (f.converted) toast('Le fichier Word d\'origine n\'a pas été gardé : il s\'ouvre en texte');
       if (!AndroidOpen.begin(f.name)) return toast('Préparation du fichier impossible');
       const CH = 3 * 256 * 1024; // morceaux de 768 ko
@@ -3626,6 +3628,17 @@ async function openWith(b, mode = 'view', prompt = '') {
   } catch (e) { toast(e.message || 'Impossible d\'ouvrir ce livre'); }
 }
 window.__openDone = (msg) => { if (msg && msg !== 'ok') toast(msg); };
+// Partager un livre : à des amis (Messenger, Messages, courriel, WhatsApp…) ou à une application d'IA
+async function shareBook(b) {
+  const msg = `« ${b.title} »${b.author ? ' de ' + b.author : ''}`;
+  if (window.AndroidOpen) return openWith(b, 'send', msg);
+  try { // iPhone et navigateurs : la feuille de partage du téléphone
+    const f = await LocalAPI.fileOf(b.id); if (!f || !f.file) return toast('Fichier introuvable');
+    const file = new File([f.file], f.name, { type: f.file.type || 'application/octet-stream' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: b.title, text: msg }); return; }
+    openWith(b, 'view'); toast('Le livre est téléchargé : envoie-le depuis tes fichiers');
+  } catch (e) { if (e?.name !== 'AbortError') toast('Partage impossible'); }
+}
 
 // ================= Résumé par une IA =================
 // Les phrases clés ne sont pas des citations : l'IA les formule pour dire ce que le livre veut dire et nous apprend

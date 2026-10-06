@@ -930,7 +930,7 @@ public class MainActivity extends Activity {
     private void launch(Uri uri, String name, String mode, String prompt) {
         String mime = Partage.mimeOf(name);
         Intent i;
-        if ("ai".equals(mode)) {
+        if ("ai".equals(mode) || "send".equals(mode)) { // « send » : partager à des amis (Messenger, Messages, courriel…) ou à une app d'IA
             i = new Intent(Intent.ACTION_SEND);
             i.setType(mime);
             i.putExtra(Intent.EXTRA_STREAM, uri);
@@ -942,7 +942,7 @@ public class MainActivity extends Activity {
             i.setDataAndType(uri, mime);
         }
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        Intent chooser = Intent.createChooser(i, "ai".equals(mode) ? "Résumer avec…" : "Ouvrir avec…");
+        Intent chooser = Intent.createChooser(i, "ai".equals(mode) ? "Résumer avec…" : "send".equals(mode) ? "Partager « " + name + " »" : "Ouvrir avec…");
         chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         runOnUiThread(() -> {
             try { startActivity(chooser); js("__openDone", "ok"); }
