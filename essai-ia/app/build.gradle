@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Application d'essai SÉPARÉE de Bibliothèque : autre identifiant, s'installe et se désinstalle à part
+android {
+    namespace 'ca.essai.cleia'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'ca.essai.cleia'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('essai.jks')
+            storePassword 'bibliotheque2026'
+            keyAlias 'bibliotheque'
+            keyPassword 'bibliotheque2026'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // Onglet Chrome en panneau (la page de Google en bas, nos instructions en haut)
+    implementation 'androidx.browser:browser:1.8.0'
+}

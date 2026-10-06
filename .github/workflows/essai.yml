@@ -1,0 +1,48 @@
+name: Construire l'essai Clé IA
+
+on:
+  push:
+    paths:
+      - 'essai-ia/**'
+      - '.github/workflows/essai.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Compiler
+        working-directory: essai-ia
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon 2>&1 | tee ../build.log
+      - name: Journal d'erreurs (branche essai-log)
+        if: failure()
+        run: |
+          git config user.name "build-bot"; git config user.email "build-bot@users.noreply.github.com"
+          tail -c 60000 build.log > /tmp/build.log
+          git checkout --orphan essai-log && git rm -rqf . && cp /tmp/build.log build.log
+          git add build.log && git commit -qm "Journal essai ${{ github.run_number }}" && git push -f origin essai-log
+      - name: Renommer
+        run: cp essai-ia/app/build/outputs/apk/release/app-release.apk EssaiCleIA.apk
+      # Publiée comme « pré-version » : n'est jamais prise pour la dernière version de Bibliothèque
+      - name: Publier
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: essai-${{ github.run_number }}
+          name: Essai Clé IA — ${{ github.run_number }}
+          body: Application d'essai séparée (s'installe à côté de Bibliothèque).
+          prerelease: true
+          make_latest: false
+          files: EssaiCleIA.apk

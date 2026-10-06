@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Essai Clé IA</title>
+<style>
+  :root { --bg: #f6f3ee; --ink: #1f1b16; --muted: #6b6258; --card: #fff; --line: #e4ddd2; --blue: #1a73e8; --green: #1e8e3e; --red: #d93025; --accent: #8a4b1f; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .screen { display: none; padding: 18px 16px 28px; max-width: 560px; margin: 0 auto; }
+  .screen.on { display: block; }
+  h1 { font: 700 24px/1.2 Georgia, serif; margin: 6px 0 6px; }
+  h2 { font: 700 19px/1.25 Georgia, serif; margin: 0 0 8px; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin: 12px 0; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 14px; padding: 15px 16px; font: 600 17px system-ui, sans-serif; background: #ebe4d8; color: var(--ink); margin: 10px 0 0; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.go { background: var(--green); color: #fff; }
+  .btn.small { padding: 10px 12px; font-size: 15px; }
+  .row { display: flex; gap: 10px; }
+  .row .btn { flex: 1; }
+  .status { display: flex; align-items: center; gap: 12px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: #c9c0b3; flex: none; }
+  .dot.ok { background: var(--green); }
+  ol.steps { padding-left: 22px; margin: 8px 0; }
+  ol.steps li { margin: 6px 0; }
+  textarea { width: 100%; min-height: 110px; border: 1px solid var(--line); border-radius: 12px; padding: 10px; font: 15px/1.4 system-ui, sans-serif; background: #fffdf9; }
+  input.key { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: 15px monospace; }
+  .answer { white-space: pre-wrap; background: #fffdf9; border-left: 4px solid var(--green); padding: 10px 12px; border-radius: 8px; }
+  .err { color: var(--red); }
+
+  /* ---------- Guide en haut de l'écran, la page de Google dans le panneau du bas ---------- */
+  #guide { padding: 10px 14px 8px; height: 36vh; min-height: 230px; display: none; flex-direction: column; }
+  #guide.on { display: flex; }
+  .gtop { display: flex; justify-content: space-between; align-items: center; font: 600 13px system-ui; color: var(--muted); }
+  .pips { display: flex; gap: 5px; }
+  .pips i { width: 22px; height: 6px; border-radius: 3px; background: #ddd3c5; }
+  .pips i.on { background: var(--accent); }
+  .gbody { flex: 1; display: flex; gap: 12px; align-items: center; min-height: 0; }
+  .gtext { flex: 1.25; font-size: 16.5px; line-height: 1.35; }
+  .gtext b { color: var(--accent); }
+  .gtext small { display: block; color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .mock { flex: 1; background: #fff; border: 1px solid #dadce0; border-radius: 12px; padding: 10px 8px; font: 13px Roboto, Arial, sans-serif; color: #202124; min-width: 0; position: relative; }
+  .gnav { display: flex; gap: 8px; }
+  .gnav .btn { margin-top: 6px; padding: 11px 10px; font-size: 15.5px; }
+  .gnav .btn.prev { flex: 0 0 64px; }
+
+  /* Éléments imités de la page de Google */
+  .gbtn { display: inline-block; background: var(--blue); color: #fff; border-radius: 18px; padding: 7px 12px; font-weight: 500; white-space: nowrap; }
+  .gbtn.flat { background: #fff; color: var(--blue); border: 1px solid #dadce0; }
+  .ring { position: relative; }
+  .ring::after { content: ''; position: absolute; inset: -7px; border: 3px solid var(--red); border-radius: 24px; animation: pulse 1.2s ease-in-out infinite; pointer-events: none; }
+  .ring.round::after { border-radius: 50%; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: .55; } }
+  .acct { display: flex; align-items: center; gap: 8px; padding: 6px; border: 1px solid #dadce0; border-radius: 10px; }
+  .av { width: 26px; height: 26px; border-radius: 50%; background: #7e57c2; color: #fff; display: grid; place-items: center; font-weight: 600; }
+  .chk { display: flex; gap: 6px; align-items: flex-start; font-size: 11.5px; line-height: 1.25; margin-bottom: 8px; }
+  .box { width: 16px; height: 16px; border: 2px solid #5f6368; border-radius: 3px; flex: none; margin-top: 1px; }
+  .keyrow { display: flex; align-items: center; gap: 6px; background: #f1f3f4; border-radius: 8px; padding: 7px 8px; font: 12px monospace; }
+  .keyrow span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copy { width: 30px; height: 30px; border-radius: 50%; background: #fff; display: grid; place-items: center; flex: none; }
+  .arrow { position: absolute; right: -4px; bottom: -14px; font-size: 22px; color: var(--red); }
+
+  /* Panneau de vérification */
+  .big { font-size: 44px; text-align: center; margin: 8px 0 0; }
+  .spin { width: 42px; height: 42px; border: 4px solid #e3d9cb; border-top-color: var(--accent); border-radius: 50%; margin: 24px auto 8px; animation: rot 0.9s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ===== Accueil ===== -->
+<section class="screen on" id="home">
+  <h1>Essai Clé IA</h1>
+  <p class="muted">Cette petite application d'essai reproduit ce que vivra une personne qui installe Bibliothèque sans rien connaître : obtenir sa propre clé gratuite pour l'IA de Google, en quelques touchers.</p>
+
+  <div class="card">
+    <div class="status"><span class="dot" id="dot"></span><div><b id="stTitle">IA pas encore activée</b><div class="muted" id="stSub">Le Professeur, les vidéos et les résumés rédigés ont besoin d'une clé gratuite.</div></div></div>
+    <button class="btn primary" id="activate" onclick="show('intro')">Activer l'IA gratuite</button>
+  </div>
+
+  <div class="card" id="tryCard" style="display:none">
+    <h2>Essayer l'IA</h2>
+    <p class="muted">Un vrai essai avec ta clé : Gemini résume le texte ci-dessous.</p>
+    <textarea id="txt">Le Petit Prince est un conte poétique et philosophique d'Antoine de Saint-Exupéry, publié en 1943. Un aviateur tombé en panne dans le désert du Sahara rencontre un petit garçon venu d'une autre planète. Au fil de leurs conversations, le petit prince raconte son voyage de planète en planète, ses rencontres avec des adultes étranges, et son amour pour une rose. Le livre parle de l'amitié, de la perte, et de ce qui est essentiel et invisible pour les yeux.</textarea>
+    <button class="btn go" id="askBtn" onclick="ask()">Résumer en 3 phrases</button>
+    <div id="ans" style="margin-top:10px"></div>
+    <button class="btn small" onclick="resetKey()">Effacer la clé et recommencer l'essai</button>
+  </div>
+
+  <p class="muted" style="margin-top:18px">Pour l'essai, tu peux effacer la clé et refaire tout le parcours autant de fois que tu veux. Désinstalle « Essai Clé IA » comme n'importe quelle application : ta Bibliothèque n'est pas touchée.</p>
+</section>
+
+<!-- ===== Avant d'ouvrir la page de Google ===== -->
+<section class="screen" id="intro">
+  <h1>IA gratuite en 1 minute</h1>
+  <p>Google offre gratuitement son IA, <b>Gemini</b>. Il faut seulement une « clé » : un code personnel qui dit à Google que c'est toi.</p>
+  <div class="card">
+    <b>Ce qui va se passer :</b>
+    <ol class="steps">
+      <li>La page de Google s'ouvre en bas de l'écran.</li>
+      <li>Les instructions restent ici, en haut, étape par étape.</li>
+      <li>Tu touches « Créer une clé API », puis « Copier ».</li>
+      <li>Tu reviens : l'application trouve la clé toute seule.</li>
+    </ol>
+  </div>
+  <p class="muted">✔ Gratuit, aucune carte de crédit.<br>✔ La clé reste seulement sur ce téléphone.<br>ℹ️ Avec l'offre gratuite, Google peut utiliser les textes envoyés pour améliorer son IA.</p>
+  <button class="btn primary" onclick="openGoogle()">C'est parti : ouvrir la page de Google</button>
+  <button class="btn small" onclick="show('manual')">J'ai déjà une clé</button>
+  <button class="btn small" onclick="show('home')">Plus tard</button>
+</section>
+
+<!-- ===== Guide affiché en haut pendant que la page de Google est ouverte en bas ===== -->
+<section id="guide">
+  <div class="gtop"><span id="gnum">Étape 1 sur 5</span><span class="pips" id="pips"></span></div>
+  <div class="gbody"><div class="gtext" id="gtext"></div><div class="mock" id="gmock"></div></div>
+  <div class="gnav">
+    <button class="btn prev" onclick="step(-1)">◀</button>
+    <button class="btn primary" id="gnext" onclick="step(1)">Étape suivante ▶</button>
+  </div>
+</section>
+
+<!-- ===== Vérification ===== -->
+<section class="screen" id="checking">
+  <div class="spin"></div>
+  <h2 style="text-align:center">Clé trouvée !</h2>
+  <p class="muted" style="text-align:center">Vérification auprès de Google…</p>
+</section>
+
+<section class="screen" id="success">
+  <div class="big">✅</div>
+  <h1 style="text-align:center">IA activée</h1>
+  <p style="text-align:center">C'est fait. Le Professeur, les vidéos et les résumés rédigés fonctionnent maintenant.</p>
+  <button class="btn go" onclick="show('home')">Continuer</button>
+</section>
+
+<section class="screen" id="notfound">
+  <h1>Pas encore de clé copiée</h1>
+  <p id="nfWhy">Je n'ai pas trouvé de clé dans ce que tu as copié.</p>
+  <div class="card">
+    <b>Pour la retrouver :</b>
+    <ol class="steps">
+      <li>Retourne sur la page de Google.</li>
+      <li>Ta clé est dans la liste : une ligne qui commence par <b>AIza…</b></li>
+      <li>Touche l'icône <b>Copier</b> (deux petits carrés) à côté.</li>
+    </ol>
+  </div>
+  <button class="btn primary" onclick="openGoogle(true)">Retourner sur la page de Google</button>
+  <button class="btn small" onclick="show('manual')">Coller la clé moi-même</button>
+  <button class="btn small" onclick="show('home')">Plus tard</button>
+</section>
+
+<section class="screen" id="manual">
+  <h1>Coller la clé</h1>
+  <p>Touche longuement la case ci-dessous, puis « Coller ».</p>
+  <input class="key" id="manualKey" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <p class="err" id="manualErr"></p>
+  <button class="btn primary" onclick="tryManual()">Valider</button>
+  <button class="btn small" onclick="show('home')">Annuler</button>
+</section>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const STEPS = [
+  { t: 'Si Google le demande, <b>choisis ton compte Google</b> (celui de ce téléphone).<small>Rien ne s\'affiche ? Passe à l\'étape suivante.</small>',
+    m: '<div style="font-size:12px;margin-bottom:6px">Choisir un compte</div><div class="acct ring"><span class="av">D</span><span style="font-size:12px">Ton nom<br><span style="color:#5f6368">toi@gmail.com</span></span></div>' },
+  { t: 'Première fois seulement : <b>coche la case</b> « J\'accepte… », puis touche <b>Continuer</b>.<small>Pas de case ? Passe à l\'étape suivante.</small>',
+    m: '<div class="chk"><span class="box ring" style="border-radius:3px"></span><span>J\'accepte les conditions d\'utilisation de Google…</span></div><div style="text-align:right"><span class="gbtn">Continuer</span></div>' },
+  { t: 'Touche le bouton bleu <b>« Créer une clé API »</b>.<small>Page en anglais ? Le bouton s\'appelle « Create API key ».</small>',
+    m: '<div style="font-size:12px;margin-bottom:10px;color:#5f6368">Clés API</div><span class="gbtn ring">🔑 Créer une clé API</span>' },
+  { t: 'Si une fenêtre s\'ouvre : touche <b>« Créer une clé »</b> pour confirmer (garde le projet proposé).<small>Pas de fenêtre ? Passe à l\'étape suivante.</small>',
+    m: '<div style="font-size:12px;margin-bottom:6px">Créer une clé</div><div style="font-size:11px;color:#5f6368;border:1px solid #dadce0;border-radius:6px;padding:5px;margin-bottom:8px">Projet : Gemini API ▾</div><div style="text-align:right"><span class="gbtn ring">Créer une clé</span></div>' },
+  { t: 'Ta clé apparaît : <b>AIza…</b> Touche l\'icône <b>Copier</b> (deux petits carrés) à côté, puis le bouton vert ci-dessous.',
+    m: '<div style="font-size:11px;color:#5f6368;margin-bottom:6px">Ta clé API</div><div class="keyrow"><span>AIzaSyB7…x4Qk</span><span class="copy ring round"><svg width="16" height="16" viewBox="0 0 24 24" fill="#5f6368"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></span></div><span class="arrow">⬆</span>' },
+];
+let cur = 0, mode = 'home', checking = false, lastTried = '';
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  $('#guide').classList.toggle('on', id === 'guide');
+  mode = id; scrollTo(0, 0);
+  if (id === 'home') refresh();
+}
+function refresh() {
+  const k = App.key();
+  $('#dot').classList.toggle('ok', !!k);
+  $('#stTitle').textContent = k ? 'IA activée ✓' : 'IA pas encore activée';
+  $('#stSub').textContent = k ? 'Clé enregistrée : ' + k.slice(0, 6) + '…' + k.slice(-4) : 'Le Professeur, les vidéos et les résumés rédigés ont besoin d\'une clé gratuite.';
+  $('#activate').style.display = k ? 'none' : '';
+  $('#tryCard').style.display = k ? '' : 'none';
+}
+function renderStep() {
+  const s = STEPS[cur];
+  $('#gnum').textContent = `Étape ${cur + 1} sur ${STEPS.length}`;
+  $('#pips').innerHTML = STEPS.map((_, i) => `<i class="${i <= cur ? 'on' : ''}"></i>`).join('');
+  $('#gtext').innerHTML = s.t; $('#gmock').innerHTML = s.m;
+  const last = cur === STEPS.length - 1;
+  $('#gnext').textContent = last ? '✓ J\'ai copié la clé' : 'Étape suivante ▶';
+  $('#gnext').className = 'btn ' + (last ? 'go' : 'primary');
+}
+function step(d) {
+  if (d > 0 && cur === STEPS.length - 1) { // on ferme la page de Google pour pouvoir lire le presse-papiers
+    if (App.tabOpen()) { App.closeTab(); setTimeout(() => lookForKey(true), 700); } else lookForKey(true);
+    return;
+  }
+  cur = Math.max(0, Math.min(STEPS.length - 1, cur + d)); renderStep();
+}
+function openGoogle(again) {
+  cur = again ? STEPS.length - 1 : 0; renderStep();
+  show('guide');
+  App.openGoogle(true);
+}
+function findKey(t) {
+  t = (t || '').trim();
+  const m = t.match(/AIza[0-9A-Za-z_\-]{30,}/);
+  if (m) return m[0];
+  if (/^[A-Za-z0-9_\-.]{30,90}$/.test(t)) return t; // autre format de clé : on laisse Google juger
+  return '';
+}
+// L'application reprend la main (page de Google fermée, ou toucher sur les instructions) : on regarde le presse-papiers
+function lookForKey(insist) {
+  if (mode !== 'guide' && mode !== 'notfound' || checking) return;
+  const k = findKey(App.clip());
+  if (k && (k !== lastTried || insist)) return verify(k);
+  if (insist || !App.tabOpen()) {
+    $('#nfWhy').textContent = k ? 'Google a refusé la clé copiée. Copie-la de nouveau, sans rien ajouter.' : 'Je n\'ai pas trouvé de clé dans ce que tu as copié.';
+    if (!App.tabOpen() || insist) show('notfound');
+  }
+}
+window.onFocusBack = () => setTimeout(() => lookForKey(false), 250);
+window.onTabClosed = () => setTimeout(() => lookForKey(false), 400);
+function verify(k) {
+  checking = true; lastTried = k; show('checking'); App.check(k);
+  window.onChecked = (r) => {
+    checking = false;
+    if (r.ok) { App.save(k); App.closeTab(); show('success'); }
+    else { $('#nfWhy').textContent = r.msg + ' Copie-la de nouveau depuis la page de Google.'; show('notfound'); }
+  };
+}
+function tryManual() {
+  const k = findKey($('#manualKey').value);
+  if (!k) { $('#manualErr').textContent = 'Ce n\'est pas une clé (elle commence par AIza…).'; return; }
+  $('#manualErr').textContent = ''; mode = 'guide'; verify(k);
+}
+function resetKey() { App.clear(); lastTried = ''; $('#ans').innerHTML = ''; refresh(); }
+function ask() {
+  $('#askBtn').disabled = true; $('#ans').innerHTML = '<p class="muted">Gemini réfléchit…</p>';
+  window.onAnswer = (r) => {
+    $('#askBtn').disabled = false;
+    $('#ans').innerHTML = r.text ? '<div class="answer"></div><p class="muted">Réponse de ' + r.model + ', avec ta clé à toi.</p>' : '<p class="err"></p>';
+    (r.text ? $('#ans .answer') : $('#ans .err')).textContent = r.text || r.error;
+  };
+  App.ask('Résume ce texte en exactement 3 phrases courtes, en français :\n\n' + $('#txt').value);
+}
+window.goBack = () => { if (mode !== 'home' && mode !== 'checking') { show('home'); return true; } return false; };
+refresh();
+</script>
+</body>
+</html>
