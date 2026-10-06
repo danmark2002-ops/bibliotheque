@@ -148,6 +148,7 @@ async function maintenance() {
     const fixed = await LocalAPI.fixCovers(() => { if (++n % 5 === 0) loadBooks().then(() => { if (!$('.reader')) renderLibrary(); }); });
     if (fixed) { await loadBooks(); if (!$('.reader')) renderLibrary(); }
   } catch {}
+  thumbsSoon();
 }
 async function loadBooks() { S.books = await api('/api/books'); await loadCols(); }
 
@@ -501,10 +502,18 @@ function warmCovers() {
     if (Glide.busy()) { warmTimer = setTimeout(step, 500); return; }
     const imgs = [...document.querySelectorAll('.room img[loading="lazy"]')].slice(0, 6);
     if (!imgs.length) return;
-    imgs.forEach((i) => { i.loading = 'eager'; });
+    imgs.forEach((i) => { i.loading = 'eager'; i.decode?.().catch(() => {}); }); // décodée d'avance : rien à préparer au moment où elle arrive à l'écran
     warmTimer = setTimeout(() => (window.requestIdleCallback || ((f) => setTimeout(f, 0)))(step, { timeout: 1500 }), 120);
   };
   warmTimer = setTimeout(step, 800);
+}
+// Vignettes des couvertures à la taille de l'écran, préparées une à une quand l'étagère est immobile
+let thumbsRun = null;
+function thumbsSoon() {
+  if (!window.LocalAPI?.makeThumbs || thumbsRun) return;
+  const pause = async () => { do await new Promise((r) => setTimeout(r, Glide.busy() ? 500 : 40)); while (Glide.busy() || window.__reader); };
+  thumbsRun = LocalAPI.makeThumbs(null, pause).then(async (n) => { if (n) { await loadBooks(); if (!$('.reader')) renderLibrary(); } })
+    .catch(() => {}).finally(() => { thumbsRun = null; });
 }
 let pendingRender = null;
 function renderLibrary(opts = {}) {
@@ -1098,7 +1107,7 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
     return ok + updated;
   } finally {
     FOLDER.busy = false;
-    if (touched) { await loadBooks(); renderLibrary(); } else $('.btn.refresh')?.classList.remove('spin');
+    if (touched) { await loadBooks(); renderLibrary(); thumbsSoon(); } else $('.btn.refresh')?.classList.remove('spin');
   }
 }
 function openFolder(libId = curLib()?.id) {

@@ -646,13 +646,42 @@ window.LocalAPI = (() => {
 
   // ---------- Livres ----------
   const coverUrls = new Map();
+  // L'étagère montre une vignette à la taille de l'écran (bien plus légère que la couverture de 520 px) :
+  // sinon le téléphone décode de grosses images en plein défilement et l'étagère s'arrête un instant.
+  const thumbOk = (rec) => rec?.thumb && rec.thumbFor === (rec.cover?.size || 0);
   function coverUrl(id, blob) { if (!blob) return null; if (!coverUrls.has(id)) coverUrls.set(id, URL.createObjectURL(blob)); return coverUrls.get(id); }
+  const THUMB_W = Math.min(360, Math.max(240, Math.round(Math.min(screen.width || 400, 600) / 3.3 * Math.min(3, devicePixelRatio || 2))));
+  async function makeThumbs(onEach, pause) {
+    let made = 0;
+    for (const m of await all('meta')) {
+      if (m.trashed) continue;
+      if (pause) await pause();
+      try {
+        const rec = await get('blob', m.id);
+        if (!rec?.cover || thumbOk(rec)) continue;
+        const bmp = await createImageBitmap(rec.cover);
+        const w = Math.min(THUMB_W, bmp.width), hh = Math.round(w * bmp.height / bmp.width);
+        let small = rec.cover;
+        if (w < bmp.width) {
+          const c = document.createElement('canvas'); c.width = w; c.height = hh;
+          const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, w, hh);
+          small = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86)); freeCanvas(c);
+        }
+        bmp.close?.();
+        if (!small) continue;
+        rec.thumb = small; rec.thumbFor = rec.cover.size; await put('blob', rec, m.id);
+        coverUrls.delete(m.id); // l'ancienne adresse reste valide pour les images déjà affichées
+        made++; onEach && onEach();
+      } catch {}
+    }
+    return made;
+  }
   async function bookOut(m) {
     const p = await get('prog', m.id); const rec = m.kind === 'pdf' || m.hasCover ? await get('blob', m.id) : null;
     return { id: m.id, title: m.title, author: m.author, kind: m.kind, pages: m.pages, status: 'ready', color: m.color, created: m.created,
       tracks: m.tracks, chapters: m.chapters, dur: m.dur, ocr: m.ocr || '',
       bait: !!m.bait, ocrRedo: !!m.ocrRedo, fav: !!m.fav, state: m.state || '', lib: m.lib || 'main', src: m.src || '', fname: m.fname || '', summary: m.summary || null, cols: m.cols || [], trashed: m.trashed || 0, size: m.fsize || 0,
-      coverUrl: rec?.cover ? coverUrl(m.id, rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
+      coverUrl: rec?.cover ? coverUrl(m.id, thumbOk(rec) ? rec.thumb : rec.cover) : null, progress: p ? { page: p.page, opens: p.opens, last: p.last, pos: p.pos } : null };
   }
   const BAD_TITLE = /^(.*external file.*|\W*\d*@.*|untitled|sans titre|document\d*|pdf|adobe .*|microsoft (word|powerpoint) - .*|.*photoshop.*|.*indesign.*|.*acrobat.*|.*\.(docx?|pdf|indd|qxd|psd|tiff?|jpe?g))$/i;
   const KIND_OF = { '.pdf': 'pdf', '.docx': 'docx', '.txt': 'txt', '.md': 'txt', '.text': 'txt', '.markdown': 'txt', '.log': 'txt', '.csv': 'txt',
@@ -1091,7 +1120,7 @@ window.LocalAPI = (() => {
         const rec = await get('blob', m.id);
         let blank = !rec?.cover;
         if (rec?.cover) { const bmp = await createImageBitmap(rec.cover); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d').drawImage(bmp, 0, 0); blank = isBlank(c); }
-        if (blank) { const doc = await pdfDoc(m.id); const cover = await pdfCover(doc); rec.cover = cover; await put('blob', rec, m.id); coverUrls.delete(m.id); fixed++; onEach && onEach(); }
+        if (blank) { const doc = await pdfDoc(m.id); const cover = await pdfCover(doc); rec.cover = cover; rec.thumb = null; await put('blob', rec, m.id); coverUrls.delete(m.id); fixed++; onEach && onEach(); }
       } catch {}
       m.coverChecked = 2; await put('meta', m);
     }
@@ -1107,5 +1136,5 @@ window.LocalAPI = (() => {
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { replaceBook, stamp, unignore, Spell, freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { replaceBook, stamp, unignore, Spell, freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, makeThumbs, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();
