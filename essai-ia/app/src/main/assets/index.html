@@ -48,13 +48,13 @@
   .gnav .btn.prev { flex: 0 0 64px; }
 
   .ghead { font: 600 14px system-ui; color: var(--muted); margin-bottom: 4px; }
-  .gstep { display: flex; gap: 10px; align-items: flex-start; font-size: 15.5px; line-height: 1.3; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .gstep { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.28; padding: 4px 0; border-bottom: 1px solid var(--line); }
   .gstep:last-of-type { border-bottom: 0; }
   .num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 13px system-ui; margin-top: 1px; }
   .chip { display: inline-block; border: 1px solid #c4c7c5; border-radius: 14px; padding: 1px 9px; background: #fff; font: 500 14px Roboto, Arial, sans-serif; white-space: nowrap; vertical-align: 1px; box-shadow: 0 0 0 2px rgba(217,48,37,.55); }
   .chip.sq { padding: 2px 4px 0; border-radius: 6px; line-height: 0; }
+  .chip.x { padding: 3px 7px; line-height: 1; font-size: 15px; font-weight: 700; }
   .where { color: var(--muted); font-size: 13px; white-space: nowrap; }
-  #gdone { margin-top: auto; }
   /* Éléments imités de la page de Google */
   .gbtn { display: inline-block; background: var(--blue); color: #fff; border-radius: 18px; padding: 7px 12px; font-weight: 500; white-space: nowrap; }
   .gbtn.flat { background: #fff; color: var(--blue); border: 1px solid #dadce0; }
@@ -109,9 +109,9 @@
     <b>Ce qui va se passer :</b>
     <ol class="steps">
       <li>La page de Google s'ouvre en bas de l'écran.</li>
-      <li>Les 3 touchers à faire restent écrits ici, en haut.</li>
+      <li>Les 4 touchers à faire restent écrits ici, en haut.</li>
       <li>Tu appuies sur « Créer une clé API », « Créer une clé », puis sur les deux petits rectangles pour copier.</li>
-      <li>Tu appuies sur le bouton vert : la page se ferme et l'application trouve la clé toute seule.</li>
+      <li>Tu fermes la page avec le X : l'application trouve la clé toute seule.</li>
     </ol>
   </div>
   <p class="muted">✔ Gratuit, aucune carte de crédit.<br>✔ La clé reste seulement sur ce téléphone.<br>ℹ️ Avec l'offre gratuite, Google peut utiliser les textes envoyés pour améliorer son IA.</p>
@@ -122,11 +122,11 @@
 
 <!-- ===== Guide affiché en haut pendant que la page de Google est ouverte en bas ===== -->
 <section id="guide">
-  <div class="ghead">Dans la page de Google en bas, fais ces 3 touchers :</div>
+  <div class="ghead">Dans la page de Google en bas, fais ces 4 touchers :</div>
   <div class="gstep"><span class="num">1</span><span>Appuie sur <span class="chip">Créer une clé API</span> <span class="where">en haut à droite</span></span></div>
   <div class="gstep"><span class="num">2</span><span>Une fenêtre s'ouvre : appuie sur <span class="chip">Créer une clé</span> <span class="where">en bas à droite</span></span></div>
   <div class="gstep"><span class="num">3</span><span>Va au bout de la ligne <b>Clé API</b> et appuie sur le petit carré <span class="chip sq"><svg width="15" height="15" viewBox="0 0 24 24" fill="#3c4043"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg></span> Ça fait une copie.</span></div>
-  <button class="btn go" id="gdone" onclick="finishGuide()">Appuie ici quand tu as fini</button>
+  <div class="gstep"><span class="num">4</span><span>Quand tu as fini, appuie sur le <span class="chip sq x">✕</span> <span class="where">en haut à gauche</span> pour fermer la page. C'est tout !</span></div>
 </section>
 
 <!-- ===== Vérification ===== -->
@@ -188,14 +188,13 @@ function refresh() {
   $('#tryCard').style.display = k ? '' : 'none';
 }
 function openGoogle() {
-  $('#gdone').textContent = 'Appuie ici quand tu as fini'; $('#gdone').disabled = false;
   show('guide');
   App.openGoogle(true);
 }
 // Dernière étape : on ferme la page de Google nous-mêmes (pas besoin du X), puis on lit la clé copiée
 let wantKey = false;
 function finishGuide() {
-  wantKey = true; $('#gdone').textContent = 'Un instant…'; $('#gdone').disabled = true;
+  wantKey = true;
   App.closeTab();
   setTimeout(() => { if (wantKey) { wantKey = false; lookForKey(true); } }, 1500);
 }
