@@ -2634,16 +2634,42 @@ function caseFor(groups, owner) {
 }
 
 const fold = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-// Couvertures : chargées « paresseusement » pour un démarrage rapide, puis toutes préparées au repos —
-// sinon chacune se charge pendant le défilement et l'étagère saccade.
+// Défilement : pendant que le doigt fait glisser l'étagère (ou qu'elle file sur son élan), aucun travail lourd.
+// Les mises à jour faites en arrière-plan (vérification des dossiers, couvertures refaites…) attendent la fin du geste :
+// redessiner toute l'étagère en plein défilement donnait « une grosse saccade ».
+const Glide = { last: 0, tap: 0, down: false, wait: [],
+  busy() { return this.down || Date.now() - this.last < 350; },
+  later(fn) { this.wait.push(fn); this.kick(); },
+  kick() { clearTimeout(this.t); this.t = setTimeout(() => { if (this.busy()) return this.kick(); const w = this.wait.splice(0); w.forEach((f) => f()); }, 400); },
+};
+addEventListener('scroll', () => { Glide.last = Date.now(); }, { passive: true, capture: true });
+addEventListener('touchstart', () => { Glide.down = true; Glide.tap = Date.now(); }, { passive: true, capture: true });
+addEventListener('touchend', () => { Glide.down = false; }, { passive: true, capture: true });
+addEventListener('touchcancel', () => { Glide.down = false; }, { passive: true, capture: true });
+addEventListener('click', () => { Glide.tap = Date.now(); }, { capture: true });
+// Couvertures : chargées « paresseusement » pour un démarrage rapide, puis préparées quelques-unes à la fois,
+// seulement quand l'étagère est immobile — sinon chacune se charge pendant le défilement et l'étagère saccade.
 let warmTimer = 0;
 function warmCovers() {
   clearTimeout(warmTimer);
-  warmTimer = setTimeout(() => (window.requestIdleCallback || ((f) => setTimeout(f, 0)))(() => {
-    for (const img of document.querySelectorAll('.room img[loading="lazy"]')) img.loading = 'eager';
-  }, { timeout: 2000 }), 600);
+  const step = () => {
+    if (Glide.busy()) { warmTimer = setTimeout(step, 500); return; }
+    const imgs = [...document.querySelectorAll('.room img[loading="lazy"]')].slice(0, 6);
+    if (!imgs.length) return;
+    imgs.forEach((i) => { i.loading = 'eager'; });
+    warmTimer = setTimeout(() => (window.requestIdleCallback || ((f) => setTimeout(f, 0)))(step, { timeout: 1500 }), 120);
+  };
+  warmTimer = setTimeout(step, 800);
 }
+let pendingRender = null;
 function renderLibrary(opts = {}) {
+  // Appel venu de l'arrière-plan pendant un défilement (pas d'un toucher de l'utilisateur) : on attend la fin du geste
+  if (!opts.now && Glide.busy() && Date.now() - Glide.tap > 600) {
+    const first = !pendingRender; pendingRender = opts;
+    if (first) Glide.later(() => { const o = pendingRender; pendingRender = null; if (!$('.reader')) renderLibrary({ ...o, now: true }); });
+    return;
+  }
+  pendingRender = null;
   warmCovers();
   const owner = S.me.role === 'owner';
   const local = !!window.LocalAPI;
@@ -3150,8 +3176,9 @@ function scanFolder(libId, webFiles, opts) {
 }
 async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
   const lib = libs().find((l) => l.id === libId); if (!lib) return 0;
-  let entries;
-  FOLDER.busy = true; renderLibrary();
+  let entries, touched = !silent;
+  // vérification discrète : on ne redessine pas l'étagère (ça faisait sauter le défilement), seul le bouton tourne
+  FOLDER.busy = true; if (silent) $('.btn.refresh')?.classList.add('spin'); else renderLibrary();
   try {
     if (hasNativeFolder()) {
       const box = silent ? h('i') : h('div', { class: 'up' }, h('b', {}, `${lib.name} · ${folderOf(libId)?.name || 'Dossier'}`), h('span', { class: 'muted' }, 'Recherche de nouveaux livres…'), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box);
@@ -3171,7 +3198,7 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
     if (adopt) {
       const bySrc = new Map(S.books.filter((b) => b.src && b.lib !== libId).map((b) => [b.src, b]));
       for (const e of entries) { const b = bySrc.get(e.src); if (b) { await post('/api/books/' + b.id, { lib: libId }, 'PATCH'); moved++; } }
-      if (moved) await loadBooks();
+      if (moved) { await loadBooks(); touched = true; }
     }
     const k = await LocalAPI.known(libId);
     // nouveaux livres, et nouvelles versions de livres déjà là (même nom, fichier modifié depuis)
@@ -3187,7 +3214,7 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
       $('#uploads')?.append(box);
       try {
         const m = await LocalAPI.upload(await e.get(), (pct) => { $('i', box).style.width = pct + '%'; }, { src: e.src, lib: libId, fmtime: e.mtime });
-        await LocalAPI.replaceBook(old.id, m.id); updated++;
+        await LocalAPI.replaceBook(old.id, m.id); updated++; touched = true;
       } catch (err) { await LocalAPI.stamp(old.id, e.mtime); } // version illisible : on garde l'ancienne
       box.remove(); await new Promise((r) => setTimeout(r, 60)); // laisse respirer l'application
     }
@@ -3213,11 +3240,11 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
         if (e.group) {
           const files = []; for (const x of e.group) files.push(await x.get());
           await LocalAPI.uploadAudio(files, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src, srcs: e.group.map((x) => x.src), lib: libId });
-          box.remove(); ok++; continue;
+          box.remove(); ok++; touched = true; continue;
         }
         const file = await e.get();
         await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src, lib: libId, fmtime: e.mtime || 0 });
-        box.remove(); ok++;
+        box.remove(); ok++; touched = true;
         await new Promise((r) => setTimeout(r, 60)); // un livre à la fois, l'application reste fluide
         if (ok % 5 === 0) { await loadBooks(); renderLibrary(); } // l'étagère se remplit pendant l'import
       } catch (err) { fail++; $('span', box).textContent = err.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
@@ -3225,7 +3252,8 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
     if (!quiet) toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
     return ok + updated;
   } finally {
-    FOLDER.busy = false; await loadBooks(); renderLibrary();
+    FOLDER.busy = false;
+    if (touched) { await loadBooks(); renderLibrary(); } else $('.btn.refresh')?.classList.remove('spin');
   }
 }
 function openFolder(libId = curLib()?.id) {
