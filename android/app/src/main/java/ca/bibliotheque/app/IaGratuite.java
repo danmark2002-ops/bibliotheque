@@ -30,6 +30,10 @@ final class IaGratuite {
     private static long proPausedUntil = 0;
     /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
     static volatile String lastModel = "";
+    /** Messages d'attente pour la personne (« Pro est occupé, nouvel essai dans 40 s… »), propres à chaque demande */
+    interface Status { void say(String s); }
+    static final ThreadLocal<Status> STATUS = new ThreadLocal<>();
+    private static void tell(String m) { Status st = STATUS.get(); if (st != null) try { st.say(m); } catch (Exception ignored) { } }
 
     private IaGratuite() { }
 
@@ -65,8 +69,9 @@ final class IaGratuite {
                     break;
                 } catch (ProRefused e) {
                     if (e.code == 404) { pro++; t--; continue; }                                         // nom retiré : le suivant
-                    if (e.code == 429 && t < waits) { Thread.sleep(urgent ? 12_000L : 40_000L); continue; } // limite par minute
+                    if (e.code == 429 && t < waits) { tell("Gemini Pro est occupé : nouvel essai dans " + (urgent ? 12 : 40) + " s…"); Thread.sleep(urgent ? 12_000L : 40_000L); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute
                     if (e.code >= 500 && t < waits) { Thread.sleep(6_000L); continue; }                   // surchargé
+                    tell("Gemini Pro est à court pour aujourd'hui : Gemini Flash prend le relais…");
                     proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;                          // épuisé : Flash 6 h
                     sp.edit().putLong("proPause", proPausedUntil).apply();
                     break;

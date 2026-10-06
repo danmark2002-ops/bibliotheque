@@ -85,6 +85,7 @@ public class LivreService extends MediaBrowserService {
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
     private String pendingQ; // question entendue, en attente du choix « flash » ou « pro »
+    private int thinkToken; // arrête les petites phrases d'attente dès que la réponse arrive
     private boolean fromCar; // lecture lancée depuis l'auto : elle continue même si l'application du téléphone se ferme
     private boolean profDone = true, waitingMore; // cours encore en préparation : on attend la partie suivante
     private static final String PERSONA = "Tu es le Professeur bizarroïde : un professeur passionné, enjoué, un brin excentrique, qui adore partager les idées des livres. Tu parles à voix haute à un auditeur. Ne suppose jamais où il se trouve ni ce qu'il fait (route, volant, maison…) : n'en parle pas.";
@@ -644,6 +645,15 @@ public class LivreService extends MediaBrowserService {
         say(pro ? "Réponse pro ! Laisse-moi y réfléchir en profondeur…" : "Réponse flash, c'est parti !", "wait");
         final String id = bookId.substring(5), title = this.title.replace("🎓 ", "");
         final int part = idx < marks.size() ? marks.get(idx) : 0;
+        // pendant l'attente, une petite phrase toutes les 15 s : on sait que le Professeur n'est pas figé
+        final int think = ++thinkToken;
+        final String[] fillers = {"Je réfléchis encore…", "C'est une belle question, j'y suis presque…", "Encore un petit instant…", "Je rassemble mes idées…", "Presque prêt !"};
+        Runnable tick = new Runnable() { int n = 0; @Override public void run() {
+            if (think != thinkToken || !asking) return;
+            say(fillers[n++ % fillers.length], "wait");
+            main.postDelayed(this, 15000);
+        } };
+        main.postDelayed(tick, 15000);
         new Thread(() -> {
             String answer;
             try {
@@ -663,7 +673,7 @@ public class LivreService extends MediaBrowserService {
                     : "Oh là là, je n'arrive pas à joindre mon cerveau en ligne pour l'instant. Vérifie la connexion Internet du téléphone. Je reprends le cours !";
             }
             final String a = answer;
-            main.post(() -> { if (!asking) return; asking = false; setInter(a); play(); });
+            main.post(() -> { thinkToken++; if (!asking) return; asking = false; setInter(a); play(); });
         }).start();
     }
 
