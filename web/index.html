@@ -5356,8 +5356,18 @@ class Reader {
       setTimeout(() => this.playing && this.go(this.page + 1, 1), 700); return;
     }
     if (!this.sents.length) {
-      this.cap.replaceChildren('Cette page est une photo : il n\'y a pas de texte à lire. ', Ocr.on() ? h('button', { class: 'chip', onclick: () => { this.pause(); Ocr.run(S.books.find((x) => x.id === this.b.id) || this.b, this.page); } }, 'Convertir en texte') : '');
-      if (Ocr.on()) return; if (this.page < this.total) { this.playing = true; this.setPlayUi(); setTimeout(() => this.playing && this.go(this.page + 1, 1), 1500); } return; }
+      // Page sans texte (couverture, illustration) : on passe à la suivante. Plusieurs d'affilée : le livre est sans doute en photos
+      this.noText = (this.noText || 0) + 1;
+      const conv = Ocr.on() ? h('button', { class: 'chip', onclick: () => { this.pause(); Ocr.run(S.books.find((x) => x.id === this.b.id) || this.b, this.page); } }, 'Convertir en texte') : '';
+      if (this.page < this.total && this.noText <= 4) {
+        this.cap.replaceChildren(`Page ${this.page} : image sans texte, passée.`);
+        this.playing = true; this.setPlayUi(); setTimeout(() => this.playing && this.go(this.page + 1, 1), 900); return;
+      }
+      this.noText = 0; this.playing = false; this.setPlayUi();
+      this.cap.replaceChildren(this.page < this.total ? 'Ces pages sont des photos : il n\'y a pas de texte à lire. ' : 'Fin du livre. ', this.page < this.total ? conv : '');
+      return;
+    }
+    this.noText = 0;
     if (this.sIdx >= this.sents.length) this.sIdx = 0;
     if (!this.playing) post('/api/track', { book: this.b.id, type: 'audio', page: this.page }).catch(() => {});
     this.playing = true; this.setPlayUi(); this.speakCurrent();
