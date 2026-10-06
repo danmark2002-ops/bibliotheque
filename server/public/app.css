@@ -1012,3 +1012,6 @@ body.selmode .room { padding-bottom: 170px; }
 body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
 .check.autoscan { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px; align-items: flex-start; }
 .check.autoscan span { display: grid; gap: 3px; } .check.autoscan small { color: var(--ink-3); font-size: 12px; }
+.ignored .ignrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: 14px; }
+.ignored .ignrow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ignored .ignrow .btn { flex: none; height: 34px; }

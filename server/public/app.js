@@ -125,7 +125,7 @@ async function boot() {
   renderLibrary();
   checkReceived(); // une bibliothèque partagée a peut-être ouvert l'application
   maintenance();
-  setTimeout(() => AutoScan.run(true), 2500); // nouveaux livres dans les dossiers depuis la dernière fois
+  setTimeout(() => (window.requestIdleCallback || ((f) => setTimeout(f, 0)))(() => AutoScan.run(true), { timeout: 4000 }), 2500); // nouveaux livres dans les dossiers, une fois l'application au repos
 }
 // Faux livre : le fichier n'est qu'une page de publicité d'un site de téléchargement
 function baitSheet(b, fromEl, opts) {
@@ -993,14 +993,14 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
       const r = await nativeCall('__folderScanned', () => AndroidFolder.scan(libId));
       box.remove();
       if (!r || r.error) { if (!silent) toast(`${lib.name} : ${r?.error || 'lecture du dossier impossible'}`); return 0; }
-      entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, get: async () => {
+      entries = r.files.map((f) => ({ src: 'saf:' + f.id, name: f.name, path: f.path, size: f.size, mtime: f.mtime || 0, get: async () => {
         const resp = await fetch('/__dossier?lib=' + encodeURIComponent(libId) + '&id=' + encodeURIComponent(f.id));
         if (!resp.ok) throw new Error('Fichier illisible');
         return new File([await resp.blob()], f.name, { lastModified: f.mtime || Date.now() });
       } }));
     } else {
       if (!webFiles) { webFiles = await pickWebFolder(); if (!webFiles.length) return 0; }
-      entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, get: async () => f }));
+      entries = webFiles.filter((f) => BOOK_EXT.test(f.name) && !f.name.startsWith('.')).map((f) => ({ src: 'web:' + (f.webkitRelativePath || f.name), name: f.name, path: f.webkitRelativePath || f.name, size: f.size, mtime: f.lastModified || 0, get: async () => f }));
     }
     let moved = 0;
     if (adopt) {
@@ -1009,7 +1009,24 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
       if (moved) await loadBooks();
     }
     const k = await LocalAPI.known(libId);
-    let fresh = entries.filter((e) => !k.has(e)).sort((a, b) => a.path.localeCompare(b.path, 'fr'));
+    // nouveaux livres, et nouvelles versions de livres déjà là (même nom, fichier modifié depuis)
+    const st = new Map(entries.map((e) => [e, k.status ? k.status(e) : { k: k.has(e) ? 'same' : 'new' }]));
+    for (const [e, x] of st) if (x.stamp) await LocalAPI.stamp(x.stamp, e.mtime);
+    const changed = entries.filter((e) => st.get(e).k === 'changed');
+    let fresh = entries.filter((e) => st.get(e).k === 'new').sort((a, b) => a.path.localeCompare(b.path, 'fr'));
+    let updated = 0;
+    for (const e of changed) {
+      const old = st.get(e).old;
+      if (AUDIO_EXT.test(e.name)) { await LocalAPI.stamp(old.id, e.mtime); continue; }
+      const box = h('div', { class: 'up' }, h('b', {}, e.name), h('span', { class: 'muted' }, 'Nouvelle version : mise à jour…'), h('div', { class: 'bar' }, h('i', { style: { width: '0%' } })));
+      $('#uploads')?.append(box);
+      try {
+        const m = await LocalAPI.upload(await e.get(), (pct) => { $('i', box).style.width = pct + '%'; }, { src: e.src, lib: libId, fmtime: e.mtime });
+        await LocalAPI.replaceBook(old.id, m.id); updated++;
+      } catch (err) { await LocalAPI.stamp(old.id, e.mtime); } // version illisible : on garde l'ancienne
+      box.remove(); await new Promise((r) => setTimeout(r, 60)); // laisse respirer l'application
+    }
+    for (const e of fresh) if (st.get(e).unignore) LocalAPI.unignore(e.src);
     { // les pistes audio d'un même dossier forment un seul livre
       const byDir = new Map(), rest = [];
       for (const e of fresh) { if (AUDIO_EXT.test(e.name) && !/\.m4b$/i.test(e.name)) { const d = e.path.includes('/') ? e.path.slice(0, e.path.lastIndexOf('/')) : ''; if (!byDir.has(d)) byDir.set(d, []); byDir.get(d).push(e); } else rest.push(e); }
@@ -1020,7 +1037,8 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
       fresh = rest.sort((a, b) => a.path.localeCompare(b.path, 'fr'));
     }
     const last = store.get('folderLast', {}); store.set('folderLast', { ...(typeof last === 'object' ? last : {}), [libId]: Date.now() });
-    if (!fresh.length) { if (!quiet) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
+    if (updated) toast(`${updated} livre${updated > 1 ? 's' : ''} mis à jour (nouvelle version du fichier)`);
+    if (!fresh.length) { if (!quiet && !updated) toast(moved ? `${moved} livre${moved > 1 ? 's' : ''} retrouvé${moved > 1 ? 's' : ''} et rangé${moved > 1 ? 's' : ''} ici` : entries.length ? 'Aucun nouveau livre dans le dossier' : 'Aucun livre trouvé dans ce dossier'); return 0; }
     let ok = 0, fail = 0;
     for (let i = 0; i < fresh.length; i++) {
       const e = fresh[i];
@@ -1033,13 +1051,14 @@ async function scanOne(libId, webFiles, { quiet, adopt, silent } = {}) {
           box.remove(); ok++; continue;
         }
         const file = await e.get();
-        await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src, lib: libId });
+        await LocalAPI.upload(file, (pct, msg) => { $('i', box).style.width = pct + '%'; if (msg) $('span', box).textContent = `${i + 1}/${fresh.length} · ${msg}`; }, { src: e.src, lib: libId, fmtime: e.mtime || 0 });
         box.remove(); ok++;
+        await new Promise((r) => setTimeout(r, 60)); // un livre à la fois, l'application reste fluide
         if (ok % 5 === 0) { await loadBooks(); renderLibrary(); } // l'étagère se remplit pendant l'import
       } catch (err) { fail++; $('span', box).textContent = err.message; $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000); }
     }
     if (!quiet) toast(`${ok} nouveau${ok > 1 ? 'x' : ''} livre${ok > 1 ? 's' : ''} ajouté${ok > 1 ? 's' : ''}` + (fail ? ` · ${fail} refusé${fail > 1 ? 's' : ''}` : ''));
-    return ok;
+    return ok + updated;
   } finally {
     FOLDER.busy = false; await loadBooks(); renderLibrary();
   }
@@ -1048,7 +1067,7 @@ function openFolder(libId = curLib()?.id) {
   if (!libId) return openLibraries();
   const lib = libs().find((l) => l.id === libId);
   const f = folderOf(libId); const last = (store.get('folderLast', {}) || {})[libId] || 0;
-  let ignored = []; try { ignored = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); } catch {}
+  let ignored = []; try { ignored = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => typeof x === 'string' || !x.lib || x.lib === libId); } catch {}
   const close = sheet('Dossiers sources', h('div', {},
     f ? h('div', { class: 'srcbox' },
       h('div', { class: 'srcname' }, icon('folder'), h('span', {}, h('b', {}, f.name), h('small', {}, `Bibliothèque « ${lib.name} » · dernière recherche : ${last ? lastRead(last) : 'jamais'}`))),
@@ -1058,7 +1077,10 @@ function openFolder(libId = curLib()?.id) {
     f ? h('div', { class: 'addsrc' },
       h('p', {}, 'Un autre dossier devient une autre bibliothèque. Celle-ci reste telle quelle et tu passes de l\'une à l\'autre avec les onglets en haut.'),
       h('button', { class: 'btn primary', onclick: () => { close(); addFolderLib(); } }, icon('plus'), 'Ajouter un autre dossier')) : null,
-    ignored.length ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
+    ignored.length ? h('details', { class: 'more ignored' }, h('summary', {}, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} : ne revien${ignored.length > 1 ? 'nent' : 't'} pas`),
+      ignored.map((x) => { const o = typeof x === 'string' ? { src: x } : x; const nm = o.name || decodeURIComponent(String(o.src).split('/').pop() || o.src); return h('div', { class: 'ignrow' }, h('span', {}, nm),
+        h('button', { class: 'btn', onclick: () => { LocalAPI.unignore(o.src); close(); toast(`« ${nm} » reviendra`); scanFolder(libId); } }, 'Réimporter')); })) : null,
+    false ? h('p', { class: 'hint' }, `${ignored.length} livre${ignored.length > 1 ? 's' : ''} retiré${ignored.length > 1 ? 's' : ''} ne ser${ignored.length > 1 ? 'ont' : 'a'} pas réimporté${ignored.length > 1 ? 's' : ''}. `,
       h('a', { href: '#', onclick: (e) => { e.preventDefault(); try { localStorage.removeItem('bib.folderIgnored'); } catch {} close(); toast('Ils reviendront à la prochaine actualisation'); } }, 'Les réimporter')) : null,
     !hasNativeFolder() && f ? h('p', { class: 'hint' }, 'Dans un navigateur, il faut rechoisir le dossier à chaque actualisation.') : null,
     f && hasNativeFolder() ? h('label', { class: 'check autoscan' }, h('input', { type: 'checkbox', checked: AutoScan.on(), onchange: (e) => { store.set('autoScan', e.target.checked); toast(e.target.checked ? 'Les nouveaux livres seront ajoutés automatiquement' : 'Recherche automatique arrêtée : utilise 🔄'); } }),
@@ -1123,7 +1145,7 @@ async function deleteLibrary(libId) {
       $('i', box).style.width = Math.round(((i + 1) / all.length) * 100) + '%'; $('span', box).textContent = `${i + 1} sur ${all.length}`;
     }
     // sinon ces livres seraient refusés si tu rajoutes un jour ce dossier
-    try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(x)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
+    try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => !srcs.has(typeof x === 'string' ? x : x.src)); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {}
     box.remove();
   }
   const raw = libsRaw();

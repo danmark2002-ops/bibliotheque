@@ -777,7 +777,10 @@ window.LocalAPI = (() => {
         await put('meta', meta); return bookOut(meta);
       }
       if (m === 'DELETE') {
-        if (meta.src) { try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]'); if (!ig.includes(meta.src)) { ig.push(meta.src); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } } catch {} }
+        if (meta.src && !body.replaced) { try { // le livre retiré ne revient pas… sauf si le fichier du dossier est remplacé par une nouvelle version
+          const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => (typeof x === 'string' ? x : x.src) !== meta.src);
+          ig.push({ src: meta.src, name: meta.fname || meta.title, lib: meta.lib || 'main', t: now(), mtime: meta.fmtime || 0 }); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig));
+        } catch {} }
         await del('meta', meta.id); await del('blob', meta.id); await del('prog', meta.id); docs.delete(meta.id);
         try { window.AndroidPdf?.remove(meta.id); } catch {}
         const u = coverUrls.get(meta.id); if (u) { URL.revokeObjectURL(u); coverUrls.delete(meta.id); }
@@ -942,9 +945,34 @@ window.LocalAPI = (() => {
       if (fname) { nameSize.add(fname + '|' + fsize); names.add(clean(fname)); }
       else names.add(clean(m.title)); // anciens livres Word/texte : on compare le titre au nom du fichier
     }
-    try { for (const x of JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]')) src.add(x); } catch {}
-    return { has: (f) => src.has(f.src) || nameSize.has(f.name + '|' + f.size) || names.has(clean(f.name)) };
+    const bySrc = new Map(); for (const m of await all('meta')) if ((m.lib || 'main') === lib && m.src) bySrc.set(m.src, m);
+    const ign = new Map(); try { for (const x of JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]')) { const o = typeof x === 'string' ? { src: x } : x; ign.set(o.src, o); } } catch {}
+    const newer = (f, ref) => f.mtime && ref && f.mtime > ref + 2000; // date de modification plus récente : c'est une nouvelle version
+    const status = (f) => {
+      const m = bySrc.get(f.src);
+      if (m) {
+        if (m.trashed) return newer(f, m.fmtime || m.trashed) ? { k: 'new' } : { k: 'same' };
+        if (!m.fmtime) return { k: 'same', stamp: m.id }; // ancien import : on note la date du fichier pour la prochaine fois
+        return newer(f, m.fmtime) ? { k: 'changed', old: m } : { k: 'same' };
+      }
+      const e = ign.get(f.src);
+      if (e) return newer(f, e.mtime || e.t || Infinity) ? { k: 'new', unignore: true } : { k: 'ignored' };
+      if (nameSize.has(f.name + '|' + f.size) || names.has(clean(f.name))) return { k: 'same' };
+      return { k: 'new' };
+    };
+    return { status, has: (f) => status(f).k !== 'new' };
   }
+  // Nouvelle version d'un livre du dossier : on garde ses réglages et la page où on en était
+  async function replaceBook(oldId, newId) {
+    const o = await get('meta', oldId), n = await get('meta', newId); if (!o || !n) return;
+    for (const k of ['title', 'author', 'color', 'fav', 'state', 'cols', 'position', 'created']) if (o[k] !== undefined) n[k] = o[k];
+    await put('meta', n);
+    const pr = await get('prog', oldId); if (pr) { pr.book = newId; if (n.pages && pr.page > n.pages) pr.page = n.pages; await put('prog', pr); }
+    await del('meta', oldId); await del('blob', oldId); await del('prog', oldId); docs.delete(oldId);
+    try { window.AndroidPdf?.remove(oldId); } catch {}
+  }
+  async function stamp(id, mtime) { const m = await get('meta', id); if (m && mtime) { m.fmtime = mtime; await put('meta', m); } }
+  function unignore(src) { try { const ig = JSON.parse(localStorage.getItem('bib.folderIgnored') || '[]').filter((x) => (typeof x === 'string' ? x : x.src) !== src); localStorage.setItem('bib.folderIgnored', JSON.stringify(ig)); } catch {} }
   // Fichier du livre (l'original si on l'a, sinon le texte) — pour l'ouvrir avec une autre application
   async function fileOf(id, { asText } = {}) {
     const meta = await get('meta', id); const rec = await get('blob', id); if (!meta || !rec) return null;
@@ -1079,5 +1107,5 @@ window.LocalAPI = (() => {
     let empty = 0; for (const n of ns) { try { if ((await pdfText(id, n)).replace(/\s/g, '').length < 40) empty++; } catch { empty++; } }
     return empty >= Math.ceil(ns.length * 0.6);
   }
-  return { Spell, freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
+  return { replaceBook, stamp, unignore, Spell, freeCanvas, handle, textQuality, upload, uploadAudio, uploadImages, isScanned, tidy, fixCovers, findDup, ocrGet, ocrSave, ocrForget, audioOf, pageCanvas, pageCanvasAt, paragraphs, known, fileOf, fullText, pageItems };
 })();
