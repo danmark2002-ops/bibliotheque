@@ -3302,6 +3302,7 @@ function checkReceived() {
   let r = null; try { r = JSON.parse(AndroidShare.takeReceived() || 'null'); } catch {}
   if (!r) return;
   if (r.error) return toast(r.error);
+  if (r.book) return openReceivedBook(r.book);
   const m = r.manifest || {}, n = r.files.length;
   if (!n) { AndroidShare.clearReceived(); return toast('Ce partage ne contient aucun livre'); }
   const close = sheet('Bibliothèque reçue', h('div', {},
@@ -3310,6 +3311,23 @@ function checkReceived() {
     h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
       h('button', { class: 'btn', onclick: () => { AndroidShare.clearReceived(); close(); } }, 'Refuser'),
       h('button', { class: 'btn primary', onclick: () => { close(); importReceived(r); } }, icon('plus'), 'Ajouter à mes livres'))));
+}
+// Un livre ouvert depuis Messenger, le courriel, Drive… : il rejoint l'étagère et s'ouvre (sans doublon)
+async function openReceivedBook(info) {
+  try {
+    const resp = await fetch('/__recu?f=' + encodeURIComponent(info.file));
+    if (!resp.ok) throw new Error();
+    const file = new File([await resp.blob()], info.name);
+    AndroidShare.clearReceived();
+    if (window.__reader) { try { window.__reader.close(); } catch {} }
+    let meta = null;
+    for (const l of libs()) { meta = await LocalAPI.findDup(file, l.id); if (meta) { if (S.lib !== 'all' && S.lib !== l.id) switchLib(l.id); break; } }
+    if (meta) toast(`« ${meta.title} » est déjà sur ton étagère`);
+    else { const added = await uploadFiles([file]); meta = added.find((x) => x && x.id) || null; }
+    await loadBooks(); renderLibrary();
+    const b = meta && S.books.find((x) => x.id === meta.id);
+    if (b) openBook(b, null); else toast('Livre ajouté à l\'étagère');
+  } catch { toast('Impossible d\'ouvrir ce livre'); }
 }
 async function importReceived(r) {
   const m = r.manifest || {}, l = libs();

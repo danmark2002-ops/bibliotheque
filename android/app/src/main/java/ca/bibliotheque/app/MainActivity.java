@@ -527,6 +527,12 @@ public class MainActivity extends Activity {
         if (u == null) return;
         setIntent(new Intent(Intent.ACTION_MAIN)); // pas de deuxième import si l'écran tourne
         final Uri src = u;
+        // Un livre (PDF, EPUB, Word…) plutôt qu'une bibliothèque partagée : on le passe à l'étagère
+        String name = displayName(src), type = intent.getType() != null ? intent.getType() : getContentResolver().getType(src);
+        if (!name.toLowerCase(Locale.ROOT).endsWith(".biblio") && !"application/x-biblio".equals(type)) {
+            String ext = extFor(name, type);
+            if (ext != null) { receiveBook(src, name.contains(".") ? name : name + ext, ext); return; }
+        }
         new Thread(() -> {
             JSONObject res = new JSONObject();
             try {
@@ -558,6 +564,51 @@ public class MainActivity extends Activity {
                 wipe(recuDir());
                 try { String msg = e.getMessage() == null ? "" : e.getMessage();
                     res.put("error", msg.startsWith("Ce fichier") || msg.startsWith("Fichier de partage") ? msg : "Ce fichier n'est pas une bibliothèque partagée, ou il est abîmé."); } catch (Exception ignored) { }
+            }
+            synchronized (recuLock) { recuJson = res.toString(); }
+            js("__biblioRecue", "");
+        }).start();
+    }
+
+    private String displayName(Uri u) {
+        try (Cursor c = getContentResolver().query(u, new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getString(0);
+        } catch (Exception ignored) { }
+        String last = u.getLastPathSegment();
+        return last == null ? "Livre" : last.replaceAll(".*/", "");
+    }
+
+    /** Extension du livre d'après son nom, sinon d'après son type ; null si ce n'est pas un livre. */
+    private static String extFor(String name, String type) {
+        if (isBook(name) && !name.toLowerCase(Locale.ROOT).matches(".*\\.(mp3|m4b|m4a|aac|ogg|oga|opus|flac|wav)$")) return name.substring(name.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+        if (type == null) return null;
+        switch (type) {
+            case "application/pdf": return ".pdf";
+            case "application/epub+zip": return ".epub";
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return ".docx";
+            case "application/msword": return ".doc";
+            case "application/vnd.oasis.opendocument.text": return ".odt";
+            case "application/rtf": return ".rtf";
+            case "application/x-mobipocket-ebook": case "application/vnd.amazon.ebook": return ".mobi";
+            case "application/x-fictionbook+xml": return ".fb2";
+            case "text/plain": return ".txt";
+            default: return null;
+        }
+    }
+
+    private void receiveBook(Uri src, String name, String ext) {
+        new Thread(() -> {
+            JSONObject res = new JSONObject();
+            try {
+                File dir = recuDir(); wipe(dir); dir.mkdirs();
+                File out = new File(dir, "f0" + ext.replaceAll("[^.a-z0-9]", ""));
+                try (InputStream in = getContentResolver().openInputStream(src); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
+                    byte[] buf = new byte[1 << 16]; int r; while ((r = in.read(buf)) > 0) fo.write(buf, 0, r);
+                }
+                JSONObject b = new JSONObject(); b.put("name", name); b.put("file", out.getName()); b.put("size", out.length());
+                res.put("book", b);
+            } catch (Exception e) {
+                try { res.put("error", "Impossible d'ouvrir ce livre."); } catch (Exception ignored) { }
             }
             synchronized (recuLock) { recuJson = res.toString(); }
             js("__biblioRecue", "");
