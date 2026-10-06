@@ -224,16 +224,22 @@ function bookEl(b) {
     b.state === 'lu' ? h('span', { class: 'tag st' }, 'Lu') : b.state === 'alire' ? h('span', { class: 'tag st' }, 'À lire') : pct ? h('span', { class: 'tag pct' }, pct >= 99 ? 'Terminé' : pct + ' %') : null));
   if (S.me.role === 'owner' && window.LocalAPI && !b.trashed) $('.under', el).after(tinyIcons(b));
   if (Sel.on) { el.classList.add('selecting'); if (Sel.ids.has(b.id)) el.classList.add('picked'); $('.cover', el).append(h('span', { class: 'selbox', 'aria-hidden': 'true' }, icon('check'))); }
-  el.addEventListener('click', (e) => { if (Sel.on) { e.preventDefault(); return selToggle(b, el); } if (e.target.closest('.tiny')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
+  el.addEventListener('click', (e) => { if (el._lp && Date.now() - el._lp < 800) { e.preventDefault(); return; } if (Sel.on) { e.preventDefault(); return selToggle(b, el); } if (e.target.closest('.tiny')) return; if (S.organize || b.trashed) return editBook(b); if (b.status === 'ready') openBook(b, el); });
   ownerGestures(el, b);
   return el;
 }
+// Le « clic » qui suit le relâchement d'un appui long ne doit rien toucher (sinon il fermerait le menu qui vient de s'ouvrir)
+addEventListener('click', (e) => { if (window.__lpAt && Date.now() - window.__lpAt < 900) { window.__lpAt = 0; e.preventDefault(); e.stopPropagation(); } }, { capture: true });
 function ownerGestures(el, b) {
   if (S.me.role !== 'owner') return;
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); editBook(b); });
-  let t; el.addEventListener('touchstart', () => { t = setTimeout(() => { t = 'fired'; editBook(b); }, 600); }, { passive: true });
-  el.addEventListener('touchend', (e) => { if (t === 'fired') e.preventDefault(); clearTimeout(t); });
+  // Tous les écouteurs tactiles sont « passifs » : le téléphone fait défiler l'étagère sans attendre le JavaScript.
+  // (Un seul écouteur non passif suffisait pour que chaque glissement attende l'application : départ en retard,
+  // à-coups pendant le glissement, saut au moment de lâcher.) Le clic qui suit un appui long est ignoré dans « click ».
+  let t; el.addEventListener('touchstart', (e) => { if (e.target.closest('.tiny')) return; t = setTimeout(() => { el._lp = window.__lpAt = Date.now(); editBook(b); }, 600); }, { passive: true });
+  el.addEventListener('touchend', () => clearTimeout(t), { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(t), { passive: true });
+  el.addEventListener('touchcancel', () => clearTimeout(t), { passive: true });
 }
 // Vue « liste » : couverture, avancement et date de dernière lecture
 function listEl(books) {
@@ -324,7 +330,7 @@ async function deleteForever(b) {
 // Toutes petites icônes sous chaque livre de l'étagère
 function tinyIcons(b) {
   const ic = (name, label, on, fn) => h('span', { class: 'ti' + (on ? ' on' : ''), role: 'button', tabindex: '0', title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false',
-    onclick: (e) => { e.stopPropagation(); e.preventDefault(); fn(); }, ontouchstart: (e) => e.stopPropagation() }, icon(name));
+    onclick: (e) => { e.stopPropagation(); e.preventDefault(); fn(); } }, icon(name));
   return h('span', { class: 'tiny' },
     ic(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
     ic('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
@@ -1376,8 +1382,8 @@ function libTabs() {
       h('span', { class: 'libsw' + (id === 'all' ? ' all' : ''), style: { '--sw': DECOR_SWATCH[decor] || '#555' } }), h('span', {}, name),
       S.lib === id && id !== 'all' ? h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev')) : null);
     if (id !== 'all') { // appui long sur n'importe quel onglet : son menu
-      let t; const start = () => { t = setTimeout(() => { el._long = true; tabMenu(id); }, 550); }; const stop = () => clearTimeout(t);
-      el.addEventListener('touchstart', start, { passive: true }); el.addEventListener('touchend', stop); el.addEventListener('touchmove', stop, { passive: true });
+      let t; const start = () => { t = setTimeout(() => { window.__lpAt = Date.now(); tabMenu(id); }, 550); }; const stop = () => clearTimeout(t);
+      el.addEventListener('touchstart', start, { passive: true }); el.addEventListener('touchend', stop, { passive: true }); el.addEventListener('touchmove', stop, { passive: true });
       el.addEventListener('contextmenu', (e) => { e.preventDefault(); tabMenu(id); });
     }
     return el;
