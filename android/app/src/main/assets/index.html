@@ -1044,6 +1044,10 @@ body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
 .kg-spin { width: 40px; height: 40px; border: 4px solid var(--line); border-top-color: var(--brass); border-radius: 50%; margin: 18px auto 8px; animation: kgspin .9s linear infinite; }
 @keyframes kgspin { to { transform: rotate(360deg); } }
 
+/* Une fenêtre est ouverte (Professeur, résumé…) : la carte de progression du bas se retire pour ne rien cacher
+   (elle revient dès que la fenêtre se ferme ; la fenêtre du Professeur a ses propres boutons Pause / Reprendre / Arrêt) */
+body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: translateY(20px); transition: opacity .2s, transform .2s; }
+
 </style>
 </head>
 <body>
