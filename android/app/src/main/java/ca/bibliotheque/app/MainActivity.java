@@ -1344,12 +1344,10 @@ public class MainActivity extends Activity {
         public String profVoices() {
             JSONArray a = new JSONArray();
             try {
-                java.util.List<android.speech.tts.Voice> vs = new ArrayList<>(tts.getVoices());
-                vs.sort((x, y) -> x.getName().compareTo(y.getName()));
+                // une seule fois chaque voix (Google la propose souvent en double : sur le téléphone et en ligne)
+                java.util.List<android.speech.tts.Voice> vs = ProfStyle.frenchVoices(tts.getVoices());
                 int n = 0;
                 for (android.speech.tts.Voice v : vs) {
-                    if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
-                    if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
                     String country = v.getLocale().getCountry();
                     String where = "CA".equals(country) ? "Québec" : "FR".equals(country) ? "France" : "BE".equals(country) ? "Belgique" : "CH".equals(country) ? "Suisse" : country;
                     a.put(new JSONObject().put("name", v.getName()).put("label", "Voix " + (++n) + " · " + where + (v.isNetworkConnectionRequired() ? " · en ligne" : "")));

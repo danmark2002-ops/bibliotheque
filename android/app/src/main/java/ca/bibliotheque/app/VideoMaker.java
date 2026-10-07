@@ -355,7 +355,9 @@ final class VideoMaker {
         try {
             int r = tts.setLanguage(Locale.CANADA_FRENCH);
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
-            Voice v = voiceFor(ctx); if (v != null) tts.setVoice(v);
+            Voice v = null; try { v = ProfStyle.pickVoice(ctx, tts.getVoices()); } catch (Exception ignored) { }
+            if (v == null) v = voiceFor(ctx);
+            if (v != null) tts.setVoice(v);
             final String[] waiting = {null};
             final CountDownLatch[] done = {null};
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {

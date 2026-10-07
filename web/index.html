@@ -4591,7 +4591,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
       serieux: 'Examinons maintenant l\'idée centrale de ce livre, avec rigueur, étape par étape.',
       calme: 'Installe-toi confortablement. Nous allons parcourir ce livre doucement, ensemble.' };
     const cur = store.get('profVoice', '');
-    const sel = vs.length >= 2 ? h('select', {}, h('option', { value: '' }, 'Automatique (la meilleure)'), vs.map((v) => h('option', { value: v.name, selected: v.name === cur }, v.label))) : null;
+    const sel = vs.length >= 2 ? h('select', {}, h('option', { value: '' }, 'Automatique : une voix par ton'), vs.map((v) => h('option', { value: v.name, selected: v.name === cur }, v.label))) : null;
     const speedLbl = h('b', {}, '');
     const showSpeed = () => { speedLbl.textContent = (Math.round(this.speed() * 100) / 100).toString().replace('.', ',') + '×'; };
     const hear = () => {
@@ -4606,7 +4606,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
     if (sel) sel.onchange = hear;
     return h('details', { class: 'more' }, h('summary', {}, 'Voix, ton et vitesse du Professeur'),
       h('div', { style: { marginTop: '10px' } },
-        h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Le ton change sa façon de parler et d\'écrire ses cours ; il te le fait entendre aussitôt.'),
+        h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Chaque ton a sa propre voix, son allure et sa façon d\'écrire les cours ; il te le fait entendre aussitôt. (Avec une voix choisie à la main plus bas, les 3 tons gardent cette voix.)'),
         chips,
         h('div', { class: 'prof-row', style: { alignItems: 'center', marginTop: '10px' } }, h('span', {}, 'Vitesse'), range, speedLbl),
         sel ? h('div', { class: 'prof-row', style: { marginTop: '10px' } }, sel, h('button', { class: 'btn', onclick: hear }, icon('play'), 'Écouter')) : h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: hear }, icon('play'), 'Écouter'))));

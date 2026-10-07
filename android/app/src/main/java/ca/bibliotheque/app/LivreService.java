@@ -218,9 +218,7 @@ public class LivreService extends MediaBrowserService {
 
     /** La voix choisie dans le Professeur, sinon la meilleure voix française installée. */
     private android.speech.tts.Voice chosenVoice() {
-        String name = getSharedPreferences("ia", MODE_PRIVATE).getString("voice", "");
-        if (!name.isEmpty() && tts != null && tts.getVoices() != null)
-            for (android.speech.tts.Voice v : tts.getVoices()) if (name.equals(v.getName())) return v;
+        try { if (tts != null && tts.getVoices() != null) { android.speech.tts.Voice v = ProfStyle.pickVoice(this, tts.getVoices()); if (v != null) return v; } } catch (Exception ignored) { }
         return bestVoice();
     }
 
@@ -526,7 +524,7 @@ public class LivreService extends MediaBrowserService {
 
     /** Une voix moins monotone : l'intonation et le débit suivent le sens de chaque phrase. */
     private void expressive(String x, int n) {
-        float[] ps = ProfStyle.shape(this, x, n, rate); // ton et vitesse choisis dans l'application
+        float[] ps = ProfStyle.shape(this, x, n, 1f); // ton et vitesse du Professeur (indépendants de la vitesse de lecture des livres)
         tts.setPitch(ps[0]);
         tts.setSpeechRate(ps[1]);
     }
@@ -554,7 +552,7 @@ public class LivreService extends MediaBrowserService {
         if (++sinceSave >= 8) save();
         if (!prof) { speak(); return; }
         // le Professeur respire : petite pause entre les phrases, plus longue entre les paragraphes et les parties
-        main.postDelayed(gap(++token), pauseKind == 2 ? 1100 : pauseKind == 1 ? 500 : 140);
+        main.postDelayed(gap(++token), (long) ((pauseKind == 2 ? 1100 : pauseKind == 1 ? 500 : 140) * ProfStyle.pause(this)));
     }
 
     // ---------------------------------------------------------------- questions au Professeur, depuis l'auto

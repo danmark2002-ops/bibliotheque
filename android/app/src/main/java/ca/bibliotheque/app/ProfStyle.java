@@ -12,18 +12,55 @@ final class ProfStyle {
     static String tone(Context c) { return c.getSharedPreferences("ia", Context.MODE_PRIVATE).getString("profTone", "passionne"); }
     static float speed(Context c) { return c.getSharedPreferences("ia", Context.MODE_PRIVATE).getFloat("profSpeed", 1f); }
 
+    /** Pauses entre les phrases : le conteur respire, le passionné enchaîne */
+    static float pause(Context c) { switch (tone(c)) { case "conteur": case "calme": return 1.7f; case "serieux": case "naturel": return 1.15f; default: return 0.85f; } }
+
+    /** Nom de base d'une voix (Google donne souvent la même voix deux fois : « …-local » et « …-network ») */
+    static String base(String name) { return name.replaceAll("-(local|network|language)$", ""); }
+
+    /** Voix françaises installées, sans doublons, la version sur le téléphone d'abord, triées de façon stable. */
+    static java.util.List<android.speech.tts.Voice> frenchVoices(java.util.Set<android.speech.tts.Voice> all) {
+        java.util.Map<String, android.speech.tts.Voice> m = new java.util.TreeMap<>();
+        if (all == null) return new java.util.ArrayList<>();
+        for (android.speech.tts.Voice v : all) {
+            if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
+            if (v.getFeatures() != null && v.getFeatures().contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+            String k = base(v.getName());
+            android.speech.tts.Voice old = m.get(k);
+            if (old == null || (old.isNetworkConnectionRequired() && !v.isNetworkConnectionRequired())) m.put(k, v);
+        }
+        return new java.util.ArrayList<>(m.values());
+    }
+
+    /**
+     * Voix du Professeur. Choisie à la main : celle-là. Sinon, chaque ton a SA voix (un vrai timbre différent,
+     * pas seulement plus aigu ou plus grave) : passionné = 1re voix, sérieux = 2e, conteur = 3e, dans la région préférée.
+     */
+    static android.speech.tts.Voice pickVoice(Context c, java.util.Set<android.speech.tts.Voice> all) {
+        String name = c.getSharedPreferences("ia", Context.MODE_PRIVATE).getString("voice", "");
+        java.util.List<android.speech.tts.Voice> fr = frenchVoices(all);
+        if (!name.isEmpty()) for (android.speech.tts.Voice v : all) if (name.equals(v.getName()) || base(v.getName()).equals(base(name))) return v;
+        if (fr.isEmpty()) return null;
+        java.util.List<android.speech.tts.Voice> pool = new java.util.ArrayList<>();
+        for (String cc : new String[]{"CA", "FR"}) { for (android.speech.tts.Voice v : fr) if (cc.equals(v.getLocale().getCountry()) && !v.isNetworkConnectionRequired()) pool.add(v); if (pool.size() >= 3) break; }
+        if (pool.size() < 2) for (android.speech.tts.Voice v : fr) if (!pool.contains(v)) pool.add(v);
+        String t = tone(c);
+        int idx = t.equals("serieux") || t.equals("naturel") ? 1 : t.equals("conteur") || t.equals("calme") ? 2 : 0;
+        return pool.get(idx % pool.size());
+    }
+
     /** {hauteur, débit} pour la phrase n° n */
     static float[] shape(Context c, String x, int n, float baseRate) {
         String s = x.trim(), t = tone(c);
         float p0, r0, vp, vr, boost;          // hauteur, débit, variations, élan des exclamations
-        // 3 tons bien distincts (les anciens réglages proches y sont ramenés)
+        // 3 tons bien distincts : chacun a aussi sa propre voix (pickVoice) ; ici, son allure
         switch (t) {
             case "serieux": case "naturel":
-                p0 = 0.9f;  r0 = 0.97f; vp = 0.004f; vr = 0.006f; boost = 0.02f; break; // grave, posé, presque sans effets
+                p0 = 0.86f; r0 = 0.92f; vp = 0.004f; vr = 0.005f; boost = 0.02f; break; // grave, posé, régulier
             case "conteur": case "calme":
-                p0 = 1.0f;  r0 = 0.8f;  vp = 0.02f;  vr = 0.03f;  boost = 0.06f; break;  // lent, chaleureux
+                p0 = 0.98f; r0 = 0.82f; vp = 0.025f; vr = 0.035f; boost = 0.06f; break; // lent, chantant, longues pauses
             default:
-                p0 = 1.16f; r0 = 1.12f; vp = 0.03f;  vr = 0.04f;  boost = 0.16f;          // passionné : aigu, rapide, très vivant
+                p0 = 1.12f; r0 = 1.0f;  vp = 0.035f; vr = 0.04f;  boost = 0.16f;          // passionné : vif, très expressif
         }
         float rate = baseRate * speed(c);
         float pitch = p0 + (((n * 37) % 7) - 3) * vp, r = rate * (r0 + (((n * 53) % 5) - 2) * vr);
