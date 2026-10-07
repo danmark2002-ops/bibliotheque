@@ -389,7 +389,7 @@ final class VideoMaker {
                         // Le son de la vidéo est toujours fabriqué en 48 kHz, la fréquence native des téléphones et des lecteurs :
                         // la voix du téléphone sort en 22–24 kHz, et la conversion faite au moment de la lecture créait des pétillements.
                         if (sampleRate == 0) sampleRate = OUT_RATE;
-                        byte[] data = fadeEdges(w.rate == sampleRate ? w.data : resample(w.data, w.rate, sampleRate), sampleRate);
+                        byte[] data = fadeEdges(brighten(w.rate == sampleRate ? w.data : resample(w.data, w.rate, sampleRate), sampleRate), sampleRate);
                         if (!titleWritten) { writeSilence(out, usToSamples(titleUs, sampleRate)); writtenSamples += usToSamples(titleUs, sampleRate); titleWritten = true; }
                         if (k == 0) {
                             s.startUs = samplesToUs(writtenSamples, sampleRate);
@@ -494,6 +494,30 @@ final class VideoMaker {
             out[2 * i] = (byte) v; out[2 * i + 1] = (byte) (v >> 8);
         }
         return out;
+    }
+
+    /** Voix plus présente et plus forte : aigus relevés (+5 dB au-dessus de 3 kHz), volume +6 dB,
+     *  et un limiteur doux qui arrondit seulement les crêtes (aucune saturation). */
+    private static byte[] brighten(byte[] d, int rate) {
+        int n = d.length / 2;
+        ByteBuffer bb = ByteBuffer.wrap(d).order(ByteOrder.LITTLE_ENDIAN);
+        // filtre « high shelf » (RBJ) : +5 dB, 3 kHz
+        double A = Math.pow(10, 5.0 / 40), w0 = 2 * Math.PI * 3000 / rate, cs = Math.cos(w0), sn = Math.sin(w0);
+        double alpha = sn / 2 * Math.sqrt((A + 1 / A) * (1 / 0.8 - 1) + 2), sq = 2 * Math.sqrt(A) * alpha;
+        double b0 = A * ((A + 1) + (A - 1) * cs + sq), b1 = -2 * A * ((A - 1) + (A + 1) * cs), b2 = A * ((A + 1) + (A - 1) * cs - sq);
+        double a0 = (A + 1) - (A - 1) * cs + sq, a1 = 2 * ((A - 1) - (A + 1) * cs), a2 = (A + 1) - (A - 1) * cs - sq;
+        b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+        double x1 = 0, x2 = 0, y1 = 0, y2 = 0, gain = 2.0, th = 0.72;
+        for (int i = 0; i < n; i++) {
+            double x = bb.getShort(2 * i) / 32768.0;
+            double y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+            x2 = x1; x1 = x; y2 = y1; y1 = y;
+            double v = y * gain, av = Math.abs(v);
+            if (av > th) v = Math.signum(v) * (th + (1 - th) * Math.tanh((av - th) / (1 - th))); // limiteur doux
+            int o = (int) Math.round(v * 32767); if (o > 32767) o = 32767; else if (o < -32768) o = -32768;
+            bb.putShort(2 * i, (short) o);
+        }
+        return d;
     }
 
     /** Début et fin de chaque phrase adoucis (4 ms) : aucun « clic » au raccord avec le silence. */
