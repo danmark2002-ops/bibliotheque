@@ -4,7 +4,7 @@ import android.content.Context;
 
 /**
  * Ton et vitesse de la voix du Professeur (cours, réponses, vidéos), choisis dans l'application :
- * passionné (par défaut), enjoué, conteur, naturel, sérieux, calme ; vitesse de 0,7× à 1,5×.
+ * passionné (par défaut), sérieux, conteur ; vitesse de 0,7× à 1,5×.
  */
 final class ProfStyle {
     private ProfStyle() { }
@@ -16,13 +16,14 @@ final class ProfStyle {
     static float[] shape(Context c, String x, int n, float baseRate) {
         String s = x.trim(), t = tone(c);
         float p0, r0, vp, vr, boost;          // hauteur, débit, variations, élan des exclamations
+        // 3 tons bien distincts (les anciens réglages proches y sont ramenés)
         switch (t) {
-            case "enjoue":  p0 = 1.08f; r0 = 1.04f; vp = 0.016f; vr = 0.02f; boost = 0.10f; break;
-            case "conteur": p0 = 1.02f; r0 = 0.92f; vp = 0.02f;  vr = 0.02f; boost = 0.07f; break;
-            case "naturel": p0 = 1.0f;  r0 = 1.0f;  vp = 0.01f;  vr = 0.01f; boost = 0.03f; break;
-            case "serieux": p0 = 0.96f; r0 = 0.97f; vp = 0.006f; vr = 0.01f; boost = 0.02f; break;
-            case "calme":   p0 = 0.95f; r0 = 0.88f; vp = 0.008f; vr = 0.01f; boost = 0.01f; break;
-            default:        p0 = 1.12f; r0 = 1.06f; vp = 0.022f; vr = 0.03f; boost = 0.15f; // passionné
+            case "serieux": case "naturel":
+                p0 = 0.9f;  r0 = 0.97f; vp = 0.004f; vr = 0.006f; boost = 0.02f; break; // grave, posé, presque sans effets
+            case "conteur": case "calme":
+                p0 = 1.0f;  r0 = 0.8f;  vp = 0.02f;  vr = 0.03f;  boost = 0.06f; break;  // lent, chaleureux
+            default:
+                p0 = 1.16f; r0 = 1.12f; vp = 0.03f;  vr = 0.04f;  boost = 0.16f;          // passionné : aigu, rapide, très vivant
         }
         float rate = baseRate * speed(c);
         float pitch = p0 + (((n * 37) % 7) - 3) * vp, r = rate * (r0 + (((n * 53) % 5) - 2) * vr);

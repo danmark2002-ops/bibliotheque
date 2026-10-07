@@ -1039,3 +1039,5 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .prof-tones .chip { height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 600 13px var(--font-ui); }
 .prof-tones .chip.on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
 .prof-row input[type=range] { flex: 1; accent-color: var(--brass); }
+.prof-tones .chip { height: auto; padding: 7px 12px; display: grid; text-align: left; line-height: 1.2; }
+.prof-tones .chip small { font-weight: 400; font-size: 11.5px; opacity: .8; }

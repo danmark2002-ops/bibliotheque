@@ -2364,13 +2364,13 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
   },
   // Touche « Professeur » : le cours démarre (ou se prépare puis démarre tout seul), et la préparation continue s'il en manque
   // Voix, ton et vitesse du Professeur (cours, réponses aux questions, vidéos)
-  tones: [['passionne', 'Passionné'], ['enjoue', 'Enjoué'], ['conteur', 'Conteur'], ['naturel', 'Naturel'], ['serieux', 'Sérieux'], ['calme', 'Calme']],
-  tone: () => store.get('profTone', 'passionne'),
+  // 3 tons bien distincts (avant : 6, trop semblables à l'oreille)
+  tones: [['passionne', 'Passionné', 'aigu, rapide, très vivant'], ['serieux', 'Sérieux', 'grave, posé, sobre'], ['conteur', 'Conteur', 'lent et chaleureux']],
+  tone: () => ({ enjoue: 'passionne', naturel: 'serieux', calme: 'conteur' })[store.get('profTone', 'passionne')] || store.get('profTone', 'passionne'),
   speed: () => store.get('profSpeed', 1),
   toneNote() {
-    return { enjoue: '\nTon ton : enjoué et souriant, rythmé, mais moins survolté.', conteur: '\nTon ton : celui d\'un conteur, posé et imagé, qui prend son temps.',
-      naturel: '\nTon ton : naturel et simple, avec peu d\'effets.', serieux: '\nTon ton : sobre, posé et rigoureux, comme un bon conférencier : peu d\'exclamations, pas de bruitages.',
-      calme: '\nTon ton : calme et doux, apaisant, sans exclamations.' }[this.tone()] || '';
+    return { conteur: '\nTon ton : celui d\'un conteur, posé, chaleureux et imagé, qui prend son temps : peu d\'exclamations.',
+      serieux: '\nTon ton : sobre, posé et rigoureux, comme un bon conférencier : presque pas d\'exclamations, pas de bruitages ni d\'onomatopées.' }[this.tone()] || '';
   },
   voicePicker() {
     let vs = []; try { vs = JSON.parse(AndroidAuto.profVoices?.() || '[]'); } catch {}
@@ -2388,9 +2388,9 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
       try { if (sel) { store.set('profVoice', sel.value); AndroidAuto.profSetVoice(sel.value, ''); } } catch {}
       try { AndroidAuto.profSetStyle?.(this.tone(), this.speed(), sample[this.tone()] || sample.passionne); } catch {}
     };
-    const chips = h('div', { class: 'prof-tones' }, this.tones.map(([k, name]) => h('button', { class: 'chip' + (this.tone() === k ? ' on' : ''), onclick: (e) => {
+    const chips = h('div', { class: 'prof-tones' }, this.tones.map(([k, name, hint]) => h('button', { class: 'chip' + (this.tone() === k ? ' on' : ''), title: hint, onclick: (e) => {
       store.set('profTone', k); chips.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === e.currentTarget)); hear();
-    } }, name)));
+    } }, name, h('small', {}, hint))));
     const range = h('input', { type: 'range', min: '0.7', max: '1.5', step: '0.05', value: String(this.speed()), oninput: (e) => { store.set('profSpeed', +e.target.value); showSpeed(); }, onchange: hear });
     showSpeed();
     if (sel) sel.onchange = hear;
