@@ -770,11 +770,14 @@ final class VideoMaker {
             long dur = Math.max(1, s.endUs - s.startUs);
             float prog = Math.min(1f, Math.max(0f, (float) (t - s.startUs) / dur));
             // deux images par scène : la seconde prend le relais à mi-parcours, en fondu
+            // Le zoom de chaque image avance sans jamais revenir en arrière : pendant le fondu, la première image
+            // continue son mouvement là où elle était (avant : elle sautait en arrière, « whoop », sur les longs paragraphes).
             if (b2 != null && prog > 0.5f) {
                 float p2 = (prog - 0.5f) * 2f;
-                background(b1, si, prog, si);
-                if (p2 < 0.12f) { img.setAlpha((int) (255 * p2 / 0.12f)); background(b2, si, p2, si + 1); img.setAlpha(255); }
-                else background(b2, si, p2, si + 1);
+                if (p2 < 0.12f) {
+                    background(b1, si, 1f + p2 * 0.5f, si);
+                    img.setAlpha((int) (255 * p2 / 0.12f)); background(b2, si, p2, si + 1); img.setAlpha(255);
+                } else background(b2, si, p2, si + 1);
             } else background(b1, si, b2 != null ? prog * 2f : prog, si);
             shadeBottom(0.52f);
             // phrase choc en haut, qui apparaît en fondu
