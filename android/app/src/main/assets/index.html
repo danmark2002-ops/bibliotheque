@@ -1047,6 +1047,10 @@ body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
 /* Une fenêtre est ouverte (Professeur, résumé…) : la carte de progression du bas se retire pour ne rien cacher
    (elle revient dès que la fenêtre se ferme ; la fenêtre du Professeur a ses propres boutons Pause / Reprendre / Arrêt) */
 body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: translateY(20px); transition: opacity .2s, transform .2s; }
+.prof-tones { display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-tones .chip { height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 600 13px var(--font-ui); }
+.prof-tones .chip.on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
+.prof-row input[type=range] { flex: 1; accent-color: var(--brass); }
 
 </style>
 </head>
@@ -3867,7 +3871,7 @@ function selBarRender() {
       h('button', { class: 'selall', onclick: () => { if (all) Sel.ids.clear(); else allVis.forEach((b) => Sel.ids.add(b.id)); renderLibrary(); } }, all ? 'Aucun' : 'Tout')),
     h('div', { class: 'selacts' },
       act('share', 'Partager', () => shareMany(books), { off: !n }),
-      act('merge', 'Synthèse', () => synthChoices(books), { off: n < 2 }),
+      act('spark', 'IA', () => aiChoices(books), { off: n < 1 }),
       act('move', 'Ranger', () => selMove(books), { off: !n }),
       act(books.length && books.every((b) => b.fav) ? 'starFill' : 'star', 'Favori', () => selFav(books), { off: !n }),
       act('trash', 'Poubelle', () => selTrash(books), { off: !n, danger: true })));
@@ -3939,6 +3943,104 @@ function synthLib() {
   if (!l) { const all = libs(); l = { id: 'syn' + Date.now().toString(36), name: 'Synthèses', decor: 'ardoise', syn: true }; all.push(l); saveLibs(all); }
   return l;
 }
+// Barre de sélection → « IA » : le Professeur sur les livres choisis, ou la synthèse croisée
+function aiChoices(books) {
+  const n = books.length;
+  const close = sheet(n > 1 ? `IA · ${n} livres` : 'IA · 1 livre', h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, books.slice(0, 6).map((b) => `« ${b.title} »`).join(', ') + (n > 6 ? ` et ${n - 6} autres` : '')),
+    h('div', { class: 'sharechoices' },
+      h('button', { class: 'addbig', onclick: () => { close(); ProfMulti.open(books); } },
+        h('span', { class: 'addic' }, icon('prof')), h('span', { class: 'addtx' }, h('b', {}, 'Questions au Professeur'),
+          h('small', {}, n > 1 ? `Il a lu ces ${n} livres et te répond en les croisant : idéal pour jumeler plusieurs domaines.` : 'Pose-lui tes questions sur ce livre.'))),
+      n >= 2 ? h('button', { class: 'addbig', onclick: () => { close(); synthChoices(books); } },
+        h('span', { class: 'addic' }, icon('merge')), h('span', { class: 'addtx' }, h('b', {}, 'Synthèse croisée'),
+          h('small', {}, n > SYNTH_MAX ? `Choisis ${SYNTH_MAX} livres au plus pour une synthèse.` : 'Ce que chacun dit, leurs points communs et leurs divergences, rangé dans « Synthèses ».'))) : null)));
+}
+
+// fenêtre du Professeur d'un livre : marquée pour que « Retour » arrête le cours
+function profSheet(...a) { const c = sheet(...a); const s = $$('.scrim').pop(); if (s) s.dataset.prof = 'book'; return c; }
+
+// ---------- Le Professeur sur plusieurs livres : on lui pose des questions, il répond en croisant les livres choisis ----------
+const ProfMulti = {
+  corpus: null, key: '', history: [], speaking: false,
+  async build(books, say) {
+    const k = books.map((b) => b.id).sort().join(',');
+    if (this.key === k && this.corpus) return this.corpus;
+    // budget total raisonnable pour l'offre gratuite de Gemini (≈ 90 000 jetons), partagé entre les livres
+    const per = Math.max(4000, Math.floor(360000 / books.length));
+    const parts = [];
+    for (let i = 0; i < books.length; i++) {
+      const b = books[i];
+      say(`Le Professeur lit les livres… ${i + 1} sur ${books.length}`);
+      let txt = '';
+      try { txt = (await LocalAPI.fullText(b.id, () => {})).text || ''; } catch {}
+      const sum = b.summary?.text && b.summary.model !== 'auto' ? b.summary.text.slice(0, Math.floor(per * 0.3)) : '';
+      parts.push(`=== LIVRE ${i + 1} : « ${b.title} »${b.author ? ' de ' + b.author : ''} ===\n${sum ? 'Résumé :\n' + sum + '\n\nExtraits :\n' : ''}${condense(txt, per - sum.length)}`);
+    }
+    this.corpus = parts.join('\n\n'); this.key = k; this.history = [];
+    return this.corpus;
+  },
+  stopVoice() { this.speaking = false; try { TTS.stop?.(); } catch {} try { window.speechSynthesis?.cancel(); } catch {} },
+  speak(text) {
+    this.stopVoice(); this.speaking = true;
+    const ss = splitSentences(text.replace(/\n+/g, ' ')); let i = 0;
+    const next = () => { if (!this.speaking || i >= ss.length) { this.speaking = false; return; } const x = ss[i++]; const sh = Voice.shape(x, i, store.get('rate', 1) * Prof.speed(), Prof.tone()); TTS.speak(Pron.say(x), sh.rate, Voice.effective(), next, sh.pitch); };
+    next();
+  },
+  open(books) {
+    if (!window.AndroidAI?.generateOnline) return toast('Le Professeur a besoin de l\'IA gratuite (version Android).');
+    if (!Prof.hasKey()) return KeyGuide.start(() => this.open(books));
+    stopAllAudio();
+    const n = books.length;
+    const q = h('textarea', { placeholder: n > 1 ? 'Ta question… (ex. « Qu\'est-ce que ces livres disent ensemble sur la conscience ? »)' : 'Ta question au Professeur…' });
+    const out = h('div', { class: 'prof-answer', style: { display: 'none' } });
+    const send = async (pro) => {
+      const v = q.value.trim(); if (!v) return toast('Écris ou dicte ta question');
+      this.stopVoice(); out.style.display = ''; q.value = '';
+      const say = (m) => { out.textContent = m; };
+      try {
+        const corpus = await this.build(books, say);
+        say(pro ? 'Le Professeur réfléchit en profondeur (Gemini Pro)…' : 'Le Professeur répond (Gemini Flash)…');
+        const hist = this.history.slice(-4).map((x) => `Question : ${x.q}\nTa réponse : ${x.a}`).join('\n\n');
+        const prompt = `Tu as lu ${n > 1 ? `ces ${n} livres` : 'ce livre'} (extraits ci-dessous). L'auditeur te pose une question.
+${n > 1 ? 'Réponds en CROISANT les livres : ce que chacun apporte, où ils se rejoignent, où ils divergent, et ce que leur rencontre fait naître. Nomme les livres (par leur titre) quand tu t\'appuies sur eux.' : ''}
+Reste fidèle aux idées des auteurs, telles qu'ils les formulent, sans les juger ni les ramener à un autre cadre.
+Si la réponse n'est pas dans les livres, dis-le franchement, puis donne ton propre éclairage en précisant que c'est ton avis.
+Réponds ${pro ? 'de façon approfondie et nuancée, en 8 à 15 phrases' : 'en 4 à 7 phrases'}, avec entrain, comme à voix haute : pas de listes ni de symboles.
+${hist ? '\nVos échanges précédents :\n' + hist + '\n' : ''}
+<livres>
+${corpus}
+</livres>
+
+Question : ${v}`;
+        const r = Prof.clean(await onlineAsk(Prof.persona + Prof.toneNote(), prompt, !pro, false, say));
+        this.history.push({ q: v, a: r });
+        out.textContent = r;
+        if (pro && !/pro/.test(window.__lastModel || '')) out.prepend(h('p', { class: 'muted', style: { margin: '0 0 6px' } }, 'Gemini Pro est à court pour l\'instant : réponse de Gemini Flash.'));
+        this.speak(r);
+      } catch (e) { out.textContent = e.message; }
+    };
+    const mic = window.AndroidAuto?.listen ? h('button', { class: 'btn', 'aria-label': 'Dicter', onclick: () => {
+      this.stopVoice();
+      window.__heard = (t) => { window.__heard = null; if (t) q.value = t; };
+      setTimeout(() => AndroidAuto.listen(), 300);
+    } }, icon('mic')) : null;
+    const close = sheet(n > 1 ? `Le Professeur · ${n} livres` : 'Le Professeur', h('div', {},
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, books.slice(0, 8).map((b) => `« ${b.title} »`).join(', ') + (n > 8 ? ` et ${n - 8} autres` : '')),
+      h('div', { class: 'aiopt' },
+        h('h4', {}, 'Poser une question'),
+        h('p', {}, n > 1 ? 'Le Professeur a lu tous ces livres : il te répond à voix haute en les croisant.' : 'Le Professeur te répond à voix haute à partir du livre.'),
+        h('div', { class: 'prof-ask' }, q, mic),
+        h('div', { class: 'prof-row', style: { marginTop: '8px' } },
+          h('button', { class: 'btn', onclick: () => send(false) }, icon('spark'), 'Réponse flash'),
+          h('button', { class: 'btn primary', onclick: () => send(true) }, icon('prof'), 'Réponse pro'),
+          h('button', { class: 'btn', onclick: () => this.stopVoice() }, icon('stop'), 'Silence')),
+        out)), { wide: true });
+    const scrim = $$('.scrim').pop(); scrim.dataset.prof = 'multi';
+    new MutationObserver((_, o) => { if (!scrim.isConnected) { this.stopVoice(); o.disconnect(); } }).observe(document.body, { childList: true });
+  },
+};
+
 function synthChoices(books) {
   if (books.length < 2) return toast('Choisis au moins 2 livres');
   if (books.length > SYNTH_MAX) return toast(`${SYNTH_MAX} livres au plus pour une synthèse`);
@@ -4337,8 +4439,8 @@ const Prof = {
   },
   async ai(prompt, say, urgent) {
     const eng = await this.pickEngine(say);
-    if (eng === 'nano') return nanoAskRetry(`${this.persona}\n${prompt}`, say);
-    return onlineAsk(this.persona, prompt, urgent);
+    if (eng === 'nano') return nanoAskRetry(`${this.persona}${this.toneNote()}\n${prompt}`, say);
+    return onlineAsk(this.persona + this.toneNote(), prompt, urgent, false, say);
   },
   file: (id) => `prof/${id}.json`,
   info(id) { try { const s = AndroidAuto.readText(this.file(id)); if (!s) return null; const j = JSON.parse(s); return { done: !!j.done, n: j.n || 0, made: (j.parts || []).length, parts: j.parts || [] }; } catch { return null; } },
@@ -4466,18 +4568,43 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
     } catch (e) { out.textContent = e.message; }
   },
   // Touche « Professeur » : le cours démarre (ou se prépare puis démarre tout seul), et la préparation continue s'il en manque
+  // Voix, ton et vitesse du Professeur (cours, réponses aux questions, vidéos)
+  tones: [['passionne', 'Passionné'], ['enjoue', 'Enjoué'], ['conteur', 'Conteur'], ['naturel', 'Naturel'], ['serieux', 'Sérieux'], ['calme', 'Calme']],
+  tone: () => store.get('profTone', 'passionne'),
+  speed: () => store.get('profSpeed', 1),
+  toneNote() {
+    return { enjoue: '\nTon ton : enjoué et souriant, rythmé, mais moins survolté.', conteur: '\nTon ton : celui d\'un conteur, posé et imagé, qui prend son temps.',
+      naturel: '\nTon ton : naturel et simple, avec peu d\'effets.', serieux: '\nTon ton : sobre, posé et rigoureux, comme un bon conférencier : peu d\'exclamations, pas de bruitages.',
+      calme: '\nTon ton : calme et doux, apaisant, sans exclamations.' }[this.tone()] || '';
+  },
   voicePicker() {
     let vs = []; try { vs = JSON.parse(AndroidAuto.profVoices?.() || '[]'); } catch {}
-    if (vs.length < 2) return null;
+    const sample = { passionne: 'Ah ! Bonjour, bonjour ! Je suis le Professeur bizarroïde… et aujourd\'hui, tiens-toi bien, on part à l\'aventure !',
+      enjoue: 'Bonjour ! Je suis le Professeur. Aujourd\'hui, on découvre ce livre ensemble, tu vas voir, c\'est passionnant.',
+      conteur: 'Il était une fois un livre… et dans ce livre, une idée qui allait tout changer. Écoute bien.',
+      naturel: 'Bonjour, je suis le Professeur. Voici ce que ce livre nous apprend.',
+      serieux: 'Examinons maintenant l\'idée centrale de ce livre, avec rigueur, étape par étape.',
+      calme: 'Installe-toi confortablement. Nous allons parcourir ce livre doucement, ensemble.' };
     const cur = store.get('profVoice', '');
-    const sel = h('select', {}, h('option', { value: '' }, 'Automatique (la meilleure)'), vs.map((v) => h('option', { value: v.name, selected: v.name === cur }, v.label)));
-    const sample = 'Ah ! Bonjour, bonjour ! Je suis le Professeur bizarroïde… et aujourd\'hui, tiens-toi bien, on part à l\'aventure !';
-    const apply = () => { store.set('profVoice', sel.value); AndroidAuto.profSetVoice(sel.value, sample); };
-    sel.onchange = apply;
-    return h('details', { class: 'more' }, h('summary', {}, 'Voix du Professeur'),
+    const sel = vs.length >= 2 ? h('select', {}, h('option', { value: '' }, 'Automatique (la meilleure)'), vs.map((v) => h('option', { value: v.name, selected: v.name === cur }, v.label))) : null;
+    const speedLbl = h('b', {}, '');
+    const showSpeed = () => { speedLbl.textContent = (Math.round(this.speed() * 100) / 100).toString().replace('.', ',') + '×'; };
+    const hear = () => {
+      try { if (sel) { store.set('profVoice', sel.value); AndroidAuto.profSetVoice(sel.value, ''); } } catch {}
+      try { AndroidAuto.profSetStyle?.(this.tone(), this.speed(), sample[this.tone()] || sample.passionne); } catch {}
+    };
+    const chips = h('div', { class: 'prof-tones' }, this.tones.map(([k, name]) => h('button', { class: 'chip' + (this.tone() === k ? ' on' : ''), onclick: (e) => {
+      store.set('profTone', k); chips.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === e.currentTarget)); hear();
+    } }, name)));
+    const range = h('input', { type: 'range', min: '0.7', max: '1.5', step: '0.05', value: String(this.speed()), oninput: (e) => { store.set('profSpeed', +e.target.value); showSpeed(); }, onchange: hear });
+    showSpeed();
+    if (sel) sel.onchange = hear;
+    return h('details', { class: 'more' }, h('summary', {}, 'Voix, ton et vitesse du Professeur'),
       h('div', { style: { marginTop: '10px' } },
-        h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Choisis la voix qui te plaît : il la fait entendre aussitôt.'),
-        h('div', { class: 'prof-row' }, sel, h('button', { class: 'btn', onclick: apply }, icon('play'), 'Écouter'))));
+        h('p', { class: 'muted', style: { margin: '0 0 8px' } }, 'Le ton change sa façon de parler et d\'écrire ses cours ; il te le fait entendre aussitôt.'),
+        chips,
+        h('div', { class: 'prof-row', style: { alignItems: 'center', marginTop: '10px' } }, h('span', {}, 'Vitesse'), range, speedLbl),
+        sel ? h('div', { class: 'prof-row', style: { marginTop: '10px' } }, sel, h('button', { class: 'btn', onclick: hear }, icon('play'), 'Écouter')) : h('div', { class: 'prof-row', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: hear }, icon('play'), 'Écouter'))));
   },
   clean0: (t) => String(t || '').replace(/\r/g, '').replace(/^```\w*\n?|```$/g, '').trim(),
   hasKey: () => { try { return !!AndroidAI.hasGeminiKey(); } catch { return false; } },
@@ -4505,7 +4632,7 @@ Question : ${q}`, (m) => { out.textContent = m; }, true));
     } }, icon('mic')) : null;
     const ready = info && info.made;
     if (!store.get('profMic', 0)) { store.set('profMic', 1); try { AndroidAI.askMic?.(); } catch {} }
-    const close = sheet('Le Professeur bizarroïde', h('div', {},
+    const close = profSheet('Le Professeur bizarroïde', h('div', {},
       h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
       h('div', { class: 'aiopt' },
         h('h4', {}, ready ? 'Le Professeur parle 🎓' : 'Le Professeur se prépare…'),
@@ -6262,7 +6389,7 @@ window.__autoCmd = (cmd, arg) => {
   return true;
 };
 // Bouton retour Android
-window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); if (Sel.on && !$('.scrim')) { selEnd(); return true; } const s = $('.scrim'); if (s) { s.remove(); return true; } return false; };
+window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); if (Sel.on && !$('.scrim')) { selEnd(); return true; } const all = $$('.scrim'); const s = all[all.length - 1]; if (s) { if (s.dataset.prof === 'book') { try { AndroidAuto.profStop ? AndroidAuto.profStop() : AndroidAuto.profPause(); } catch {} } s.remove(); return true; } return false; }; // Retour sur la fenêtre du Professeur : le cours s'arrête
 
 // ================= Télé : diffusion d'écran (Cast) et navigation à la télécommande =================
 const TV = {

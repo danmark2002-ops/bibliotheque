@@ -1365,6 +1365,14 @@ public class MainActivity extends Activity {
             prof("voice", null, sample);
         }
 
+        /** Ton (passionne, enjoue, conteur, naturel, serieux, calme) et vitesse du Professeur, puis un exemple à voix haute. */
+        @JavascriptInterface
+        public void profSetStyle(String tone, float speed, String sample) {
+            getSharedPreferences("ia", MODE_PRIVATE).edit().putString("profTone", tone == null || tone.isEmpty() ? "passionne" : tone)
+                .putFloat("profSpeed", Math.max(0.7f, Math.min(1.5f, speed))).apply();
+            if (sample != null && !sample.isEmpty()) prof("voice", null, sample);
+        }
+
         /** Réponse à une question : dite à voix haute, puis le cours reprend. */
         @JavascriptInterface
         public void profAnswer(String id, String text) { prof("answer", id, text); }

@@ -1035,3 +1035,7 @@ body.selmode #toast { bottom: calc(165px + env(safe-area-inset-bottom)); }
 /* Une fenêtre est ouverte (Professeur, résumé…) : la carte de progression du bas se retire pour ne rien cacher
    (elle revient dès que la fenêtre se ferme ; la fenêtre du Professeur a ses propres boutons Pause / Reprendre / Arrêt) */
 body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: translateY(20px); transition: opacity .2s, transform .2s; }
+.prof-tones { display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-tones .chip { height: 34px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: 600 13px var(--font-ui); }
+.prof-tones .chip.on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
+.prof-row input[type=range] { flex: 1; accent-color: var(--brass); }

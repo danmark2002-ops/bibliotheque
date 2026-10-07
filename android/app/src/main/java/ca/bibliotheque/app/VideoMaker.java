@@ -347,6 +347,7 @@ final class VideoMaker {
     /** Synthétise chaque phrase, assemble la piste audio (PCM 16 bits mono) et la chronologie. Renvoie la durée totale. */
     private static long speakAll(Context ctx, String title, List<Scene> scenes, List<Seg> segs, File pcm, int[] rateOut, Progress p) throws Exception {
         CountDownLatch init = new CountDownLatch(1);
+        styleCtx = ctx.getApplicationContext();
         ttsOk = false;
         android.os.Handler mainH = new android.os.Handler(android.os.Looper.getMainLooper());
         mainH.post(() -> tts = new TextToSpeech(ctx.getApplicationContext(), st -> { ttsOk = st == TextToSpeech.SUCCESS; init.countDown(); }));
@@ -417,12 +418,10 @@ final class VideoMaker {
         }
     }
 
+    private static Context styleCtx; // ton et vitesse du Professeur, les mêmes que pour ses cours
     private static void expressive(String s, int n) {
-        float pitch = 1.1f + (((n * 37) % 7) - 3) * 0.02f, r = 1.05f + (((n * 53) % 5) - 2) * 0.03f;
-        if (s.endsWith("!")) { pitch = 1.24f; r = 1.12f; }
-        else if (s.endsWith("?")) { pitch = 1.2f; r = 1.0f; }
-        else if (s.endsWith("…")) { pitch = 1.03f; r = 0.9f; }
-        tts.setPitch(pitch); tts.setSpeechRate(r);
+        float[] ps = styleCtx != null ? ProfStyle.shape(styleCtx, s, n, 1f) : new float[]{1.1f, 1.05f};
+        tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]);
     }
 
     private static long usToSamples(long us, int rate) { return us * rate / 1_000_000L; }

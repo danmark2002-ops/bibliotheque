@@ -526,17 +526,9 @@ public class LivreService extends MediaBrowserService {
 
     /** Une voix moins monotone : l'intonation et le débit suivent le sens de chaque phrase. */
     private void expressive(String x, int n) {
-        String s = x.trim();
-        // un professeur qui vit : la voix monte, accélère, ralentit, ne garde jamais le même ton deux phrases de suite
-        float pitch = 1.12f + (((n * 37) % 7) - 3) * 0.022f, r = rate * (1.06f + (((n * 53) % 5) - 2) * 0.03f);
-        if (s.endsWith("!") || s.endsWith("! »") || s.endsWith("!»")) { pitch = 1.27f + ((n % 3) * 0.02f); r = rate * 1.14f; }
-        else if (s.endsWith("?") || s.endsWith("? »") || s.endsWith("?»")) { pitch = 1.22f; r = rate * 1.0f; }
-        else if (s.endsWith("…") || s.endsWith("...")) { pitch = 1.04f; r = rate * 0.9f; }
-        if (s.length() < 25) r *= 1.05f;
-        if (s.matches("(?i)^(ah|oh|eh|ha|hé|ho|wow|bam|boum|voilà|imaginez|imagine|attention|tenez|tiens|écoutez|écoute|alors|et voilà|incroyable|fascinant|génial|extraordinaire)(?=[\\s,!.…]).*")) pitch += 0.08f;
-        if (s.length() > 180 || s.contains(":")) r *= 0.93f;
-        tts.setPitch(Math.max(0.9f, Math.min(1.42f, pitch)));
-        tts.setSpeechRate(Math.max(0.5f, Math.min(2.5f, r)));
+        float[] ps = ProfStyle.shape(this, x, n, rate); // ton et vitesse choisis dans l'application
+        tts.setPitch(ps[0]);
+        tts.setSpeechRate(ps[1]);
     }
 
     private void spoken(String uttId) {
