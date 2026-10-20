@@ -1,0 +1,203 @@
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:700: Warning: Field requires API level 24 (current min is 23): android.content.Intent#EXTRA_EXCLUDE_COMPONENTS [InlinedApi]
+            chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, new android.content.ComponentName[]{ new android.content.ComponentName(MainActivity.this, MainActivity.class) });
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "InlinedApi":
+   This check scans through all the Android API field references in the
+   application and flags certain constants, such as static final integers and
+   Strings, which were introduced in later versions. These will actually be
+   copied into the class files rather than being referenced, which means that
+   the value is available even when running on older devices. In some cases
+   that's fine, and in other cases it can result in a runtime crash or
+   incorrect behavior. It depends on the context, so consider the code
+   carefully and decide whether it's safe and can be suppressed or whether the
+   code needs to be guarded.
+
+   If you really want to use this API and don't need to support older devices
+   just set the minSdkVersion in your build.gradle or AndroidManifest.xml
+   files.
+
+   If your code is deliberately accessing newer APIs, and you have ensured
+   (e.g. with conditional execution) that this code will only ever be called
+   on a supported platform, then you can annotate your class or method with
+   the @TargetApi annotation specifying the local minimum SDK to apply, such
+   as @TargetApi(11), such that this check considers 11 rather than your
+   manifest file's minimum SDK as the required API level.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:38: Error: Missing intent-filter for action android.media.action.MEDIA_PLAY_FROM_SEARCH. [MissingIntentFilterForMediaSearch]
+    <application
+    ^
+
+   Explanation for issues of type "MissingIntentFilterForMediaSearch":
+   To support voice searches on Android Auto, you should also register an
+   intent-filter for the action android.media.action.MEDIA_PLAY_FROM_SEARCH.
+
+   To do this, add
+   `<intent-filter>`
+       `<action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+   />`
+   `</intent-filter>`
+   to your <activity> or <service>.
+
+   https://developer.android.com/training/auto/audio/index.html#support_voice
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/LivreService.java:829: Error: When targeting Android 13 or higher, posting a permission requires holding the POST_NOTIFICATIONS permission [NotificationPermission]
+            getSystemService(NotificationManager.class).notify(7, notification());
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NotificationPermission":
+   When targeting Android 13 and higher, posting permissions requires holding
+   the runtime permission android.permission.POST_NOTIFICATIONS.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:44: Warning: Attribute enableOnBackInvokedCallback is only used in API level 33 and higher (current min is 23) [UnusedAttribute]
+        android:enableOnBackInvokedCallback="true"
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:47: Warning: Attribute networkSecurityConfig is only used in API level 24 and higher (current min is 23) [UnusedAttribute]
+        android:networkSecurityConfig="@xml/network_security_config">
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UnusedAttribute":
+   This check finds attributes set in XML files that were introduced in a
+   version newer than the oldest version targeted by your application (with
+   the minSdkVersion attribute).
+
+   This is not an error; the application will simply ignore the attribute.
+   However, if the attribute is important to the appearance or functionality
+   of your application, you should consider finding an alternative way to
+   achieve the same result with only available attributes, and then you can
+   optionally create a copy of the layout in a layout-vNN folder which will be
+   used on API NN or higher where you can take advantage of the newer
+   attribute.
+
+   Note: This check does not only apply to attributes. For example, some tags
+   can be unused too, such as the new <tag> element in layouts introduced in
+   API 21.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:15: Warning: Requiring Wifi permissions limits app availability on TVs that support only Ethernet [LeanbackUsesWifi]
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "LeanbackUsesWifi":
+   WiFi is not required for Android TV and many devices connect to the
+   internet via alternative methods e.g. Ethernet.
+
+   If your app is not focused specifically on WiFi functionality and only
+   wishes to connect to the internet, please modify your Manifest to contain:
+   <uses-feature android:name="android.hardware.wifi" android:required="false"
+   />
+
+   Un-metered or non-roaming connections can be detected in software using
+   NetworkCapabilities#NET_CAPABILITY_NOT_METERED and
+   NetworkCapabilities#NET_CAPABILITY_NOT_ROAMING.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:41: Warning: A newer version of com.android.billingclient:billing than 8.0.0 is available: 9.1.0 [GradleDependency]
+    implementation 'com.android.billingclient:billing:8.0.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:47: Warning: A newer version of com.google.android.gms:play-services-cast-framework than 21.5.0 is available: 23.0.0 [GradleDependency]
+    implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:48: Warning: A newer version of androidx.mediarouter:mediarouter than 1.7.0 is available: 1.8.1 [GradleDependency]
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:50: Warning: A newer version of androidx.browser:browser than 1.8.0 is available: 1.10.0 [GradleDependency]
+    implementation 'androidx.browser:browser:1.8.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:82: Warning: Using setJavaScriptEnabled can introduce XSS vulnerabilities into your application, review carefully [SetJavaScriptEnabled]
+        s.setJavaScriptEnabled(true);
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:782: Warning: Using setJavaScriptEnabled can introduce XSS vulnerabilities into your application, review carefully [SetJavaScriptEnabled]
+            bs.setJavaScriptEnabled(true); bs.setDomStorageEnabled(true); bs.setLoadWithOverviewMode(true); bs.setUseWideViewPort(true);
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetJavaScriptEnabled":
+   Your code should not invoke setJavaScriptEnabled if you are not sure that
+   your app really requires JavaScript support.
+
+   https://goo.gle/SetJavaScriptEnabled
+   https://developer.android.com/training/articles/security-tips
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:108: Warning: Exported content providers can provide access to potentially sensitive data [ExportedContentProvider]
+        <provider
+         ~~~~~~~~
+
+   Explanation for issues of type "ExportedContentProvider":
+   Content providers are exported by default and any application on the system
+   can potentially use them to read and write data. If the content provider
+   provides access to sensitive data, it should be protected by specifying
+   export=false in the manifest or by protecting it with a permission that can
+   be granted to other applications.
+
+   https://goo.gle/ExportedContentProvider
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:100: Warning: Exported service does not require permission [ExportedService]
+        <service
+         ~~~~~~~
+
+   Explanation for issues of type "ExportedService":
+   Exported services (services which either set exported=true or contain an
+   intent-filter and do not specify exported=false) should define a permission
+   that an entity must have in order to launch the service or bind to it.
+   Without this, any application can use this service.
+
+   https://goo.gle/ExportedService
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/xml/network_security_config.xml:3: Warning: Insecure Base Configuration [InsecureBaseConfiguration]
+    <base-config cleartextTrafficPermitted="true" />
+                                            ~~~~
+
+   Explanation for issues of type "InsecureBaseConfiguration":
+   Permitting cleartext traffic could allow eavesdroppers to intercept data
+   sent by your app, which impacts the privacy of your users. Consider only
+   allowing encrypted traffic by setting the cleartextTrafficPermitted tag to
+   false.
+
+   https://goo.gle/InsecureBaseConfiguration
+   https://developer.android.com/preview/features/security-config.html
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:61: Warning: Do not place Android context classes in static fields (static reference to MainActivity which has field web pointing to WebView); this is a memory leak [StaticFieldLeak]
+    static volatile MainActivity instance;
+    ~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/VideoMaker.java:423: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private static Context styleCtx; // ton et vitesse du Professeur, les mêmes que pour ses cours
+            ~~~~~~
+
+   Explanation for issues of type "StaticFieldLeak":
+   A static field will leak contexts.
+
+   Non-static inner classes have an implicit reference to their outer class.
+   If that outer class is for example a Fragment or Activity, then this
+   reference means that the long-running handler/loader/task will hold a
+   reference to the activity which prevents it from getting garbage
+   collected.
+
+   Similarly, direct field references to activities and fragments from these
+   longer running instances can cause leaks.
+
+   ViewModel classes should never point to Views or non-application Contexts.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:774: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            hint.setText("Les livres téléchargés vont sur ton étagère"); hint.setTextSize(11); hint.setTextColor(Color.parseColor("#b9a888"));
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+2 errors, 16 warnings

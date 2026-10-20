@@ -1,0 +1,464 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="ca.bibliotheque.app"
+4    android:versionCode="78"
+5    android:versionName="8.7" > <!-- Gemini Nano exige Android 8 : il n'est utilisé que là (vérifié dans le code) ; l'application s'installe dès Android 6 -->
+6    <uses-sdk
+6-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:6:5-126
+7        android:minSdkVersion="23"
+8        android:targetSdkVersion="36" />
+9
+10    <uses-permission android:name="android.permission.INTERNET" />
+10-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:8:5-67
+10-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:8:22-64
+11    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+11-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:9:5-79
+11-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:9:22-76
+12    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+12-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:10:5-77
+12-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:10:22-74
+13    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+13-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:11:5-92
+13-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:11:22-89
+14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+14-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:12:5-88
+14-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:12:22-85
+15    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+15-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:13:5-71
+15-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:13:22-68
+16    <uses-permission android:name="android.permission.WAKE_LOCK" />
+16-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:14:5-68
+16-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:14:22-65
+17    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+17-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:15:5-76
+17-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:15:22-73
+18    <uses-permission
+18-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:16:5-108
+19        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+19-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:16:22-78
+20        android:maxSdkVersion="28" />
+20-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:16:79-105
+21
+22    <!-- Téléviseurs (Android TV / Google TV) : pas d'écran tactile, télécommande, micro facultatif -->
+23    <uses-feature
+23-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:19:5-87
+24        android:name="android.software.leanback"
+24-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:19:19-59
+25        android:required="false" />
+25-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:19:60-84
+26    <uses-feature
+26-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:20:5-90
+27        android:name="android.hardware.touchscreen"
+27-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:20:19-62
+28        android:required="false" />
+28-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:20:63-87
+29    <uses-feature
+29-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:21:5-89
+30        android:name="android.hardware.microphone"
+30-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:21:19-61
+31        android:required="false" />
+31-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:21:62-86
+32
+33    <queries>
+33-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:23:5-36:15
+34        <intent>
+34-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:24:9-26:18
+35            <action android:name="android.support.customtabs.action.CustomTabsService" />
+35-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:25:13-90
+35-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:25:21-87
+36        </intent>
+37        <intent>
+37-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:27:9-29:18
+38            <action android:name="android.intent.action.TTS_SERVICE" />
+38-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:28:13-72
+38-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:28:21-69
+39        </intent>
+40        <intent>
+40-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:30:9-32:18
+41            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+41-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:31:13-77
+41-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:31:21-74
+42        </intent>
+43        <intent>
+43-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:33:9-35:18
+44            <action android:name="android.speech.RecognitionService" />
+44-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:34:13-72
+44-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:34:21-69
+45        </intent>
+46        <intent>
+46-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:13:9-15:18
+47            <action android:name="com.android.vending.billing.InAppBillingService.BIND" />
+47-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:14:13-91
+47-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:14:21-88
+48        </intent>
+49        <intent>
+49-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:16:9-18:18
+50            <action android:name="com.google.android.apps.play.billingtestcompanion.BillingOverrideService.BIND" />
+50-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:17:13-116
+50-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:17:21-113
+51        </intent>
+52
+53        <package android:name="com.google.android.aicore" />
+53-->[com.google.mlkit:genai-prompt:1.0.0-beta4] /home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/AndroidManifest.xml:12:9-61
+53-->[com.google.mlkit:genai-prompt:1.0.0-beta4] /home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/AndroidManifest.xml:12:18-58
+54        <package android:name="com.google.android.gms.policy_cast_dynamite" />
+54-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:11:9-79
+54-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:11:18-76
+55    </queries>
+56
+57    <uses-permission android:name="com.android.vending.BILLING" />
+57-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:10:5-67
+57-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:10:22-64
+58    <uses-permission android:name="com.google.android.apps.aicore.service.BIND_SERVICE" />
+58-->[com.google.mlkit:genai-prompt:1.0.0-beta4] /home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/AndroidManifest.xml:9:5-91
+58-->[com.google.mlkit:genai-prompt:1.0.0-beta4] /home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/AndroidManifest.xml:9:22-88
+59
+60    <permission
+60-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:22:5-24:47
+61        android:name="ca.bibliotheque.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+61-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:23:9-81
+62        android:protectionLevel="signature" />
+62-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:24:9-44
+63
+64    <uses-permission android:name="ca.bibliotheque.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+64-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:26:5-97
+64-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:26:22-94
+65
+66    <application
+66-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:38:5-117:19
+67        android:allowBackup="true"
+67-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:39:9-35
+68        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+68-->[androidx.core:core:1.10.1] /home/runner/.gradle/caches/8.11.1/transforms/2fbb2e01f569b38069892c13d70d3852/transformed/core-1.10.1/AndroidManifest.xml:28:18-86
+69        android:banner="@drawable/banner"
+69-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:45:9-42
+70        android:enableOnBackInvokedCallback="true"
+70-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:44:9-51
+71        android:extractNativeLibs="false"
+72        android:icon="@drawable/ic_launcher"
+72-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:40:9-45
+73        android:label="@string/app_name"
+73-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:42:9-41
+74        android:networkSecurityConfig="@xml/network_security_config"
+74-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:47:9-69
+75        android:roundIcon="@drawable/ic_launcher"
+75-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:41:9-50
+76        android:theme="@style/AppTheme"
+76-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:43:9-40
+77        android:usesCleartextTraffic="true" >
+77-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:46:9-44
+78        <activity
+78-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:49:9-90:20
+79            android:name="ca.bibliotheque.app.MainActivity"
+79-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:50:13-41
+80            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
+80-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:53:13-113
+81            android:exported="true"
+81-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:51:13-36
+82            android:launchMode="singleTask"
+82-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:52:13-44
+83            android:windowSoftInputMode="adjustResize" >
+83-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:54:13-55
+84            <intent-filter>
+84-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:55:13-59:29
+85                <action android:name="android.intent.action.MAIN" />
+85-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:56:17-69
+85-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:56:25-66
+86
+87                <category android:name="android.intent.category.LAUNCHER" />
+87-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:57:17-77
+87-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:57:27-74
+88                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+88-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:58:17-86
+88-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:58:27-83
+89            </intent-filter>
+90            <!-- Recevoir une bibliothèque partagée (.biblio) depuis WhatsApp, Drive, Quick Share, courriel, fichiers… -->
+91            <intent-filter>
+91-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:61:13-69:29
+92                <action android:name="android.intent.action.VIEW" />
+92-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:17-69
+92-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:25-66
+93                <action android:name="android.intent.action.SEND" />
+93-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:63:17-69
+93-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:63:25-66
+94
+95                <category android:name="android.intent.category.DEFAULT" />
+95-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:17-76
+95-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:27-73
+96
+97                <data android:mimeType="application/zip" />
+97-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+97-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+98                <data android:mimeType="application/x-zip-compressed" />
+98-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+98-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+99                <data android:mimeType="application/octet-stream" />
+99-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+99-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+100                <data android:mimeType="application/x-biblio" />
+100-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+100-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+101            </intent-filter>
+102            <!-- Ouvrir un livre reçu (Messenger, courriel, Drive, Fichiers…) : il s'ajoute à l'étagère et s'ouvre -->
+103            <intent-filter>
+103-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:71:13-84:29
+104                <action android:name="android.intent.action.VIEW" />
+104-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:17-69
+104-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:25-66
+105                <action android:name="android.intent.action.SEND" />
+105-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:63:17-69
+105-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:63:25-66
+106
+107                <category android:name="android.intent.category.DEFAULT" />
+107-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:17-76
+107-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:27-73
+108
+109                <data android:mimeType="application/pdf" />
+109-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+109-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+110                <data android:mimeType="application/epub+zip" />
+110-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+110-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+111                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+111-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+111-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+112                <data android:mimeType="application/msword" />
+112-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+112-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+113                <data android:mimeType="application/vnd.oasis.opendocument.text" />
+113-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+113-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+114                <data android:mimeType="application/rtf" />
+114-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+114-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+115                <data android:mimeType="application/x-mobipocket-ebook" />
+115-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+115-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+116                <data android:mimeType="application/vnd.amazon.ebook" />
+116-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+116-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+117                <data android:mimeType="application/x-fictionbook+xml" />
+117-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+117-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+118            </intent-filter>
+119            <intent-filter>
+119-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:85:13-89:29
+120                <action android:name="android.intent.action.VIEW" />
+120-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:17-69
+120-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:62:25-66
+121
+122                <category android:name="android.intent.category.DEFAULT" />
+122-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:17-76
+122-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:64:27-73
+123
+124                <data android:mimeType="text/plain" />
+124-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:17-60
+124-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:65:23-57
+125            </intent-filter>
+126        </activity>
+127        <!-- Reconnaissance de texte : le modèle est installé par les services Google Play dès l'installation de l'application -->
+128        <meta-data
+128-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:92:9-94
+129            android:name="com.google.mlkit.vision.DEPENDENCIES"
+129-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:92:20-71
+130            android:value="ocr" />
+130-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:92:72-91
+131        <!-- Android Auto : la Bibliothèque est une application média (grille de couvertures, lecture à voix haute) -->
+132        <meta-data
+132-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:94:9-96:71
+133            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+133-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:95:13-93
+134            android:value="ca.bibliotheque.app.CastOptionsProvider" />
+134-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:96:13-68
+135        <meta-data
+135-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:97:9-99:59
+136            android:name="com.google.android.gms.car.application"
+136-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:98:13-66
+137            android:resource="@xml/automotive_app_desc" />
+137-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:99:13-56
+138
+139        <service
+139-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:100:9-107:19
+140            android:name="ca.bibliotheque.app.LivreService"
+140-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:101:13-41
+141            android:exported="true"
+141-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:102:13-36
+142            android:foregroundServiceType="mediaPlayback|microphone" >
+142-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:103:13-69
+143            <intent-filter>
+143-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:104:13-106:29
+144                <action android:name="android.media.browse.MediaBrowserService" />
+144-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:105:17-83
+144-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:105:25-80
+145            </intent-filter>
+146        </service>
+147
+148        <provider
+148-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:108:9-111:39
+149            android:name="ca.bibliotheque.app.Couvertures"
+149-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:109:13-40
+150            android:authorities="ca.bibliotheque.app.couvertures"
+150-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:110:13-66
+151            android:exported="true" />
+151-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:111:13-36
+152        <provider
+152-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:112:9-116:50
+153            android:name="ca.bibliotheque.app.Partage"
+153-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:113:13-36
+154            android:authorities="ca.bibliotheque.app.partage"
+154-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:114:13-62
+155            android:exported="false"
+155-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:115:13-37
+156            android:grantUriPermissions="true" />
+156-->/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:116:13-47
+157
+158        <meta-data
+158-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:22:9-24:37
+159            android:name="com.google.android.play.billingclient.version"
+159-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:23:13-73
+160            android:value="8.0.0" />
+160-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:24:13-34
+161
+162        <activity
+162-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:26:9-30:75
+163            android:name="com.android.billingclient.api.ProxyBillingActivity"
+163-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:27:13-78
+164            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation"
+164-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:28:13-96
+165            android:exported="false"
+165-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:29:13-37
+166            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+166-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:30:13-72
+167        <activity
+167-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:31:9-35:75
+168            android:name="com.android.billingclient.api.ProxyBillingActivityV2"
+168-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:32:13-80
+169            android:configChanges="keyboard|keyboardHidden|screenLayout|screenSize|orientation"
+169-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:33:13-96
+170            android:exported="false"
+170-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:34:13-37
+171            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+171-->[com.android.billingclient:billing:8.0.0] /home/runner/.gradle/caches/8.11.1/transforms/3c2bb60750eb99a05cd2c493c45ba2b3/transformed/billing-8.0.0/AndroidManifest.xml:35:13-72
+172
+173        <receiver
+173-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:15:9-125
+174            android:name="com.google.android.gms.cast.framework.media.MediaIntentReceiver"
+174-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:15:19-97
+175            android:exported="false" />
+175-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:15:98-122
+176
+177        <service
+177-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:17:9-118
+178            android:name="com.google.android.gms.cast.framework.ReconnectionService"
+178-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:17:18-90
+179            android:exported="false" />
+179-->[com.google.android.gms:play-services-cast-framework:21.5.0] /home/runner/.gradle/caches/8.11.1/transforms/8fc44989df58e6ef3f810bd0f04e8e34/transformed/play-services-cast-framework-21.5.0/AndroidManifest.xml:17:91-115
+180        <service
+180-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:9:9-15:19
+181            android:name="com.google.mlkit.common.internal.MlKitComponentDiscoveryService"
+181-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:10:13-91
+182            android:directBootAware="true"
+182-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:17:13-43
+183            android:exported="false" >
+183-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:11:13-37
+184            <meta-data
+184-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:12:13-14:85
+185                android:name="com.google.firebase.components:com.google.mlkit.vision.text.internal.TextRegistrar"
+185-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:13:17-114
+186                android:value="com.google.firebase.components.ComponentRegistrar" />
+186-->[com.google.android.gms:play-services-mlkit-text-recognition-common:19.1.0] /home/runner/.gradle/caches/8.11.1/transforms/2d620b4852e64702bf7786f9a531cee6/transformed/play-services-mlkit-text-recognition-common-19.1.0/AndroidManifest.xml:14:17-82
+187            <meta-data
+187-->[com.google.mlkit:vision-common:17.3.0] /home/runner/.gradle/caches/8.11.1/transforms/99845153fb655f650ab2099bfe90ed23/transformed/vision-common-17.3.0/AndroidManifest.xml:12:13-14:85
+188                android:name="com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar"
+188-->[com.google.mlkit:vision-common:17.3.0] /home/runner/.gradle/caches/8.11.1/transforms/99845153fb655f650ab2099bfe90ed23/transformed/vision-common-17.3.0/AndroidManifest.xml:13:17-124
+189                android:value="com.google.firebase.components.ComponentRegistrar" />
+189-->[com.google.mlkit:vision-common:17.3.0] /home/runner/.gradle/caches/8.11.1/transforms/99845153fb655f650ab2099bfe90ed23/transformed/vision-common-17.3.0/AndroidManifest.xml:14:17-82
+190            <meta-data
+190-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:20:13-22:85
+191                android:name="com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar"
+191-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:21:17-120
+192                android:value="com.google.firebase.components.ComponentRegistrar" />
+192-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:22:17-82
+193        </service>
+194
+195        <provider
+195-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:9:9-13:38
+196            android:name="com.google.mlkit.common.internal.MlKitInitProvider"
+196-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:10:13-78
+197            android:authorities="ca.bibliotheque.app.mlkitinitprovider"
+197-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:11:13-69
+198            android:exported="false"
+198-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:12:13-37
+199            android:initOrder="99" />
+199-->[com.google.mlkit:common:18.11.0] /home/runner/.gradle/caches/8.11.1/transforms/e4414252607121be021524ba88c5e1d5/transformed/common-18.11.0/AndroidManifest.xml:13:13-35
+200
+201        <activity
+201-->[com.google.android.gms:play-services-base:18.5.0] /home/runner/.gradle/caches/8.11.1/transforms/02447a58f3cea65adc3908390c2eeb83/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:9-173
+202            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+202-->[com.google.android.gms:play-services-base:18.5.0] /home/runner/.gradle/caches/8.11.1/transforms/02447a58f3cea65adc3908390c2eeb83/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:19-85
+203            android:exported="false"
+203-->[com.google.android.gms:play-services-base:18.5.0] /home/runner/.gradle/caches/8.11.1/transforms/02447a58f3cea65adc3908390c2eeb83/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:146-170
+204            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+204-->[com.google.android.gms:play-services-base:18.5.0] /home/runner/.gradle/caches/8.11.1/transforms/02447a58f3cea65adc3908390c2eeb83/transformed/play-services-base-18.5.0/AndroidManifest.xml:5:86-145
+205
+206        <meta-data
+206-->[com.google.android.gms:play-services-basement:18.9.0] /home/runner/.gradle/caches/8.11.1/transforms/9f481ae34196b13dfd38b3c63ebfd311/transformed/play-services-basement-18.9.0/AndroidManifest.xml:21:9-23:69
+207            android:name="com.google.android.gms.version"
+207-->[com.google.android.gms:play-services-basement:18.9.0] /home/runner/.gradle/caches/8.11.1/transforms/9f481ae34196b13dfd38b3c63ebfd311/transformed/play-services-basement-18.9.0/AndroidManifest.xml:22:13-58
+208            android:value="@integer/google_play_services_version" />
+208-->[com.google.android.gms:play-services-basement:18.9.0] /home/runner/.gradle/caches/8.11.1/transforms/9f481ae34196b13dfd38b3c63ebfd311/transformed/play-services-basement-18.9.0/AndroidManifest.xml:23:13-66
+209
+210        <service
+210-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:28:9-34:19
+211            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+211-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:29:13-103
+212            android:exported="false" >
+212-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:30:13-37
+213            <meta-data
+213-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:31:13-33:39
+214                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+214-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:32:17-94
+215                android:value="cct" />
+215-->[com.google.android.datatransport:transport-backend-cct:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/d687a0f07cb7b636038721b4c6a84a6c/transformed/transport-backend-cct-3.1.8/AndroidManifest.xml:33:17-36
+216        </service>
+217        <service
+217-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:26:9-30:19
+218            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+218-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:27:13-117
+219            android:exported="false"
+219-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:28:13-37
+220            android:permission="android.permission.BIND_JOB_SERVICE" >
+220-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:29:13-69
+221        </service>
+222
+223        <receiver
+223-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:32:9-34:40
+224            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+224-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:33:13-132
+225            android:exported="false" />
+225-->[com.google.android.datatransport:transport-runtime:3.1.8] /home/runner/.gradle/caches/8.11.1/transforms/954b094e6f9d232143336a8483bcf6ef/transformed/transport-runtime-3.1.8/AndroidManifest.xml:34:13-37
+226
+227        <provider
+227-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
+228            android:name="androidx.startup.InitializationProvider"
+228-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:25:13-67
+229            android:authorities="ca.bibliotheque.app.androidx-startup"
+229-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:26:13-68
+230            android:exported="false" >
+230-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:27:13-37
+231            <meta-data
+231-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
+232                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+232-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:30:17-75
+233                android:value="androidx.startup" />
+233-->[androidx.emoji2:emoji2:1.2.0] /home/runner/.gradle/caches/8.11.1/transforms/8f6a1c125c3dfb766c38eb1f63ae8b7f/transformed/emoji2-1.2.0/AndroidManifest.xml:31:17-49
+234            <meta-data
+234-->[androidx.lifecycle:lifecycle-process:2.4.1] /home/runner/.gradle/caches/8.11.1/transforms/ce6ae0464e8b4b1d18142db3a96365a8/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:31:13-33:52
+235                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+235-->[androidx.lifecycle:lifecycle-process:2.4.1] /home/runner/.gradle/caches/8.11.1/transforms/ce6ae0464e8b4b1d18142db3a96365a8/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:32:17-78
+236                android:value="androidx.startup" />
+236-->[androidx.lifecycle:lifecycle-process:2.4.1] /home/runner/.gradle/caches/8.11.1/transforms/ce6ae0464e8b4b1d18142db3a96365a8/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:33:17-49
+237        </provider>
+238    </application>
+239
+240</manifest>

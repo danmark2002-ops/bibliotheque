@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.10.1" type="incidents">
+
+    <incident
+        id="MissingIntentFilterForMediaSearch"
+        severity="error"
+        message="Missing `intent-filter` for action `android.media.action.MEDIA_PLAY_FROM_SEARCH`.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="38"
+            column="5"
+            startOffset="2002"
+            endLine="117"
+            endColumn="19"
+            endOffset="6408"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.android.billingclient:billing than 8.0.0 is available: 9.1.0">
+        <fix-replace
+            description="Change to 9.1.0"
+            family="Update versions"
+            oldString="8.0.0"
+            replacement="9.1.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="41"
+            column="20"
+            startOffset="1027"
+            endLine="41"
+            endColumn="61"
+            endOffset="1068"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.gms:play-services-cast-framework than 21.5.0 is available: 23.0.0">
+        <fix-replace
+            description="Change to 23.0.0"
+            family="Update versions"
+            oldString="21.5.0"
+            replacement="23.0.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="47"
+            column="20"
+            startOffset="1502"
+            endLine="47"
+            endColumn="80"
+            endOffset="1562"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.mediarouter:mediarouter than 1.7.0 is available: 1.8.1">
+        <fix-replace
+            description="Change to 1.8.1"
+            family="Update versions"
+            oldString="1.7.0"
+            replacement="1.8.1"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="48"
+            column="20"
+            startOffset="1582"
+            endLine="48"
+            endColumn="60"
+            endOffset="1622"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.browser:browser than 1.8.0 is available: 1.10.0">
+        <fix-replace
+            description="Change to 1.10.0"
+            family="Update versions"
+            oldString="1.8.0"
+            replacement="1.10.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="50"
+            column="20"
+            startOffset="1730"
+            endLine="50"
+            endColumn="52"
+            endOffset="1762"/>
+    </incident>
+
+    <incident
+        id="SetJavaScriptEnabled"
+        severity="warning"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="82"
+            column="9"
+            startOffset="3271"
+            endLine="82"
+            endColumn="37"
+            endOffset="3299"/>
+    </incident>
+
+    <incident
+        id="SetJavaScriptEnabled"
+        severity="warning"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="782"
+            column="13"
+            startOffset="43950"
+            endLine="782"
+            endColumn="42"
+            endOffset="43979"/>
+    </incident>
+
+    <incident
+        id="ExportedContentProvider"
+        severity="warning"
+        message="Exported content providers can provide access to potentially sensitive data">
+        <fix-attribute
+            description="Set exported=&quot;false&quot;"
+            namespace="http://schemas.android.com/apk/res/android"
+            attribute="exported"
+            value="false"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="108"
+            column="10"
+            startOffset="6033"
+            endLine="108"
+            endColumn="18"
+            endOffset="6041"/>
+    </incident>
+
+    <incident
+        id="ExportedService"
+        severity="warning"
+        message="Exported service does not require permission">
+        <fix-alternatives>
+            <fix-attribute
+                description="Set permission"
+                namespace="http://schemas.android.com/apk/res/android"
+                attribute="permission"
+                value="TODO"
+                point="4"
+                mark="0"/>
+            <fix-attribute
+                description="Set exported=&quot;false&quot;"
+                namespace="http://schemas.android.com/apk/res/android"
+                attribute="exported"
+                value="false"/>
+        </fix-alternatives>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="100"
+            column="10"
+            startOffset="5710"
+            endLine="100"
+            endColumn="17"
+            endOffset="5717"/>
+    </incident>
+
+    <incident
+        id="InsecureBaseConfiguration"
+        severity="warning"
+        message="Insecure Base Configuration">
+        <fix-replace
+            description="Replace with false"
+            replacement="false"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+                startOffset="109"
+                endOffset="113"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+            line="3"
+            column="45"
+            startOffset="109"
+            endLine="3"
+            endColumn="49"
+            endOffset="113"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields (static reference to `MainActivity` which has field `web` pointing to `WebView`); this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="61"
+            column="5"
+            startOffset="2268"
+            endLine="61"
+            endColumn="11"
+            endOffset="2274"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields; this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/VideoMaker.java"
+            line="423"
+            column="13"
+            startOffset="24076"
+            endLine="423"
+            endColumn="19"
+            endOffset="24082"/>
+    </incident>
+
+    <incident
+        id="SetTextI18n"
+        severity="warning"
+        message="String literal in `setText` can not be translated. Use Android resources instead.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="774"
+            column="26"
+            startOffset="43347"
+            endLine="774"
+            endColumn="71"
+            endOffset="43392"/>
+    </incident>
+
+</incidents>

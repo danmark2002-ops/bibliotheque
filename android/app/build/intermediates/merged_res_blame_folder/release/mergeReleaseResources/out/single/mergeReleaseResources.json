@@ -1,0 +1,38 @@
+[
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_notif.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_notif.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_network_security_config.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_plus10.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_plus10.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_launcher.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_launcher.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_moins3.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_moins3.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_banner.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/banner.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_plus3.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_plus3.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_automotive_app_desc.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/automotive_app_desc.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_question.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_question.xml"
+    }
+]

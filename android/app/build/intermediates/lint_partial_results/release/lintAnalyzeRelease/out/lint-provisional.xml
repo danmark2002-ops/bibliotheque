@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.10.1" type="conditional_incidents">
+
+    <incident
+        id="ScopedStorage"
+        severity="warning"
+        message="">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="16"
+            column="36"
+            startOffset="1072"
+            endLine="16"
+            endColumn="77"
+            endOffset="1113"/>
+        <map>
+            <entry
+                name="maxSdkVersion"
+                int="28"/>
+            <entry
+                name="read"
+                boolean="false"/>
+        </map>
+    </incident>
+
+    <incident
+        id="InlinedApi"
+        severity="warning"
+        message="">
+        <fix-data minSdk="23-∞" requiresApi="24-∞"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="700"
+            column="30"
+            startOffset="38820"
+            endLine="700"
+            endColumn="61"
+            endOffset="38851"/>
+        <map>
+            <entry
+                name="message"
+                string="Field requires API level 24 (current min is %1$s): `android.content.Intent#EXTRA_EXCLUDE_COMPONENTS`"/>
+            <api-levels id="minSdk"
+                value="23-∞"/>
+            <entry
+                name="name"
+                string="EXTRA_EXCLUDE_COMPONENTS"/>
+            <entry
+                name="owner"
+                string="android.content.Intent"/>
+            <api-levels id="requiresApi"
+                value="24-∞"/>
+        </map>
+    </incident>
+
+    <incident
+        id="NotificationPermission"
+        severity="error"
+        message="When targeting Android 13 or higher, posting a permission requires holding the `POST_NOTIFICATIONS` permission">
+        <fix-data missing="android.permission.POST_NOTIFICATIONS"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/LivreService.java"
+            line="829"
+            column="13"
+            startOffset="46436"
+            endLine="829"
+            endColumn="82"
+            endOffset="46505"/>
+    </incident>
+
+    <incident
+        id="UnusedAttribute"
+        severity="warning"
+        message="">
+        <fix-data minSdk="23-∞" requiresApi="33-∞"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="44"
+            column="9"
+            startOffset="2234"
+            endLine="44"
+            endColumn="51"
+            endOffset="2276"/>
+        <map>
+            <entry
+                name="message"
+                string="Attribute `enableOnBackInvokedCallback` is only used in API level 33 and higher (current min is %1$s)"/>
+            <api-levels id="minSdk"
+                value="23-∞"/>
+            <api-levels id="requiresApi"
+                value="33-∞"/>
+        </map>
+    </incident>
+
+    <incident
+        id="UnusedAttribute"
+        severity="warning"
+        message="">
+        <fix-data minSdk="23-∞" requiresApi="24-∞"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="47"
+            column="9"
+            startOffset="2371"
+            endLine="47"
+            endColumn="69"
+            endOffset="2431"/>
+        <map>
+            <entry
+                name="message"
+                string="Attribute `networkSecurityConfig` is only used in API level 24 and higher (current min is %1$s)"/>
+            <api-levels id="minSdk"
+                value="23-∞"/>
+            <api-levels id="requiresApi"
+                value="24-∞"/>
+        </map>
+    </incident>
+
+</incidents>

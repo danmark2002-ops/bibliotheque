@@ -1,0 +1,131 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:javaPreCompileRelease
+> Task :app:generateReleaseResValues
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :app:parseReleaseLocalResources
+> Task :app:mergeReleaseResources
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:extractProguardFiles
+> Task :app:preReleaseUnitTestBuild UP-TO-DATE
+> Task :app:processReleaseManifestForPackage
+> Task :app:processReleaseResources
+
+> Task :app:compileReleaseJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:generateReleaseLintReportModel
+> Task :app:bundleReleaseClassesToCompileJar
+> Task :app:generateReleaseUnitTestLintModel
+
+> Task :app:lintAnalyzeRelease
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.common.time_time-android-ktx.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.prompt_mlkit_genai_prompt.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.common.labs.kotlin.coroutines_coroutines_android.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/dbc072b57aa255d0f656f6678c6e6583/transformed/genai-common-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.common_mlkit_genai_common.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/com.google.mlkit/genai-schema/1.0.0-alpha1/bff6644c83ba6ff9a925e450df7540188569c232/genai-schema-1.0.0-alpha1.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.schema_mlkit_genai_schema.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib-jdk8.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib-jdk7.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+
+> Task :app:lintAnalyzeReleaseUnitTest
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.common.time_time-android-ktx.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.prompt_mlkit_genai_prompt.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/8e4e879da7bee304891086b3b866b013/transformed/genai-prompt-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.common.labs.kotlin.coroutines_coroutines_android.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/8.11.1/transforms/dbc072b57aa255d0f656f6678c6e6583/transformed/genai-common-1.0.0-beta4/jars/classes.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.common_mlkit_genai_common.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/com.google.mlkit/genai-schema/1.0.0-alpha1/bff6644c83ba6ff9a925e450df7540188569c232/genai-schema-1.0.0-alpha1.jar!/META-INF/java.com.google.android.libraries.mlkit.granules.genai.schema_mlkit_genai_schema.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib-jdk8.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+e: file:///home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.3.21/a2ee2c4e220fee522f0451b723bab2a43f3481a7/kotlin-stdlib-2.3.21.jar!/META-INF/kotlin-stdlib-jdk7.kotlin_module Module was compiled with an incompatible version of Kotlin. The binary version of its metadata is 2.3.0, expected version is 2.1.0.
+
+> Task :app:lintReportRelease
+Wrote HTML report to file:///home/runner/work/bibliotheque/bibliotheque/android/app/build/reports/lint-results-release.html
+Lint found 2 errors and 16 warnings. First failure:
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:38: Error: Missing intent-filter for action android.media.action.MEDIA_PLAY_FROM_SEARCH. [MissingIntentFilterForMediaSearch]
+    <application
+    ^
+
+
+> Task :app:lintRelease FAILED
+Lint found 2 errors, 16 warnings. First failure:
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:38: Error: Missing intent-filter for action android.media.action.MEDIA_PLAY_FROM_SEARCH. [MissingIntentFilterForMediaSearch]
+    <application
+    ^
+
+   Explanation for issues of type "MissingIntentFilterForMediaSearch":
+   To support voice searches on Android Auto, you should also register an
+   intent-filter for the action android.media.action.MEDIA_PLAY_FROM_SEARCH.
+
+   To do this, add
+   `<intent-filter>`
+       `<action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+   />`
+   `</intent-filter>`
+   to your <activity> or <service>.
+
+   https://developer.android.com/training/auto/audio/index.html#support_voice
+
+
+The full lint text report is located at:
+  /home/runner/work/bibliotheque/bibliotheque/android/app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1792477637867.json
+[Incubating] Problems report is available at: file:///home/runner/work/bibliotheque/bibliotheque/android/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:lintRelease'.
+> Lint found errors in the project; aborting build.
+  
+  Fix the issues identified by lint, or create a baseline to see only new errors.
+  To create a baseline, run `gradlew updateLintBaseline` after adding the following to the module's build.gradle file:
+  ```
+  android {
+      lint {
+          baseline = file("lint-baseline.xml")
+      }
+  }
+  ```
+  For more details, see https://developer.android.com/studio/write/lint#snapshot
+  
+  Lint found 2 errors, 16 warnings. First failure:
+  
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:38: Error: Missing intent-filter for action android.media.action.MEDIA_PLAY_FROM_SEARCH. [MissingIntentFilterForMediaSearch]
+      <application
+      ^
+  
+     Explanation for issues of type "MissingIntentFilterForMediaSearch":
+     To support voice searches on Android Auto, you should also register an
+     intent-filter for the action android.media.action.MEDIA_PLAY_FROM_SEARCH.
+  
+     To do this, add
+     `<intent-filter>`
+         `<action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+     />`
+     `</intent-filter>`
+     to your <activity> or <service>.
+  
+     https://developer.android.com/training/auto/audio/index.html#support_voice
+  
+  
+  The full lint text report is located at:
+    /home/runner/work/bibliotheque/bibliotheque/android/app/build/intermediates/lint_intermediate_text_report/release/lintReportRelease/lint-results-release.txt
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 33s
+23 actionable tasks: 23 executed
