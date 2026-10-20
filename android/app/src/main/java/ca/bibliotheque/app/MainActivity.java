@@ -232,7 +232,7 @@ public class MainActivity extends Activity {
             try {
                 if (!ttsReady || tts.getVoices() == null) return "[]";
                 java.util.List<android.speech.tts.Voice> vs = new ArrayList<>(tts.getVoices());
-                vs.sort((x, y) -> x.getName().compareTo(y.getName()));
+                java.util.Collections.sort(vs, (x, y) -> x.getName().compareTo(y.getName()));
                 for (android.speech.tts.Voice v : vs) {
                     if (v.getLocale() == null || !"fr".equals(v.getLocale().getLanguage())) continue;
                     if (v.getFeatures() != null && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;

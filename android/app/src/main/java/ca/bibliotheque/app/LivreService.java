@@ -120,7 +120,7 @@ public class LivreService extends MediaBrowserService {
         session.setActive(true); // les boutons de l'auto et du volant arrivent ici dès la connexion
         applyPhone();
         AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
-        focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
+        if (Build.VERSION.SDK_INT >= 26) focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
         tts = new TextToSpeech(this, st -> {
             if (st != TextToSpeech.SUCCESS) return;
             int r = tts.setLanguage(Locale.CANADA_FRENCH);
@@ -136,7 +136,7 @@ public class LivreService extends MediaBrowserService {
             if (playing) main.post(this::speak);
         });
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
     }
 
     /** La voix française de meilleure qualité installée sur le téléphone (sans Internet, pour l'auto). */
@@ -210,7 +210,7 @@ public class LivreService extends MediaBrowserService {
         asking = false; waitingMore = false; inter.clear(); interIdx = 0;
         if (ears != null) try { ears.cancel(); } catch (Exception ignored) { }
         if (playing) pause(); else { token++; if (tts != null) tts.stop(); save(); }
-        try { stopForeground(STOP_FOREGROUND_REMOVE); } catch (Exception ignored) { }
+        try { stopFg(true); } catch (Exception ignored) { }
         session.setPlaybackState(new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
             .setState(PlaybackState.STATE_STOPPED, posMs(), 0f).build());
@@ -270,7 +270,7 @@ public class LivreService extends MediaBrowserService {
         } else if ("recent".equals(parentId)) {
             List<JSONObject> list = new ArrayList<>();
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optLong("last") > 0) list.add(b); }
-            list.sort((a, b) -> Long.compare(b.optLong("last"), a.optLong("last")));
+            java.util.Collections.sort(list, (a, b) -> Long.compare(b.optLong("last"), a.optLong("last")));
             JSONObject prog = autoProgress();
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && prog.has("prof:" + b.optString("id"))) out.add(profItem(b)); }
             for (int i = 0; i < Math.min(30, list.size()); i++) out.add(book(list.get(i)));
@@ -339,7 +339,7 @@ public class LivreService extends MediaBrowserService {
             if (last != null) start(last); else error("Choisis un livre dans une bibliothèque.");
         }
         @Override public void onPause() { if (!toPhone("pause", 0)) pause(); }
-        @Override public void onStop() { if (toPhone("pause", 0)) return; pause(); stopForeground(STOP_FOREGROUND_DETACH); }
+        @Override public void onStop() { if (toPhone("pause", 0)) return; pause(); stopFg(false); }
         @Override public void onSkipToNext() { move(30); }
         @Override public void onSkipToPrevious() { move(-30); }
         @Override public void onFastForward() { move(30); }
@@ -483,7 +483,8 @@ public class LivreService extends MediaBrowserService {
     private void play() {
         if (bookId == null) return;
         if (asking) { asking = false; if (ears != null) try { ears.cancel(); } catch (Exception ignored) { } }
-        if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { error("Le son est occupé par une autre application."); return; }
+        int got = Build.VERSION.SDK_INT >= 26 ? audio.requestAudioFocus(focus) : audio.requestAudioFocus(this::onFocus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        if (got != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { error("Le son est occupé par une autre application."); return; }
         playing = true;
         session.setActive(true);
         goForeground();
@@ -795,7 +796,7 @@ public class LivreService extends MediaBrowserService {
 
     private Notification notification() {
         Notification.MediaStyle style = new Notification.MediaStyle().setMediaSession(session.getSessionToken());
-        Notification.Builder n = new Notification.Builder(this, CH)
+        Notification.Builder n = (Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CH) : new Notification.Builder(this))
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle(title).setContentText(author)
             .setLargeIcon(art)
@@ -806,9 +807,15 @@ public class LivreService extends MediaBrowserService {
         return n.build();
     }
 
+    /** Quitter le premier plan (Android 6 : l'ancienne façon) */
+    @SuppressWarnings("deprecation")
+    private void stopFg(boolean remove) {
+        if (Build.VERSION.SDK_INT >= 24) stopForeground(remove ? STOP_FOREGROUND_REMOVE : STOP_FOREGROUND_DETACH); else stopForeground(remove);
+    }
+
     private void goForeground() {
         try {
-            startForegroundService(new Intent(this, LivreService.class));
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(new Intent(this, LivreService.class)); else startService(new Intent(this, LivreService.class));
             if (Build.VERSION.SDK_INT >= 29) startForeground(7, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
             else startForeground(7, notification());
         } catch (Exception ignored) {
@@ -818,7 +825,7 @@ public class LivreService extends MediaBrowserService {
 
     private void notifyNow() {
         try {
-            if (!playing) stopForeground(STOP_FOREGROUND_DETACH);
+            if (!playing) stopFg(false);
             getSystemService(NotificationManager.class).notify(7, notification());
         } catch (Exception ignored) { }
     }

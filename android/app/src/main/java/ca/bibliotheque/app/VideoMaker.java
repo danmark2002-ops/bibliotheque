@@ -220,7 +220,7 @@ final class VideoMaker {
 
     private static Set<String> loadHistory(Context c) {
         Set<String> h = new HashSet<>();
-        try { for (String l : new String(java.nio.file.Files.readAllBytes(historyFile(c).toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) h.add(l.trim()); } catch (Exception ignored) { }
+        try { for (String l : new String(Compat.readAll(historyFile(c)), "UTF-8").split("\n")) if (!l.isEmpty()) h.add(l.trim()); } catch (Exception ignored) { }
         return h;
     }
 
@@ -249,7 +249,7 @@ final class VideoMaker {
             if (pages != null) {
                 List<JSONObject> list = new ArrayList<>();
                 for (java.util.Iterator<String> it = pages.keys(); it.hasNext(); ) list.add(pages.getJSONObject(it.next()));
-                list.sort((a, b) -> Integer.compare(a.optInt("index", 99), b.optInt("index", 99)));
+                java.util.Collections.sort(list, (a, b) -> Integer.compare(a.optInt("index", 99), b.optInt("index", 99)));
                 for (JSONObject pg : list) {
                     JSONArray ii = pg.optJSONArray("imageinfo"); if (ii == null || ii.length() == 0) continue;
                     JSONObject i = ii.getJSONObject(0);
