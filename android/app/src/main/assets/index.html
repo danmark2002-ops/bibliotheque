@@ -3562,7 +3562,7 @@ function shareChoices(books) {
     h('div', { class: 'sharechoices' },
       h('button', { class: 'addbig', onclick: () => { close(); packLibrary({ name: n === 1 ? books[0].title : (lib && lib.name !== 'Toutes' ? lib.name : 'Livres partagés'), decor: lib?.decor || 'noyer', merge: true }, books, 'secure'); } },
         h('span', { class: 'addic' }, icon('link')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer à un téléphone · sécurisé'),
-          h('small', {}, 'Même dans une autre ville : un lien chiffré à texter. La personne le touche et les livres s\'ajoutent à sa Bibliothèque.'))),
+          h('small', {}, 'Partage facile (de téléphone à téléphone) : un lien chiffré à texter. La personne le touche et les livres s\'ajoutent à sa Bibliothèque.'))),
       h('button', { class: 'addbig', onclick: () => { close(); n === 1 ? shareBook(books[0]) : shareMany(books); } },
         h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Partager le fichier'),
           h('small', {}, 'Quick Share (téléphone à côté), WhatsApp, courriel, Drive, une application d\'IA…'))))));
