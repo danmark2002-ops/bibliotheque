@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId 'ca.bibliotheque.app'
-        minSdk 26
+        minSdk 22 // téléviseurs plus anciens (Fire TV, Android TV 5 à 7) : les fonctions récentes sont activées selon la version
         targetSdk 36
         versionCode 78
         versionName '8.7'

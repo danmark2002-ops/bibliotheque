@@ -182,7 +182,7 @@ final class VideoMaker {
                 thumbs.add(out.toByteArray());
             }
             String prompt = "Tu es directeur artistique pour une vidéo qui résume un livre. Voici une scène :\n"
-                + "Phrase choc : " + s.phrase + "\nNarration : " + String.join(" ", s.sentences)
+                + "Phrase choc : " + s.phrase + "\nNarration : " + Compat.join(" ", s.sentences)
                 + "\n\nVoici " + imgs.size() + " images candidates, numérotées de 0 à " + (imgs.size() - 1) + " dans l'ordre."
                 + " Choisis les 2 images qui illustrent le mieux et le plus précisément CETTE narration (sujet, idée, époque, ambiance),"
                 + " les plus belles et nettes. Écarte les images hors sujet, floues, avec beaucoup de texte, des logos, des schémas illisibles ou des cadres."
@@ -228,10 +228,10 @@ final class VideoMaker {
         try {
             List<String> lines = new ArrayList<>();
             File f = historyFile(c);
-            if (f.exists()) for (String l : new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) lines.add(l.trim());
+            if (f.exists()) for (String l : new String(Compat.readAll(f), "UTF-8").split("\n")) if (!l.isEmpty()) lines.add(l.trim());
             for (String u : used) { String k = key(u); if (!lines.contains(k)) lines.add(k); }
             if (lines.size() > 2000) lines = lines.subList(lines.size() - 2000, lines.size());
-            try (FileOutputStream o = new FileOutputStream(f)) { o.write(String.join("\n", lines).getBytes("UTF-8")); }
+            try (FileOutputStream o = new FileOutputStream(f)) { o.write(Compat.join("\n", lines).getBytes("UTF-8")); }
         } catch (Exception ignored) { }
     }
 

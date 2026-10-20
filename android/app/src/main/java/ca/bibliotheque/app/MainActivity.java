@@ -1311,7 +1311,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String readText(String name) {
             File x = f(name); if (x == null || !x.exists()) return "";
-            try { return new String(java.nio.file.Files.readAllBytes(x.toPath()), "UTF-8"); } catch (Exception e) { return ""; }
+            try { return new String(Compat.readAll(x), "UTF-8"); } catch (Exception e) { return ""; }
         }
 
         @JavascriptInterface

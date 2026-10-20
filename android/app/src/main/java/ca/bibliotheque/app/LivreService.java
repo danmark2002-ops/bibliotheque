@@ -31,7 +31,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -98,7 +98,7 @@ public class LivreService extends MediaBrowserService {
     private File dir() { return new File(getFilesDir(), "auto"); }
 
     private static String read(File f) {
-        try { return new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8); } catch (Exception e) { return null; }
+        try { return new String(Compat.readAll(f), StandardCharsets.UTF_8); } catch (Exception e) { return null; }
     }
 
     private JSONObject catalog() {
