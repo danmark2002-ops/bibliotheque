@@ -1416,6 +1416,8 @@ public class MainActivity extends Activity {
         /** Réponse : window.__aiStatus("available" | "downloadable" | "downloading" | "unavailable" | "error:…") */
         @JavascriptInterface
         public void status() {
+            // IA du téléphone (Gemini Nano) : Android 8 ou plus seulement (vieux téléviseurs : non disponible)
+            if (Build.VERSION.SDK_INT < 26) { js("__aiStatus", "unavailable"); return; }
             aiExec.execute(() -> {
                 String r;
                 try {
@@ -1431,6 +1433,7 @@ public class MainActivity extends Activity {
         /** Télécharge le modèle (fait par Android, une seule fois). Progression : window.__aiDownload("progress:octets" | "done" | "error:…") */
         @JavascriptInterface
         public void download() {
+            if (Build.VERSION.SDK_INT < 26) { js("__aiDownload", "error:indisponible"); return; }
             aiExec.execute(() -> {
                 try {
                     nano().download(new com.google.mlkit.genai.common.DownloadCallback() {
@@ -1510,6 +1513,7 @@ public class MainActivity extends Activity {
         /** Une demande à l'IA. Réponse : window.__aiResult({id, text} ou {id, error}) */
         @JavascriptInterface
         public void generate(String id, String prompt) {
+            if (Build.VERSION.SDK_INT < 26) { js("__aiResult", "{\"id\":" + JSONObject.quote(id) + ",\"error\":\"IA du téléphone indisponible\"}"); return; }
             aiExec.execute(() -> {
                 JSONObject res = new JSONObject();
                 try {
