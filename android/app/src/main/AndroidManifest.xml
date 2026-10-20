@@ -57,6 +57,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- Envoi sécurisé de livres : le lien reçu ouvre directement la Bibliothèque -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bibliotheque" android:host="recevoir" />
+            </intent-filter>
             <!-- Recevoir une bibliothèque partagée (.biblio) depuis WhatsApp, Drive, Quick Share, courriel, fichiers… -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

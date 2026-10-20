@@ -532,6 +532,12 @@ public class MainActivity extends Activity {
         if (Intent.ACTION_VIEW.equals(a)) u = intent.getData();
         else if (Intent.ACTION_SEND.equals(a)) u = intent.getParcelableExtra(Intent.EXTRA_STREAM);
         if (u == null) return;
+        if ("bibliotheque".equals(u.getScheme()) && "recevoir".equals(u.getHost())) { // envoi sécurisé
+            setIntent(new Intent(Intent.ACTION_MAIN));
+            String p = u.getQueryParameter("p");
+            if (p != null) secureReceive(p);
+            return;
+        }
         setIntent(new Intent(Intent.ACTION_MAIN)); // pas de deuxième import si l'écran tourne
         final Uri src = u;
         // Un livre (PDF, EPUB, Word…) plutôt qu'une bibliothèque partagée : on le passe à l'étagère
@@ -654,6 +660,67 @@ public class MainActivity extends Activity {
         return link;
     }
 
+    /** Envoi « multipart » d'un fichier avec des champs, en continu et avec la progression ; renvoie la réponse. */
+    private String multipart(String url, String[][] fields, String fileField, File f) throws Exception {
+        String bd = "----biblio" + System.currentTimeMillis();
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        c.setDoOutput(true); c.setRequestMethod("POST"); c.setChunkedStreamingMode(1 << 20);
+        c.setConnectTimeout(30000); c.setReadTimeout(300000);
+        c.setRequestProperty("User-Agent", "Bibliotheque/9 (Android)");
+        c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + bd);
+        try (java.io.OutputStream out = c.getOutputStream(); java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            for (String[] kv : fields) out.write(("--" + bd + "\r\nContent-Disposition: form-data; name=\"" + kv[0] + "\"\r\n\r\n" + kv[1] + "\r\n").getBytes("UTF-8"));
+            out.write(("--" + bd + "\r\nContent-Disposition: form-data; name=\"" + fileField + "\"; filename=\"" + f.getName() + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes("UTF-8"));
+            byte[] buf = new byte[1 << 16]; long sent = 0, total = Math.max(1, f.length()); int n; long last = 0;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n); sent += n;
+                long now = System.currentTimeMillis();
+                if (now - last > 400) { last = now; js("__upProgress", String.valueOf(Math.min(99.0, sent * 100.0 / total))); }
+            }
+            out.write(("\r\n--" + bd + "--\r\n").getBytes("UTF-8"));
+        }
+        int code = c.getResponseCode();
+        String body; try (InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream()) { body = in == null ? "" : new String(readAll(in), "UTF-8"); }
+        if (code >= 400) throw new IOException("envoi " + code);
+        return body;
+    }
+
+    /** Réception d'un envoi sécurisé (lien bibliotheque://recevoir?p=…) : téléchargement, vérification, déchiffrement. */
+    private void secureReceive(String p) {
+        new Thread(() -> {
+            try {
+                JSONObject j = new JSONObject(new String(android.util.Base64.decode(p, android.util.Base64.URL_SAFE), "UTF-8"));
+                String url = j.getString("u");
+                if (!url.startsWith("https://")) throw new IOException("lien");
+                byte[] key = android.util.Base64.decode(j.getString("k"), android.util.Base64.URL_SAFE);
+                File dir = new File(getCacheDir(), "securise"); wipe(dir); dir.mkdirs();
+                File enc = new File(dir, "envoi.bin"), plain = new File(dir, "livres.biblio");
+                js("__secureState", "Téléchargement des livres…");
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                c.setInstanceFollowRedirects(true); c.setConnectTimeout(30000); c.setReadTimeout(300000);
+                c.setRequestProperty("User-Agent", "Bibliotheque/9 (Android)");
+                int code = c.getResponseCode();
+                if (code == 404 || code == 410) throw new IOException("expiré");
+                if (code >= 400) throw new IOException("erreur " + code);
+                long total = c.getContentLengthLong(), got = 0, last = 0;
+                try (InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(enc)) {
+                    byte[] buf = new byte[1 << 16]; int n;
+                    while ((n = in.read(buf)) > 0) { fo.write(buf, 0, n); got += n;
+                        long now = System.currentTimeMillis(); if (total > 0 && now - last > 500) { last = now; js("__secureState", "Téléchargement des livres… " + (got * 100 / total) + " %"); } }
+                }
+                js("__secureState", "Vérification et déchiffrement…");
+                Coffre.decrypt(enc, plain, key);
+                enc.delete();
+                runOnUiThread(() -> { js("__secureState", ""); handleIncoming(new Intent(Intent.ACTION_VIEW, Uri.fromFile(plain))); });
+            } catch (Exception e) {
+                String m = String.valueOf(e.getMessage());
+                js("__secureState", "!" + (m.equals("expiré") ? "Ce lien a expiré : demande à la personne de te renvoyer les livres."
+                    : m.startsWith("Le lien est incomplet") ? "Le lien est incomplet ou le fichier a été modifié : il ne peut pas être ouvert."
+                    : "Réception impossible. Vérifie la connexion Internet, puis touche de nouveau le lien."));
+            }
+        }).start();
+    }
+
     class ShareBridge {
         @JavascriptInterface
         public boolean begin(String fileName, String manifest) {
@@ -730,6 +797,43 @@ public class MainActivity extends Activity {
                     }
                     res.put("link", link);
                 } catch (Exception e) { try { res.put("error", "La mise en ligne a échoué. Vérifie la connexion, ou utilise « Envoyer le fichier »."); } catch (Exception ignored) { } }
+                js("__upDone", res.toString());
+            }).start();
+        }
+
+        /**
+         * Envoi sécurisé : le paquet est chiffré sur le téléphone (Coffre), mis en ligne sur un hébergement temporaire
+         * (Litterbox, 72 h ; sinon Uguu), et le lien rendu contient la clé dans sa partie « # », jamais envoyée à un serveur.
+         * Réponse : window.__upDone({link, hours} ou {error}).
+         */
+        @JavascriptInterface
+        public void secureUpload(String title) {
+            try { zipOut.close(); } catch (Exception e) { js("__upDone", "{\"error\":\"Préparation impossible\"}"); return; }
+            zipOut = null;
+            final File f = zipFile;
+            new Thread(() -> {
+                JSONObject res = new JSONObject();
+                File enc = new File(f.getParentFile(), "envoi.bin");
+                try {
+                    byte[] key = Coffre.newKey();
+                    js("__upProgress", "0");
+                    Coffre.encrypt(f, enc, key);
+                    f.delete();
+                    String url = null; int hours = 72;
+                    try {
+                        String r = multipart("https://litterbox.catbox.moe/resources/internals/api.php", new String[][]{{"reqtype", "fileupload"}, {"time", "72h"}}, "fileToUpload", enc).trim();
+                        if (r.startsWith("https://")) url = r;
+                    } catch (Exception ignored) { }
+                    if (url == null) {
+                        String r = multipart("https://uguu.se/upload", new String[][]{}, "files[]", enc);
+                        url = new JSONObject(r).getJSONArray("files").getJSONObject(0).getString("url"); hours = 3;
+                    }
+                    JSONObject p = new JSONObject().put("u", url).put("k", android.util.Base64.encodeToString(key, android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING)).put("t", title);
+                    String payload = android.util.Base64.encodeToString(p.toString().getBytes("UTF-8"), android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);
+                    res.put("link", "https://raw.githack.com/danmark2002-ops/bibliotheque/main/web/recevoir.html#p=" + payload);
+                    res.put("hours", hours);
+                } catch (Exception e) { try { res.put("error", "La mise en ligne a échoué. Vérifie la connexion Internet, puis réessaie."); } catch (Exception ignored) { } }
+                enc.delete();
                 js("__upDone", res.toString());
             }).start();
         }

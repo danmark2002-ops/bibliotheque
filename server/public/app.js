@@ -1274,7 +1274,7 @@ function shareLibrary(id) {
     size > 400e6 ? h('p', { class: 'hint' }, `Gros envoi (${fmtSize(size)}) : utilise le Wi-Fi.`) : null,
     h('div', { class: 'sharechoices' },
       AndroidShare.upload ? h('button', { class: 'addbig', onclick: () => { close(); packLibrary(lib, books, 'link'); } },
-        h('span', { class: 'addic' }, icon('link')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer un lien'), h('small', {}, 'Tout se fait seul : la bibliothèque est mise en ligne et tu reçois un lien à texter. La personne l\'ouvre sur son téléphone, et tout s\'ajoute.'))) : null,
+        h('span', { class: 'addic' }, icon('link')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer un lien sécurisé'), h('small', {}, 'Même loin : la bibliothèque est chiffrée sur ton téléphone puis mise en ligne ; tu reçois un lien à texter. La personne le touche, et tout s\'ajoute.'))) : null,
       h('button', { class: 'addbig', onclick: () => { close(); packLibrary(lib, books, 'file'); } },
         h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer le fichier'), h('small', {}, 'Quick Share (téléphone à côté), WhatsApp, Drive…'))))));
 }
@@ -1298,7 +1298,7 @@ async function packLibrary(lib, books, how = 'file') {
       used.add(path.toLowerCase()); items.push({ b, f, path });
     }
     if (!items.length) throw new Error('Aucun fichier à envoyer');
-    const manifest = { format: 1, app: 'Bibliotheque', name: lib.name, decor: lib.decor, date: Date.now(),
+    const manifest = { format: 1, app: 'Bibliotheque', name: lib.name, decor: lib.decor, date: Date.now(), merge: !!lib.merge,
       books: items.filter((x) => !x.part).map(({ b, path }) => ({ path, title: b.title, author: b.author || '', state: '', fav: false })).concat(groups) };
     if (!AndroidShare.begin(safeName(lib.name) + '.biblio', JSON.stringify(manifest))) throw new Error('Préparation du fichier impossible');
     const total = items.reduce((a, x) => a + x.f.file.size, 0) || 1; let done = 0;
@@ -1313,12 +1313,13 @@ async function packLibrary(lib, books, how = 'file') {
       }
       AndroidShare.fileEnd();
     }
-    if (how === 'link' && AndroidShare.upload) {
-      say(0, 'Mise en ligne…');
-      const r = await new Promise((res) => { window.__upProgress = (pc) => say(Number(pc), `Mise en ligne · ${Math.floor(Number(pc))} %`); window.__upDone = (j) => { try { res(JSON.parse(j)); } catch { res({ error: 'Envoi impossible' }); } }; AndroidShare.upload(lib.name); });
+    if ((how === 'link' || how === 'secure') && (AndroidShare.secureUpload || AndroidShare.upload)) {
+      const secure = !!AndroidShare.secureUpload;
+      say(0, secure ? 'Chiffrement et mise en ligne…' : 'Mise en ligne…');
+      const r = await new Promise((res) => { window.__upProgress = (pc) => say(Number(pc), `${secure ? 'Envoi chiffré' : 'Mise en ligne'} · ${Math.floor(Number(pc))} %`); window.__upDone = (j) => { try { res(JSON.parse(j)); } catch { res({ error: 'Envoi impossible' }); } }; secure ? AndroidShare.secureUpload(lib.name) : AndroidShare.upload(lib.name); });
       window.__upProgress = window.__upDone = null;
       if (r.error || !r.link) throw new Error(r.error || 'Envoi impossible');
-      box.remove(); shareLinkSheet(lib.name, r.link);
+      box.remove(); secure ? secureLinkSheet(lib.name, r.link, r.hours || 72, books.length) : shareLinkSheet(lib.name, r.link);
       return;
     }
     say(100, 'Prêt : choisis comment l\'envoyer');
@@ -1329,6 +1330,41 @@ async function packLibrary(lib, books, how = 'file') {
     say(100, e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 6000);
   }
 }
+function secureLinkSheet(name, link, hours, n) {
+  const what = n === 1 ? `le livre « ${name} »` : `${n} livres`;
+  const msg = `Je t'envoie ${what} avec l'application Bibliothèque 📚🔒 Touche ce lien sur ton téléphone Android pour les ajouter à tes livres : ${link}`;
+  const days = hours >= 48 ? `${Math.round(hours / 24)} jours` : `${hours} heures`;
+  const close = sheet('Envoi sécurisé prêt', h('div', {},
+    h('p', {}, '🔒 Les livres sont chiffrés sur ton téléphone avant de partir. Envoie maintenant le lien à la personne, par texto, Messenger ou courriel.'),
+    h('p', { class: 'hint' }, `La personne touche le lien : sa Bibliothèque s'ouvre et les livres s'ajoutent tout seuls. Le lien fonctionne pendant ${days}. Seul ce lien permet d'ouvrir les livres : ne l'envoie qu'à la bonne personne.`),
+    h('div', { class: 'actions', style: { justifyContent: 'flex-end', marginTop: '14px' } },
+      h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(link); toast('Lien copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
+      h('button', { class: 'btn primary', onclick: () => { close(); AndroidShare.text ? AndroidShare.text(msg) : (navigator.share ? navigator.share({ text: msg }) : null); } }, icon('share'), 'Envoyer le lien'))));
+}
+// Partager : envoi sécurisé à un téléphone (même loin), ou le fichier lui-même
+function shareChoices(books) {
+  if (!books.length) return;
+  if (!window.AndroidShare?.secureUpload) return books.length === 1 ? shareBook(books[0]) : shareMany(books);
+  const n = books.length, lib = curLib();
+  const close = sheet(n === 1 ? 'Partager le livre' : `Partager ${n} livres`, h('div', {},
+    h('p', { class: 'muted', style: { marginTop: '-6px' } }, books.slice(0, 5).map((b) => `« ${b.title} »`).join(', ') + (n > 5 ? ` et ${n - 5} autres` : '')),
+    h('div', { class: 'sharechoices' },
+      h('button', { class: 'addbig', onclick: () => { close(); packLibrary({ name: n === 1 ? books[0].title : (lib && lib.name !== 'Toutes' ? lib.name : 'Livres partagés'), decor: lib?.decor || 'noyer', merge: true }, books, 'secure'); } },
+        h('span', { class: 'addic' }, icon('link')), h('span', { class: 'addtx' }, h('b', {}, 'Envoyer à un téléphone · sécurisé'),
+          h('small', {}, 'Même dans une autre ville : un lien chiffré à texter. La personne le touche et les livres s\'ajoutent à sa Bibliothèque.'))),
+      h('button', { class: 'addbig', onclick: () => { close(); n === 1 ? shareBook(books[0]) : shareMany(books); } },
+        h('span', { class: 'addic' }, icon('share')), h('span', { class: 'addtx' }, h('b', {}, 'Partager le fichier'),
+          h('small', {}, 'Quick Share (téléphone à côté), WhatsApp, courriel, Drive, une application d\'IA…'))))));
+}
+// Réception d'un envoi sécurisé : la progression, puis la feuille « Bibliothèque reçue » habituelle
+window.__secureState = (m) => {
+  let box = $('#secureBox');
+  if (!m) { box?.remove(); return; }
+  if (m[0] === '!') { box?.remove(); toast(m.slice(1)); return; }
+  if (!box) { box = h('div', { class: 'up', id: 'secureBox' }, h('b', {}, '🔒 Livres reçus'), h('span', { class: 'muted' }, ''), h('div', { class: 'bar' }, h('i', { class: 'indet' }))); $('#uploads')?.append(box); }
+  $('span', box).textContent = m;
+};
+
 function shareLinkSheet(name, link) {
   const msg = `Je te partage ma bibliothèque « ${name} ». Ouvre ce lien sur ton téléphone, télécharge le fichier, puis ouvre-le avec l'application Bibliothèque : ${link}`;
   const close = sheet('Lien prêt', h('div', {},
@@ -1349,9 +1385,9 @@ function checkReceived() {
   if (r.book) return openReceivedBook(r.book);
   const m = r.manifest || {}, n = r.files.length;
   if (!n) { AndroidShare.clearReceived(); return toast('Ce partage ne contient aucun livre'); }
-  const close = sheet('Bibliothèque reçue', h('div', {},
+  const close = sheet(m.merge ? (n > 1 ? 'Livres reçus' : 'Livre reçu') : 'Bibliothèque reçue', h('div', {},
     h('div', { class: 'srcname' }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[m.decor] || '#555' } }), h('span', {}, h('b', {}, m.name || 'Bibliothèque partagée'), h('small', {}, `${n} livre${n > 1 ? 's' : ''} · ${fmtSize(r.size || 0)}`))),
-    h('p', { class: 'muted' }, 'Elle s\'ajoute comme une nouvelle bibliothèque, avec son décor. Tes autres livres ne bougent pas.'),
+    h('p', { class: 'muted' }, m.merge ? `${n > 1 ? 'Ils s\'ajoutent' : 'Il s\'ajoute'} à ta bibliothèque « ${(curLib() || libs()[0])?.name || 'Ma Bibliothèque'} ».` : 'Elle s\'ajoute comme une nouvelle bibliothèque, avec son décor. Tes autres livres ne bougent pas.'),
     h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
       h('button', { class: 'btn', onclick: () => { AndroidShare.clearReceived(); close(); } }, 'Refuser'),
       h('button', { class: 'btn primary', onclick: () => { close(); importReceived(r); } }, icon('plus'), 'Ajouter à mes livres'))));
@@ -1378,8 +1414,9 @@ async function importReceived(r) {
   let name = String(m.name || 'Bibliothèque partagée').slice(0, 60), k = 2;
   while (l.some((x) => x.name === name)) name = `${String(m.name || 'Bibliothèque partagée').slice(0, 54)} (${k++})`;
   const decor = DECORS.some(([d]) => d === m.decor) ? m.decor : 'acajou';
-  const lib = { id: 'lib' + Date.now().toString(36), name, decor };
-  l.push(lib); saveLibs(l); switchLib(lib.id);
+  // livres envoyés un à un (envoi sécurisé) : ils rejoignent la bibliothèque affichée, sans en créer une nouvelle
+  const lib = m.merge ? (curLib() || l[0]) : { id: 'lib' + Date.now().toString(36), name, decor };
+  if (!m.merge) { l.push(lib); saveLibs(l); switchLib(lib.id); }
   const info = new Map((m.books || []).map((b) => [b.path, b]));
   let ok = 0, fail = 0;
   for (const g of (m.books || []).filter((x) => x.group)) { // livres audio en plusieurs pistes
@@ -1509,7 +1546,7 @@ function editBook(b) {
   const actRow = local && !b.trashed ? h('div', { class: 'bookacts' },
     window.__reader?.b?.id === b.id ? null : h('button', { class: 'bact', onclick: () => { close(); openBook(b, null); } }, icon(b.kind === 'audio' ? 'headphones' : 'book'), h('span', {}, b.kind === 'audio' ? 'Écouter' : 'Lire')),
     h('button', { class: 'bact', onclick: () => { close(); openWith(b, 'view'); } }, icon('open'), h('span', {}, 'Ouvrir avec…')),
-    h('button', { class: 'bact', onclick: () => { close(); shareBook(b); } }, icon('share'), h('span', {}, 'Partager')),
+    h('button', { class: 'bact', onclick: () => { close(); shareChoices([b]); } }, icon('share'), h('span', {}, 'Partager')),
     PAGED(b.kind) && Ocr.on() ? (b.ocr === 'done'
       ? h('button', { class: 'bact on', onclick: () => { close(); const v = store.get('view:' + b.id, 'text') === 'text' ? 'photo' : 'text'; store.set('view:' + b.id, v); if (window.__reader?.b?.id === b.id) window.__reader.switchView(v); else toast(v === 'text' ? 'Le livre s\'ouvrira en texte' : 'Le livre s\'ouvrira en photos'); } }, icon('type'), h('span', {}, store.get('view:' + b.id, 'text') === 'text' ? 'Revenir aux photos' : 'Lire en texte'))
       : h('button', { class: 'bact', onclick: () => { close(); Ocr.run(b, window.__reader?.b?.id === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null,
@@ -1706,7 +1743,7 @@ function selBarRender() {
       h('b', {}, n ? `${n} livre${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''}` : 'Touche les livres'),
       h('button', { class: 'selall', onclick: () => { if (all) Sel.ids.clear(); else allVis.forEach((b) => Sel.ids.add(b.id)); renderLibrary(); } }, all ? 'Aucun' : 'Tout')),
     h('div', { class: 'selacts' },
-      act('share', 'Partager', () => shareMany(books), { off: !n }),
+      act('share', 'Partager', () => shareChoices(books), { off: !n }),
       act('spark', 'IA', () => aiChoices(books), { off: n < 1 }),
       act('move', 'Ranger', () => selMove(books), { off: !n }),
       act(books.length && books.every((b) => b.fav) ? 'starFill' : 'star', 'Favori', () => selFav(books), { off: !n }),

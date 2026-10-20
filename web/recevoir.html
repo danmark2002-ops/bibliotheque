@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Des livres pour toi · Bibliothèque</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --bg: #1e1712; --ink: #f3e9da; --brass: #d4ab6a; --brass-ink: #241809; --muted: rgba(243,233,218,.72); }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 system-ui, -apple-system, Roboto, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 22px; }
+  h1 { font: 600 28px/1.2 Georgia, serif; margin: 8px 0 12px; }
+  .big { display: block; text-align: center; text-decoration: none; background: var(--brass); color: var(--brass-ink); font-weight: 700; font-size: 19px; border-radius: 16px; padding: 18px; margin: 22px 0 12px; }
+  .alt { display: block; text-align: center; color: var(--brass); margin: 10px 0; }
+  .card { background: rgba(255,255,255,.05); border-radius: 14px; padding: 14px 16px; margin-top: 22px; }
+  p { margin: 8px 0; } .muted { color: var(--muted); font-size: 15px; }
+  ol { padding-left: 20px; } li { margin: 6px 0; }
+</style>
+</head>
+<body>
+<main>
+  <div style="font-size:44px">📚🔒</div>
+  <h1 id="title">Des livres pour toi</h1>
+  <p id="lead">Quelqu'un t'envoie des livres avec l'application <b>Bibliothèque</b>. L'envoi est chiffré : seul ce lien permet de les ouvrir.</p>
+
+  <div id="android">
+    <a class="big" id="open" href="#">Ouvrir dans Bibliothèque</a>
+    <a class="alt" id="scheme" href="#">Le bouton ne fait rien ? Touche ici</a>
+    <div class="card">
+      <b>Tu n'as pas encore l'application ?</b>
+      <ol>
+        <li><a class="alt" style="display:inline" href="https://github.com/danmark2002-ops/bibliotheque/releases/latest/download/Bibliotheque.apk">Télécharge Bibliothèque</a> et installe-la.</li>
+        <li>Reviens sur cette page (touche de nouveau le lien reçu).</li>
+        <li>Touche « Ouvrir dans Bibliothèque » : les livres s'ajoutent tout seuls.</li>
+      </ol>
+      <p class="muted">Si la page s'est ouverte dans Messenger ou une autre application, choisis d'abord « Ouvrir dans Chrome » (menu ⋮).</p>
+    </div>
+  </div>
+
+  <div id="other" style="display:none" class="card">
+    <p>Ces livres s'ouvrent avec l'application <b>Bibliothèque pour Android</b>. Ouvre ce lien sur un téléphone Android.</p>
+  </div>
+
+  <p class="muted" style="margin-top:22px">🔒 Les livres sont chiffrés sur le téléphone de l'expéditeur. Le service qui les héberge temporairement ne peut pas les lire. Le lien expire après quelques jours.</p>
+</main>
+<script>
+  // La clé est dans la partie « # » du lien : elle n'est jamais envoyée à un serveur, même pas à celui de cette page.
+  const p = new URLSearchParams(location.hash.slice(1)).get('p') || '';
+  try {
+    const j = JSON.parse(decodeURIComponent(escape(atob(p.replace(/-/g, '+').replace(/_/g, '/')))));
+    if (j.t) document.getElementById('title').textContent = '« ' + j.t + ' »';
+  } catch (e) {}
+  if (!/android/i.test(navigator.userAgent)) { document.getElementById('android').style.display = 'none'; document.getElementById('other').style.display = ''; }
+  const scheme = 'bibliotheque://recevoir?p=' + encodeURIComponent(p);
+  const intent = 'intent://recevoir?p=' + encodeURIComponent(p) + '#Intent;scheme=bibliotheque;package=ca.bibliotheque.app;S.browser_fallback_url='
+    + encodeURIComponent('https://github.com/danmark2002-ops/bibliotheque/releases/latest/download/Bibliotheque.apk') + ';end';
+  document.getElementById('open').href = intent;
+  document.getElementById('scheme').href = scheme;
+  if (!p) { document.getElementById('lead').textContent = 'Ce lien est incomplet : demande à la personne de te le renvoyer.'; document.getElementById('android').style.display = 'none'; }
+</script>
+</body>
+</html>
