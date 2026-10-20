@@ -1,0 +1,32 @@
+name: Vérifier la compatibilité (lint)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Lint
+        working-directory: android
+        run: |
+          gradle lintRelease --no-daemon --continue > ../lint.log 2>&1 || true
+          cp app/build/reports/lint-results-release.txt ../lint.txt 2>/dev/null || true
+          tail -c 40000 ../lint.log > ../lint-tail.log
+      - name: Publier le rapport (branche lint-log)
+        run: |
+          git config user.name "build-bot"; git config user.email "build-bot@users.noreply.github.com"
+          mkdir -p /tmp/r && cp lint.txt lint-tail.log /tmp/r/ 2>/dev/null || true
+          git checkout --orphan lint-log && git rm -rqf . && cp /tmp/r/* . 2>/dev/null || true
+          git add -A && git commit -qm "Rapport lint ${{ github.run_number }} (${{ github.ref_name }})" && git push -f origin lint-log
