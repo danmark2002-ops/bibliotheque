@@ -6493,8 +6493,10 @@ const TV = {
       const dx = qx - cx, dy = qy - cy;
       const main = dir === 'up' ? -dy : dir === 'down' ? dy : dir === 'left' ? -dx : dx;
       if (main <= 4) continue;
+      // écart de côté mesuré entre les bords (pas les centres) : un bouton large juste en dessous n'est plus sauté
+      const gap = dir === 'up' || dir === 'down' ? Math.max(0, q.left - r.right, r.left - q.right) : Math.max(0, q.top - r.bottom, r.top - q.bottom);
       const side = dir === 'up' || dir === 'down' ? Math.abs(dx) : Math.abs(dy);
-      const score = main + side * 2.2;
+      const score = main + gap * 2.2 + side * 0.15;
       if (score < bestScore) { bestScore = score; best = x; }
     }
     if (best) {
