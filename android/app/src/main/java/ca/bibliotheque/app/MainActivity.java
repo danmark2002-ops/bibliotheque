@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
     volatile boolean keyPageOpen = false;
     private static final String FOLDER_PATH = "/__dossier";
     private static final String RECU_PATH = "/__recu";
+    private static final String RECEPTION_PATH = "/__reception";
     private static final String WEB_PATH = "/__web";
 
     private WebView web;
@@ -112,6 +113,7 @@ public class MainActivity extends Activity {
                 if (FOLDER_PATH.equals(path)) return folderFile(u.getQueryParameter("lib"), u.getQueryParameter("id"));
                 if ("/__pdfpage".equals(path)) return pdfPage(u);
                 if (RECU_PATH.equals(path)) return recuFile(u.getQueryParameter("f"));
+                if (RECEPTION_PATH.equals(path)) return privateFile(Reception.dir(MainActivity.this), u.getQueryParameter("f"));
                 if (WEB_PATH.equals(path)) return privateFile(webDir(), u.getQueryParameter("f"));
                 if (path == null || path.equals("/") || path.isEmpty()) path = "/index.html";
                 try {
@@ -1475,6 +1477,16 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean hasGeminiKey() { return !IaGratuite.key(MainActivity.this).isEmpty(); }
+
+        /** « Recevoir des livres » : démarre le petit serveur, renvoie l'adresse à ouvrir sur le téléphone ("" sans Wi-Fi) */
+        @JavascriptInterface
+        public String receiveStart() {
+            try { String a = Reception.start(MainActivity.this, (file, name) -> {
+                try { js("__livreEnvoye", new JSONObject().put("file", file).put("name", name).toString()); } catch (Exception ignored) { }
+            }); return a == null ? "" : a; } catch (Exception e) { return ""; }
+        }
+        @JavascriptInterface public void receiveStop() { Reception.stop(); }
+        @JavascriptInterface public void receiveDone(String file) { if (file != null && file.matches("[fw]\\d+\\.[a-z0-9]{1,6}")) new File(Reception.dir(MainActivity.this), file).delete(); }
 
         /** Parcours guidé de la clé gratuite : page de Google en panneau, lecture de la copie, vérification */
         @JavascriptInterface public void keyWarm() { runOnUiThread(MainActivity.this::keyWarmup); }

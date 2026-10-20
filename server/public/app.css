@@ -1041,3 +1041,7 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .prof-row input[type=range] { flex: 1; accent-color: var(--brass); }
 .prof-tones .chip { height: auto; padding: 7px 12px; display: grid; text-align: left; line-height: 1.2; }
 .prof-tones .chip small { font-weight: 400; font-size: 11.5px; opacity: .8; }
+.recv-addr { font: 700 30px/1.2 var(--font-ui); letter-spacing: .5px; text-align: center; padding: 18px 10px; margin: 10px 0; border-radius: 16px; background: var(--brass); color: var(--brass-ink); word-break: break-all; }
+.recv-list { display: grid; gap: 8px; margin-top: 10px; }
+.recv-row { display: grid; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.recv-row small { opacity: .8; }

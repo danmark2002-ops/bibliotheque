@@ -44,7 +44,7 @@ final class VideoServeur {
         server = null; file = null;
     }
 
-    private static String localIp() {
+    static String localIp() {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;

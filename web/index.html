@@ -1058,6 +1058,10 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .prof-row input[type=range] { flex: 1; accent-color: var(--brass); }
 .prof-tones .chip { height: auto; padding: 7px 12px; display: grid; text-align: left; line-height: 1.2; }
 .prof-tones .chip small { font-weight: 400; font-size: 11.5px; opacity: .8; }
+.recv-addr { font: 700 30px/1.2 var(--font-ui); letter-spacing: .5px; text-align: center; padding: 18px 10px; margin: 10px 0; border-radius: 16px; background: var(--brass); color: var(--brass-ink); word-break: break-all; }
+.recv-list { display: grid; gap: 8px; margin-top: 10px; }
+.recv-row { display: grid; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
+.recv-row small { opacity: .8; }
 
 </style>
 </head>
@@ -2966,6 +2970,8 @@ function openAddMenu() {
     h('div', { class: 'addgrid' },
       big('file', 'Un livre', 'Choisis un ou plusieurs fichiers sur le téléphone : PDF, EPUB, Kindle, Word, texte…', pickFiles),
       big('folder', 'Un dossier entier', f ? `Tous les livres d'un autre dossier, dans une nouvelle bibliothèque. Celle-ci suit déjà « ${f.name} ».` : 'Tous les livres d\'un dossier, d\'un coup. Les nouveaux s\'ajouteront quand tu actualises.', () => (lib && !f ? chooseFolder(lib.id, { adopt: true }) : addFolderLib()))),
+    Recv.ok() ? h('button', { class: 'addfind', onclick: () => { close(); Recv.open(); } },
+      icon('tvplay'), h('span', {}, h('b', {}, 'Recevoir du téléphone'), h('small', {}, 'Envoie des livres depuis ton téléphone, par le Wi-Fi (pratique sur une télé)')), chevR()) : null,
     h('div', { class: 'addrow' },
       window.AndroidWeb ? small('link', 'Depuis un lien', addFromLink) : null,
       small('paste', 'Coller un texte', pasteText)),
@@ -2973,6 +2979,45 @@ function openAddMenu() {
       icon('globe'), h('span', {}, h('b', {}, 'Trouver des livres'), h('small', {}, 'Des milliers de livres gratuits en français')), chevR()) : null,
     lib ? h('p', { class: 'hint', style: { marginTop: '14px' } }, `Ils iront dans « ${lib.name} ».`) : null));
 }
+
+// « Recevoir des livres » : la télé (ou une tablette) affiche une adresse ; on l'ouvre dans le navigateur du téléphone,
+// on choisit ses livres, et ils arrivent directement ici, par le Wi-Fi de la maison.
+const Recv = {
+  ok: () => !!window.AndroidAI?.receiveStart,
+  queue: [], busy: false, list: null, n: 0,
+  open() {
+    const addr = AndroidAI.receiveStart();
+    if (!addr) return toast('Connecte d\'abord cet appareil au Wi-Fi de la maison.');
+    this.n = 0;
+    this.list = h('div', { class: 'recv-list' });
+    const close = sheet('Recevoir des livres', h('div', {},
+      h('p', {}, 'Sur ton téléphone (branché sur le même Wi-Fi), ouvre le navigateur — Chrome ou Safari — et tape cette adresse :'),
+      h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, '')),
+      h('p', { class: 'muted' }, 'Touche « Choisir des livres », sélectionne tes PDF, EPUB ou Word : ils apparaissent ici, puis sur l\'étagère. Garde cette fenêtre ouverte pendant l\'envoi.'),
+      this.list), { wide: true });
+    const scrim = $$('.scrim').pop();
+    new MutationObserver((_, o) => { if (!scrim.isConnected) { o.disconnect(); if (!this.busy && !this.queue.length) { try { AndroidAI.receiveStop(); } catch {} } } }).observe(document.body, { childList: true });
+  },
+  async take() {
+    if (this.busy) return; this.busy = true;
+    while (this.queue.length) {
+      const r = this.queue.shift();
+      const row = h('div', { class: 'recv-row' }, h('b', {}, r.name), h('small', {}, 'Ajout à la bibliothèque…'));
+      this.list?.prepend(row);
+      try {
+        const resp = await fetch('/__reception?f=' + encodeURIComponent(r.file));
+        if (!resp.ok) throw new Error();
+        await uploadFiles([new File([await resp.blob()], r.name)]);
+        $('small', row).textContent = '✔ Sur l\'étagère'; this.n++;
+      } catch { $('small', row).textContent = 'Ce fichier n\'a pas pu être ajouté'; }
+      try { AndroidAI.receiveDone(r.file); } catch {}
+    }
+    this.busy = false;
+    await loadBooks(); if (!$('.reader')) renderLibrary();
+    toast(`${this.n} livre${this.n > 1 ? 's' : ''} reçu${this.n > 1 ? 's' : ''}`);
+  },
+};
+window.__livreEnvoye = (j) => { try { Recv.queue.push(JSON.parse(j)); Recv.take(); } catch {} };
 
 function addFromLink() {
   const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
