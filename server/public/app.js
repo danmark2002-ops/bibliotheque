@@ -346,10 +346,10 @@ function coachOptions() {
   if (store.get('tipOpts', false) || !window.LocalAPI || S.me?.role !== 'owner' || $('.reader') || $('.scrim')) return;
   const first = $('.case .book, .blist .brow'); if (!first) return;
   const r = first.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
-  const done = () => { store.set('tipOpts', true); tip.remove(); };
+  const done = () => { store.set('tipOpts', true); tip.remove(); if (TV.on) setTimeout(() => TV.first(), 0); };
   const tip = h('div', { class: 'coach', role: 'dialog' },
     h('b', {}, 'Plus d\'options pour chaque livre'),
-    h('p', {}, 'Appuie longuement sur un livre, ou touche ', h('span', { class: 'coachdots' }, icon('dots')), ' en dessous : Résumé IA, Professeur, Vidéo, Ranger dans une bibliothèque, Ouvrir avec…'),
+    h('p', {}, TV.on ? 'Garde le bouton OK de la télécommande enfoncé sur un livre, ou choisis ' : 'Appuie longuement sur un livre, ou touche ', h('span', { class: 'coachdots' }, icon('dots')), ' en dessous : Résumé IA, Professeur, Vidéo, Ranger dans une bibliothèque, Ouvrir avec…'),
     h('div', { class: 'coachact' }, h('button', { class: 'btn', onclick: () => { done(); editBook(S.books.find((x) => first.getAttribute('aria-label')?.startsWith(x.title)) || S.books.find((x) => !x.trashed)); } }, 'Voir'), h('button', { class: 'btn primary', onclick: done }, 'Compris')));
   document.body.append(tip);
   const w = Math.min(320, innerWidth - 24), left = Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2));
@@ -357,6 +357,7 @@ function coachOptions() {
   Object.assign(tip.style, { width: w + 'px', left: left + 'px', top: (below ? r.bottom + 64 + scrollY : r.top - 12 + scrollY) + 'px', transform: below ? 'none' : 'translateY(-100%)' });
   tip.style.setProperty('--ax', (r.left + r.width / 2 - left) + 'px'); tip.classList.add(below ? 'down' : 'up');
   first.classList.add('coached');
+  if (TV.on) { const ok = tip.querySelector('.btn.primary'); ok.focus({ preventScroll: true }); tip.scrollIntoView({ block: 'nearest' }); } // télécommande : on arrive directement sur « Compris »
 }
 // Boutons rapides de la vue liste
 function quickBar(b, { labels } = {}) {
@@ -4262,7 +4263,7 @@ window.__autoCmd = (cmd, arg) => {
   return true;
 };
 // Bouton retour Android
-window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); if (Sel.on && !$('.scrim')) { selEnd(); return true; } const all = $$('.scrim'); const s = all[all.length - 1]; if (s) { if (s.dataset.prof === 'book') { try { AndroidAuto.profStop ? AndroidAuto.profStop() : AndroidAuto.profPause(); } catch {} } s.remove(); return true; } return false; }; // Retour sur la fenêtre du Professeur : le cours s'arrête
+window.__androidBack = () => { if (window.__readerBack) return window.__readerBack(); const co = $('.coach'); if (co && !$('.scrim')) { store.set('tipOpts', true); co.remove(); if (TV.on) TV.first(); return true; } if (Sel.on && !$('.scrim')) { selEnd(); return true; } const all = $$('.scrim'); const s = all[all.length - 1]; if (s) { if (s.dataset.prof === 'book') { try { AndroidAuto.profStop ? AndroidAuto.profStop() : AndroidAuto.profPause(); } catch {} } s.remove(); return true; } return false; }; // Retour sur la fenêtre du Professeur : le cours s'arrête
 
 // ================= Télé : diffusion d'écran (Cast) et navigation à la télécommande =================
 const TV = {
@@ -4287,7 +4288,7 @@ const TV = {
     return [...root.querySelectorAll('button, a[href], input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')]
       .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
   },
-  scope() { const sh = [...document.querySelectorAll('.scrim')].pop(); return sh || $('.reader') || document.body; },
+  scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
   first() { const f = this.focusables(this.scope())[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
   held: null,
   key(e) {
