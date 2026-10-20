@@ -182,7 +182,7 @@ final class VideoMaker {
                 thumbs.add(out.toByteArray());
             }
             String prompt = "Tu es directeur artistique pour une vidéo qui résume un livre. Voici une scène :\n"
-                + "Phrase choc : " + s.phrase + "\nNarration : " + String.join(" ", s.sentences)
+                + "Phrase choc : " + s.phrase + "\nNarration : " + Compat.join(" ", s.sentences)
                 + "\n\nVoici " + imgs.size() + " images candidates, numérotées de 0 à " + (imgs.size() - 1) + " dans l'ordre."
                 + " Choisis les 2 images qui illustrent le mieux et le plus précisément CETTE narration (sujet, idée, époque, ambiance),"
                 + " les plus belles et nettes. Écarte les images hors sujet, floues, avec beaucoup de texte, des logos, des schémas illisibles ou des cadres."
@@ -220,7 +220,7 @@ final class VideoMaker {
 
     private static Set<String> loadHistory(Context c) {
         Set<String> h = new HashSet<>();
-        try { for (String l : new String(java.nio.file.Files.readAllBytes(historyFile(c).toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) h.add(l.trim()); } catch (Exception ignored) { }
+        try { for (String l : new String(Compat.readAll(historyFile(c)), "UTF-8").split("\n")) if (!l.isEmpty()) h.add(l.trim()); } catch (Exception ignored) { }
         return h;
     }
 
@@ -228,10 +228,10 @@ final class VideoMaker {
         try {
             List<String> lines = new ArrayList<>();
             File f = historyFile(c);
-            if (f.exists()) for (String l : new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8").split("\n")) if (!l.isEmpty()) lines.add(l.trim());
+            if (f.exists()) for (String l : new String(Compat.readAll(f), "UTF-8").split("\n")) if (!l.isEmpty()) lines.add(l.trim());
             for (String u : used) { String k = key(u); if (!lines.contains(k)) lines.add(k); }
             if (lines.size() > 2000) lines = lines.subList(lines.size() - 2000, lines.size());
-            try (FileOutputStream o = new FileOutputStream(f)) { o.write(String.join("\n", lines).getBytes("UTF-8")); }
+            try (FileOutputStream o = new FileOutputStream(f)) { o.write(Compat.join("\n", lines).getBytes("UTF-8")); }
         } catch (Exception ignored) { }
     }
 
@@ -249,7 +249,7 @@ final class VideoMaker {
             if (pages != null) {
                 List<JSONObject> list = new ArrayList<>();
                 for (java.util.Iterator<String> it = pages.keys(); it.hasNext(); ) list.add(pages.getJSONObject(it.next()));
-                list.sort((a, b) -> Integer.compare(a.optInt("index", 99), b.optInt("index", 99)));
+                java.util.Collections.sort(list, (a, b) -> Integer.compare(a.optInt("index", 99), b.optInt("index", 99)));
                 for (JSONObject pg : list) {
                     JSONArray ii = pg.optJSONArray("imageinfo"); if (ii == null || ii.length() == 0) continue;
                     JSONObject i = ii.getJSONObject(0);
