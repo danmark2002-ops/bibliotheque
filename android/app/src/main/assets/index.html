@@ -4355,8 +4355,17 @@ if (!window.AndroidAI) window.AndroidAI = (() => {
         let r; try { r = await call(`${base}/${PRO[m]}:generateContent`, key, body); } catch { break; }
         if (r.ok) { const x = await read(r); if (x) return { text: x, model: PRO[m] }; break; }
         if (r.status === 404) { m++; t--; continue; }
-        if (r.status === 429 && t < 2) { tell('Gemini Pro est occupé : nouvel essai dans 40 s…'); await sleep(40000); tell('Gemini Pro : nouvel essai…'); continue; }
-        if (r.status >= 500 && t < 2) { await sleep(6000); continue; }
+        if (r.status === 429) { // pourquoi ? quota du jour (ou Pro absent du palier gratuit), texte trop long pour la minute, ou trop de demandes
+          const b = await r.text().catch(() => '');
+          if (/input_token|InputTokens/.test(b) && !/limit\D{0,6}0\b(?![.\d])/.test(b)) { tell('Livre trop long pour Gemini Pro gratuit : Gemini Flash s\'en charge…'); break; }
+          if (!/PerDay|limit\D{0,6}0\b(?![.\d])/.test(b)) { // limite par minute : une courte attente au plus, sinon Flash cette fois (sans pause de 6 h)
+            const s = (+(b.match(/retryDelay\W+(\d+)/) || [])[1] || 9) + 1;
+            if (t < 1 && s <= 15) { tell(`Gemini Pro est occupé : nouvel essai dans ${s} s…`); await sleep(s * 1000); tell('Gemini Pro : nouvel essai…'); continue; }
+            tell('Gemini Pro est occupé : Gemini Flash s\'en charge cette fois…'); break;
+          }
+        }
+        if (r.status >= 500 && t < 1) { await sleep(5000); continue; }
+        if (r.status >= 500) { tell('Gemini Pro est surchargé : Gemini Flash s\'en charge cette fois…'); break; }
         tell('Gemini Pro est à court pour aujourd\'hui : Gemini Flash prend le relais…'); set(P, Date.now() + 6 * 3600e3); break;
       }
     }
@@ -4366,7 +4375,7 @@ if (!window.AndroidAI) window.AndroidAI = (() => {
       if (r.ok) { const x = await read(r); if (x) return { text: x, model: FLASH[m] }; last = 'réponse vide'; continue; }
       if (r.status === 404) { m++; continue; }
       if ([400, 401, 403].includes(r.status)) throw new Error('La clé Gemini est refusée. Refais « Activer l\'IA gratuite » dans les Réglages.');
-      if (r.status === 429) { last = 'quota gratuit momentanément atteint'; tell('Gemini est occupé : nouvel essai dans 20 s…'); await sleep(20000); continue; }
+      if (r.status === 429) { last = 'quota gratuit momentanément atteint'; tell('Gemini est occupé : nouvel essai dans 10 s…'); await sleep(10000); continue; }
       last = 'erreur ' + r.status; await sleep(5000);
     }
     throw new Error('Gemini ne répond pas (' + last + ').');
@@ -5064,7 +5073,7 @@ async function computeSummary(b, say) {
     if (window.AndroidAI?.generateOnline && Prof.hasKey()) { // ta clé gratuite : Gemini lit le livre en entier
       say('Gemini rédige le résumé… (environ une minute)');
       try {
-        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 900000)}\n</livre>`, false, false, say));
+        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 400000)}\n</livre>`, false, false, say));
         model = /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini';
       } catch (e) { say('Gemini indisponible (' + e.message + ') : IA du téléphone…'); text = null; }
     }

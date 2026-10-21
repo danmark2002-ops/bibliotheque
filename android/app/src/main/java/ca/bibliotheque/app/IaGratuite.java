@@ -61,7 +61,7 @@ final class IaGratuite {
         android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
         proPausedUntil = Math.max(proPausedUntil, sp.getLong("proPause", 0));
         if (wantPro && System.currentTimeMillis() > proPausedUntil && pro < PRO.length) {
-            int waits = urgent ? 1 : 2;
+            int waits = 1; // une seule courte attente, puis Flash : personne n'aime attendre
             for (int t = 0; t <= waits && pro < PRO.length; t++) {
                 try {
                     String r = once(k, system, prompt, urgent, json, PRO[pro]);
@@ -69,8 +69,12 @@ final class IaGratuite {
                     break;
                 } catch (ProRefused e) {
                     if (e.code == 404) { pro++; t--; continue; }                                         // nom retiré : le suivant
-                    if (e.code == 429 && t < waits) { tell("Gemini Pro est occupé : nouvel essai dans " + (urgent ? 12 : 40) + " s…"); Thread.sleep(urgent ? 12_000L : 40_000L); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute
-                    if (e.code >= 500 && t < waits) { Thread.sleep(6_000L); continue; }                   // surchargé
+                    String w = e.code == 429 ? why429(e.body) : "";
+                    if (w.equals("big")) { tell("Livre trop long pour Gemini Pro gratuit : Gemini Flash s'en charge…"); break; } // pas de pause de 6 h : un texte plus court passera
+                    if (w.equals("minute") && t < waits && retryMs(e.body) <= 15_000L) { long ms = urgent ? 8_000L : retryMs(e.body); tell("Gemini Pro est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute, courte
+                    if (w.equals("minute")) { tell("Gemini Pro est occupé : Gemini Flash s'en charge cette fois…"); break; } // sans pause de 6 h
+                    if (e.code >= 500 && t < waits) { Thread.sleep(5_000L); continue; }                   // surchargé
+                    if (e.code >= 500) { tell("Gemini Pro est surchargé : Gemini Flash s'en charge cette fois…"); break; }
                     tell("Gemini Pro est à court pour aujourd'hui : Gemini Flash prend le relais…");
                     proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;                          // épuisé : Flash 6 h
                     sp.edit().putLong("proPause", proPausedUntil).apply();
@@ -104,7 +108,20 @@ final class IaGratuite {
     }
 
     /** Pro a refusé (code HTTP) : on passe à Flash sans insister */
-    static final class ProRefused extends Exception { final int code; ProRefused(int c) { super("pro " + c); code = c; } }
+    static final class ProRefused extends Exception { final int code; final String body; ProRefused(int c, String b) { super("pro " + c); code = c; body = b == null ? "" : b; } }
+
+    /** Pourquoi Google dit « trop de demandes » : « day » (quota du jour épuisé, ou Pro absent du palier gratuit : limit 0),
+     *  « big » (le texte dépasse à lui seul ce que Pro accepte par minute : attendre ne sert à rien), sinon « minute ». */
+    static String why429(String b) {
+        if (b.matches("(?s).*limit\\D{0,6}0\\b(?![.\\d]).*") || b.contains("PerDay")) return "day";
+        if (b.contains("input_token") || b.contains("InputTokens")) return "big";
+        return "minute";
+    }
+    /** Délai proposé par Google (« retryDelay »: « 37s »), sinon 40 s */
+    static long retryMs(String b) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("retryDelay\\W+(\\d+)").matcher(b);
+        return m.find() ? (Long.parseLong(m.group(1)) + 1) * 1000L : 10_000L;
+    }
 
     private static String once(String key, String system, String prompt, boolean urgent, boolean json, String force) throws Exception {
         JSONObject body = new JSONObject();
@@ -124,11 +141,11 @@ final class IaGratuite {
                 String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body.toString());
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
-            if (force != null && code >= 400) throw new ProRefused(code);
+            if (force != null && code >= 400) throw new ProRefused(code, res[1]);
             if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");
-            if (code == 429) { Thread.sleep(urgent ? 4000 : 20000); throw new Exception("quota gratuit momentanément atteint"); }
+            if (code == 429) { Thread.sleep(urgent ? 4000 : 10000); throw new Exception("quota gratuit momentanément atteint"); }
             // serveurs surchargés (503, 500…) : on passe au modèle suivant, souvent moins encombré
             if (code >= 500) { model = (model + 1) % MODELS.length; throw new Exception("surchargé (" + code + ")"); }
             if (code >= 400) throw new Exception("erreur " + code);
