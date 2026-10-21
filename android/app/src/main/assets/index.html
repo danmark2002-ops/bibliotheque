@@ -2249,6 +2249,7 @@ const ICONS = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  loupe: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M10.5 7.5v6M7.5 10.5h6"/>',
   back: '<path d="M15 5l-7 7 7 7"/>',
   headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="5" height="7" rx="2"/><rect x="16" y="14" width="5" height="7" rx="2"/>',
   play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
@@ -5689,7 +5690,7 @@ class AudioBook {
     this.audio.onended = () => { if (this.track + 1 < this.tracks.length) this.load(this.track + 1, 0, true); else { this.save(true); toast('Fin du livre'); } };
     this.audio.onloadedmetadata = () => { const t = this.tracks[this.track]; if (!t.dur && this.audio.duration) t.dur = this.audio.duration; this.tick(true); };
     history.pushState({ reader: 1 }, ''); this.onPop = () => this.close(true); addEventListener('popstate', this.onPop);
-    window.__readerBack = () => { this.close(); return true; };
+    window.__readerBack = () => { if (this.loupeOn) { this.loupe(false); return true; } this.close(); return true; };
     post('/api/track', { book: b.id, type: 'open', page: this.track + 1, pos: this.startPos }).catch(() => {});
     this.load(this.track, this.startPos, false);
     if ('mediaSession' in navigator) {
@@ -5775,6 +5776,7 @@ class Reader {
         h('div', { class: 'ttl' }, h('b', {}, b.title), h('span', {}, b.author || '')),
         Prof.on() ? h('button', { class: 'rbtn', title: 'Le Professeur bizarroïde', onclick: () => { if (this.player) this.closePlayer(); Prof.open(b); } }, icon('prof')) : null,
         TTS.supported() ? this.audioBtn : null,
+        TV.on && PAGED(b.kind) ? (this.loupeBtn = h('button', { class: 'rbtn', title: 'Loupe', 'aria-label': 'Loupe', onclick: () => this.loupe(!this.loupeOn) }, icon('loupe'))) : null,
         h('button', { class: 'rbtn', title: 'Apparence', onclick: () => this.appearance() }, icon('type')),
         (b.kind === 'ocr' || (PAGED(b.kind) && b.ocr === 'done')) ? h('button', { class: 'viewchip', title: 'Changer de mode', onclick: () => this.switchView(b.kind === 'ocr' ? 'photo' : 'text') }, b.kind === 'ocr' ? 'Photo' : 'Texte') : null,
         S.me.role === 'owner' && window.LocalAPI ? h('button', { class: 'rbtn', title: 'Options du livre', 'aria-label': 'Options du livre', onclick: () => this.bookMenu() }, icon('dots')) : null),
@@ -5838,6 +5840,12 @@ class Reader {
     this.el.addEventListener('touchcancel', () => { tracking = false; if (drag && drag.curl === this.dragCurl) this.endDrag(drag, false); }, { passive: true });
     this.onKey = (e) => {
       if ($('.scrim')) return;
+      if (this.loupeOn && this.zoomed()) { // loupe (télé) : les flèches font défiler la page agrandie, OK la remet comme avant
+        const z = this.zs(), W = this.stage.clientWidth, H = this.stage.clientHeight, wide = this.cur.offsetWidth * z.s > W + 2;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); z.y += (e.key === 'ArrowDown' ? -1 : 1) * H * 0.4; this.clampZoom(); this.applyZoom(true); return; }
+        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && wide) { e.preventDefault(); z.x += (e.key === 'ArrowRight' ? -1 : 1) * W * 0.4; this.clampZoom(); this.applyZoom(true); return; }
+        if (e.key === 'Enter' && document.activeElement === this.el) { e.preventDefault(); this.loupe(false); return; }
+      }
       if (e.key === 'ArrowRight' || e.key === 'PageDown') this.go(this.page + 1, 1);
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp') this.go(this.page - 1, -1);
       else if (e.key === 'Escape') this.close();
@@ -6053,6 +6061,7 @@ class Reader {
     this.trackT = setTimeout(() => this.sendTrack && this.sendTrack(), 700);
     this.preload();
     if (this.playing) this.highlight();
+    if (this.loupeOn) requestAnimationFrame(() => this.loupe(true));
   }
   animate(curl, from, to, ms, ease, done) {
     this.finishTurn();
@@ -6257,8 +6266,9 @@ class Reader {
   clampZoom() {
     const z = this.zs(), pg = this.cur; if (!pg) return;
     const W = this.stage.clientWidth, H = this.stage.clientHeight, L = pg.offsetLeft, T = pg.offsetTop, w = pg.offsetWidth * z.s, hh = pg.offsetHeight * z.s;
+    const iT = TV.on ? ($('.r-top', this.el)?.offsetHeight || 0) : 0, iB = TV.on ? ($('.r-bottom', this.el)?.offsetHeight || 0) : 0; // télé : les barres restent affichées
     z.x = w <= W ? (W - w) / 2 - L : Math.min(-L, Math.max(W - w - L, z.x));
-    z.y = hh <= H ? (H - hh) / 2 - T : Math.min(-T, Math.max(H - hh - T, z.y));
+    z.y = hh <= H - iT - iB ? iT + (H - iT - iB - hh) / 2 - T : Math.min(iT - T, Math.max(H - iB - hh - T, z.y));
   }
   zoomAt(s1, px, py, anim) { // garde sous le doigt le même point de la page
     const z = this.zs(), pg = this.cur; if (!pg) return;
@@ -6267,6 +6277,17 @@ class Reader {
     z.s = s1; z.x = px - L - ux * s1; z.y = py - T - uy * s1;
     if (s1 <= 1.001) { z.s = 1; z.x = 0; z.y = 0; } else this.clampZoom();
     this.applyZoom(anim);
+  }
+  // Loupe (télé) : la page grossit environ deux fois, en commençant par le haut ; reste active d'une page à l'autre
+  loupe(on) {
+    this.loupeOn = !!on; this.loupeBtn?.classList.toggle('on', this.loupeOn);
+    if (!this.cur) return;
+    if (!on) { this.zoomAt(1, 0, 0, true); return; }
+    const z = this.zs(), pg = this.cur, W = this.stage.clientWidth;
+    const s1 = Math.max(1.6, Math.min(2.2, (W - 40) / pg.offsetWidth));
+    this.zoomAt(s1, pg.offsetLeft + pg.offsetWidth / 2, pg.offsetTop, false);
+    z.y = 1e6; this.clampZoom(); this.applyZoom(true); // le haut de la page d'abord
+    if (!this.loupeTold) { this.loupeTold = true; toast('Loupe : haut / bas pour faire défiler · gauche / droite pour changer de page · OK ou Retour pour revenir'); }
   }
   zoomToggle(cx, cy) { const r = this.stage.getBoundingClientRect(); if (this.zoomed()) this.zoomAt(1, 0, 0, true); else this.zoomAt(2.5, cx - r.left, cy - r.top, true); }
   resetZoom() { const z = this.zs(); if (z.s === 1 && !this.cur?.style.transform) return; z.s = 1; z.x = 0; z.y = 0; if (this.cur) { this.cur.style.transform = ''; this.cur.style.transition = 'none'; } this.el.classList.remove('zoomed'); }
@@ -6548,6 +6569,7 @@ const TV = {
     if (typing && (dir === 'left' || dir === 'right')) return;
     // dans le lecteur, gauche / droite tournent les pages (sauf dans la barre du haut ou les commandes audio)
     if ($('.reader') && !$('.scrim') && (dir === 'left' || dir === 'right') && !(a && a.closest('.r-top, .player'))) return;
+    if (window.__reader?.loupeOn && !$('.scrim') && !(a && a.closest('.player'))) { if (a && a.closest('.r-top')) window.__reader.el.focus({ preventScroll: true }); return; } // loupe : les flèches font défiler la page
     const list = this.focusables(this.scope());
     if (!list.length) return;
     e.preventDefault(); e.stopPropagation();
