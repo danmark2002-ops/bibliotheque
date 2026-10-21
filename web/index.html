@@ -6512,7 +6512,7 @@ const TV = {
   first() { const f = this.focusables(this.scope())[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
   held: null,
   key(e) {
-    const a = document.activeElement;
+    let a = document.activeElement;
     const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
     // appui long sur OK (ou touche Menu) sur un livre : le menu du livre, comme un appui long au doigt
     if (a && a.classList && a.classList.contains('book')) {
@@ -6523,8 +6523,31 @@ const TV = {
         return;
       }
     }
+    const isTi = a && a.classList && a.classList.contains('ti');
+    if (isTi && e.key === 'Enter') { // petite icône : OK l'active, et la sélection reste dessus après le rafraîchissement de l'étagère
+      e.preventDefault(); e.stopPropagation(); if (e.repeat) return;
+      const bk = a.closest('.book'), lab = bk && bk.getAttribute('aria-label'), idx = bk ? [...bk.querySelectorAll('.ti')].indexOf(a) : -1;
+      a.click();
+      for (const ms of [60, 250, 600]) setTimeout(() => { if (document.activeElement && document.activeElement !== document.body) return; const nb = [...document.querySelectorAll('.book')].find((x) => x.getAttribute('aria-label') === lab); const t = nb && nb.querySelectorAll('.ti')[idx]; if (t) t.focus({ preventScroll: true }); }, ms);
+      return;
+    }
     const dir = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.key];
     if (!dir) return;
+    // petites icônes sous un livre : bas depuis le livre y entre, haut en ressort, gauche / droite passent de l'une à l'autre
+    if (a && a.classList && a.classList.contains('book') && dir === 'down') {
+      const t0 = a.querySelector('.ti'); if (t0) { e.preventDefault(); e.stopPropagation(); t0.focus({ preventScroll: true }); t0.scrollIntoView({ block: 'nearest' }); return; }
+    }
+    if (isTi && dir === 'up') { e.preventDefault(); e.stopPropagation(); const bk = a.closest('.book'); if (bk) bk.focus({ preventScroll: true }); return; }
+    if (isTi && (dir === 'left' || dir === 'right')) {
+      e.preventDefault(); e.stopPropagation();
+      const sib = [...a.parentElement.querySelectorAll('.ti')], i = sib.indexOf(a) + (dir === 'right' ? 1 : -1);
+      if (sib[i]) return sib[i].focus({ preventScroll: true });
+      // au bout : les icônes du livre voisin sur la même tablette
+      const books = [...a.closest('.shelf, .case, body').querySelectorAll('.book')], bi = books.indexOf(a.closest('.book')) + (dir === 'right' ? 1 : -1);
+      const nb = books[bi], r0 = a.closest('.book').getBoundingClientRect();
+      if (nb && Math.abs(nb.getBoundingClientRect().top - r0.top) < r0.height / 2) { const ts = nb.querySelectorAll('.ti'); const t = dir === 'right' ? ts[0] : ts[ts.length - 1]; if (t) t.focus({ preventScroll: true }); }
+      return;
+    }
     if (typing && (dir === 'left' || dir === 'right')) return;
     // dans le lecteur, gauche / droite tournent les pages (sauf dans la barre du haut ou les commandes audio)
     if ($('.reader') && !$('.scrim') && (dir === 'left' || dir === 'right') && !(a && a.closest('.r-top, .player'))) return;
@@ -6532,7 +6555,8 @@ const TV = {
     if (!list.length) return;
     e.preventDefault(); e.stopPropagation();
     if (!a || a === document.body || !list.includes(a)) return this.first();
-    const fromBook = a.classList.contains('book');
+    const fromBook = a.classList.contains('book') || isTi; // depuis une icône, on part de son livre
+    if (isTi) a = a.closest('.book') || a;
     const r = a.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2 + (fromBook ? 10 : 0); // + 10 : on annule le soulèvement du livre choisi
     let best = null, bestScore = Infinity;
     for (const x of list) {
@@ -6543,7 +6567,7 @@ const TV = {
       if (main <= 4) continue;
       // il faut vraiment être de l'autre côté : un livre voisin (le livre choisi est soulevé de 10 px) n'est pas « en dessous »
       if (dir === 'down' ? q.top < cy : dir === 'up' ? q.bottom > cy : dir === 'right' ? q.left < cx : q.right > cx) continue;
-      // à la télécommande on va de livre en livre : les petites icônes sous les livres sont aussi dans le menu (appui long sur OK)
+      // de livre en livre : on n'entre dans les petites icônes que par la flèche bas, depuis leur livre
       if (x.classList.contains('ti')) continue;
       // écart de côté mesuré entre les bords (pas les centres) : un bouton large juste en dessous n'est plus sauté
       const gap = dir === 'up' || dir === 'down' ? Math.max(0, q.left - r.right, r.left - q.right) : Math.max(0, q.top - r.bottom, r.top - q.bottom);
