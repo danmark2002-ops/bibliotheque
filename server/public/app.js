@@ -3798,7 +3798,7 @@ class Reader {
   }
   resetBuilt() { this.finishTurn(); this.cancelDrag(); this.built.clear(); }
   tidy() { $$('.page', this.stage).forEach((x) => { if (x !== this.cur) x.remove(); }); }
-  static still() { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  static still() { return TV.on || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } // télé : la page change d'un coup (l'effet de page qui tourne est trop lourd pour les petits boîtiers télé)
   updateBar(n) {
     this.slider.value = n; this.lbl.textContent = `${n} / ${this.total}`;
     const rest = this.total - n; this.left.textContent = rest ? `${rest} page${rest > 1 ? 's' : ''} restante${rest > 1 ? 's' : ''}` : 'Dernière page';

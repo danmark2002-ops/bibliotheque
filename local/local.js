@@ -857,8 +857,10 @@ window.LocalAPI = (() => {
 
   async function pageCanvasAt(id, n, width) { if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, width); return smartRender(id, n, width); } // plus net pour le zoom
   async function pageCanvas(id, n) {
-    if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, Math.min(1800, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
-    return smartRender(id, n, Math.min(1600, Math.max(900, Math.round(innerWidth * (devicePixelRatio || 1)))));
+    // largeur réellement affichée : sur un écran couché (télé), la page debout n'occupe qu'environ 0,8 × la hauteur — inutile de dessiner plus grand (mémoire)
+    const shown = Math.min(innerWidth, innerHeight * 0.8) * (devicePixelRatio || 1);
+    if ((await get('meta', id))?.kind === 'images') return imageCanvas(id, n, Math.min(1800, Math.max(900, Math.round(shown))));
+    return smartRender(id, n, Math.min(1600, Math.max(900, Math.round(shown))));
   }
 
   // Demande au navigateur de garder les données (évite l'effacement automatique)
