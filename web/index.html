@@ -5845,8 +5845,8 @@ class Reader {
       if ($('.scrim')) return;
       if (this.loupeOn && this.zoomed()) { // loupe (télé) : les flèches font défiler la page agrandie, OK la remet comme avant
         const z = this.zs(), W = this.stage.clientWidth, H = this.stage.clientHeight, wide = this.cur.offsetWidth * z.s > W + 2;
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); z.y += (e.key === 'ArrowDown' ? -1 : 1) * H * 0.4; this.clampZoom(); this.applyZoom(true); return; }
-        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && wide) { e.preventDefault(); z.x += (e.key === 'ArrowRight' ? -1 : 1) * W * 0.4; this.clampZoom(); this.applyZoom(true); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); z.y += (e.key === 'ArrowDown' ? -1 : 1) * H * 0.2; this.clampZoom(); this.applyZoom(true); return; }
+        if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && wide) { e.preventDefault(); z.x += (e.key === 'ArrowRight' ? -1 : 1) * W * 0.2; this.clampZoom(); this.applyZoom(true); return; }
         if (e.key === 'Enter' && document.activeElement === this.el) { e.preventDefault(); this.loupe(false); return; }
       }
       if (e.key === 'ArrowRight' || e.key === 'PageDown') this.go(this.page + 1, 1);
