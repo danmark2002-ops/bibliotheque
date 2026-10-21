@@ -3569,6 +3569,7 @@ class Reader {
       h('div', { class: 'tapzone r', onclick: () => this.go(this.page + 1, 1) }),
       h('div', { class: 'r-bottom' }, h('div', { class: 'slider' }, this.lbl, this.slider, this.left)));
     document.body.append(this.el);
+    if (TV.on) { this.el.tabIndex = -1; this.el.focus({ preventScroll: true }); } // télécommande : le focus quitte la bibliothèque cachée derrière
     document.body.style.overflow = 'hidden';
     window.__reader = this;
     this.el.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -3871,7 +3872,9 @@ class Reader {
     const bmp = await this.getImg(n);
     const dpr = Math.min(devicePixelRatio || 1, 2);
     const sw = this.stage.clientWidth, sh = this.stage.clientHeight;
-    const availW = this.zoom ? sw - 28 : sw, availH = this.zoom ? sh - 150 : sh - 16;
+    // télé : les barres du haut et du bas restent affichées, la page tient entre les deux (sinon le haut de la page est caché)
+    const barT = TV.on && !this.zoom ? ($('.r-top', this.el)?.offsetHeight || 0) : 0, barB = TV.on && !this.zoom ? ($('.r-bottom', this.el)?.offsetHeight || 0) : 0;
+    const availW = this.zoom ? sw - 28 : sw, availH = this.zoom ? sh - 150 : sh - 16 - barT - barB;
     let w = Math.min(availW, availH * (bmp.width / bmp.height));
     if (this.zoom) w = Math.max(availW, w) * 2;
     w = Math.max(200, Math.floor(w)); const hgt = Math.floor(w * (bmp.height / bmp.width));
@@ -3886,7 +3889,7 @@ class Reader {
       ctx.restore();
     }
     if (!this.zoom) { // la feuille, centrée sur le fond noir, a exactement la taille de la page du PDF
-      Object.assign(pg.style, { left: Math.round((sw - w) / 2) + 'px', top: Math.round((sh - hgt) / 2) + 'px', width: w + 'px', height: hgt + 'px' });
+      Object.assign(pg.style, { left: Math.round((sw - w) / 2) + 'px', top: Math.round(barT + (sh - barT - barB - hgt) / 2) + 'px', width: w + 'px', height: hgt + 'px' });
       c.style.width = '100%'; c.style.height = '100%';
     }
     pg.replaceChildren(c);
