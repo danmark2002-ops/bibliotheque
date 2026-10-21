@@ -1578,6 +1578,9 @@ public class MainActivity extends Activity {
         /** Clé Gemini gratuite de la personne : gardée seulement sur ce téléphone. */
         @JavascriptInterface
         public void setGeminiKey(String k) { IaGratuite.setKey(MainActivity.this, k); }
+        /** Clé Claude (facultative), chiffrée par le coffre d'Android ; seul ce nom est permis */
+        @JavascriptInterface public String secretGet(String name) { return "claude".equals(name) ? Secret.get(MainActivity.this, "claude") : ""; }
+        @JavascriptInterface public void secretSet(String name, String v) { if ("claude".equals(name)) Secret.put(MainActivity.this, "claude", v == null ? "" : v.trim()); }
 
         @JavascriptInterface
         public boolean hasGeminiKey() { return !IaGratuite.key(MainActivity.this).isEmpty(); }

@@ -1597,8 +1597,8 @@ function openSettings() {
         (() => { const ck = h('input', { type: 'password', placeholder: 'sk-ant-…', value: claudeKey(), autocomplete: 'off' });
           return h('div', {}, h('label', { class: 'field' }, 'Clé d\'API Claude', ck),
             h('div', { class: 'actions' },
-              claudeKey() ? h('button', { class: 'btn', onclick: () => { store.set('claudeKey', ''); close(); toast('Clé Claude retirée'); } }, 'Retirer') : null,
-              h('button', { class: 'btn', onclick: () => { const k = ck.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); toast('Clé Claude enregistrée'); } }, 'Enregistrer'))); })())) : null,
+              claudeKey() ? h('button', { class: 'btn', onclick: () => { setClaudeKey(''); close(); toast('Clé Claude retirée'); } }, 'Retirer') : null,
+              h('button', { class: 'btn', onclick: () => { const k = ck.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); setClaudeKey(k); close(); toast('Clé Claude enregistrée'); } }, 'Enregistrer'))); })())) : null,
     local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
@@ -2040,7 +2040,15 @@ Structure :
 5. Phrases clés : ${KEYS_RULE} Présente-les en liste, sous le titre « Phrases clés ».
 Reste fidèle au texte : présente les idées de l'auteur telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Environ 800 à 1200 mots, titres courts, sans préambule.`;
 const CLAUDE_MODEL = 'claude-sonnet-5-5';
-const claudeKey = () => store.get('claudeKey', '');
+// Clé Claude : dans l'application Android, gardée chiffrée par le coffre du téléphone (plus dans le stockage de la page)
+const claudeKey = () => {
+  if (window.AndroidAI?.secretGet) {
+    const old = store.get('claudeKey', ''); if (old) { try { AndroidAI.secretSet('claude', old); store.set('claudeKey', ''); } catch {} }
+    try { return AndroidAI.secretGet('claude') || ''; } catch { return ''; }
+  }
+  return store.get('claudeKey', '');
+};
+const setClaudeKey = (k) => { if (window.AndroidAI?.secretSet) { try { AndroidAI.secretSet('claude', k || ''); store.set('claudeKey', ''); return; } catch {} } store.set('claudeKey', k || ''); };
 function mdToHtml(md) {
   const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inl = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
@@ -2112,7 +2120,7 @@ function summaryChoices(b) {
         h('h4', {}, 'Avec Claude (payant)'),
         h('p', {}, `Avec ta clé d'API Claude, facturée à l'usage : ${estimateCost(b)} pour ce livre.`),
         h('label', { class: 'field' }, 'Clé d\'API Claude', keyIn),
-        h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); store.set('claudeKey', k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude'))) : null));
+        h('button', { class: 'btn', onclick: () => { const k = keyIn.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); setClaudeKey(k); close(); makeSummary(b); } }, icon('spark'), 'Résumer avec Claude'))) : null));
 }
 
 // ---------- IA gratuite dans la version web (iPhone, navigateur) ----------

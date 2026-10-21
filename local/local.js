@@ -39,19 +39,23 @@ window.LocalAPI = (() => {
   function pdfjs() {
     if (pdfjsP) return pdfjsP;
     pdfjsP = (async () => {
-      const dec = (id) => { const b = atob(document.getElementById(id).textContent.trim()); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: 'text/javascript' }); };
+      // mesuré : la boucle de décodage ne prend que quelques dizaines de ms ; c'est la préparation du moteur qui coûte, d'où le préchargement plus bas
+      const dec = async (id) => { const b = atob(document.getElementById(id).textContent.trim()); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: 'text/javascript' }); };
       let lib, worker;
       const CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
       let m = null;
       if (document.getElementById('pdfjs-lib')) {
-        try { lib = URL.createObjectURL(dec('pdfjs-lib')); worker = URL.createObjectURL(dec('pdfjs-worker')); m = await import(lib); } catch { m = null; }
+        try { const [a, w] = await Promise.all([dec('pdfjs-lib'), dec('pdfjs-worker')]); lib = URL.createObjectURL(a); worker = URL.createObjectURL(w); m = await import(lib); } catch { m = null; }
       }
       if (!m) { worker = CDN + 'pdf.worker.min.mjs'; m = await import(CDN + 'pdf.min.mjs'); } // version en ligne (page publiée)
       m.GlobalWorkerOptions.workerSrc = worker;
       return m;
     })();
+    pdfjsP.catch(() => { pdfjsP = null; });
     return pdfjsP;
   }
+  // le moteur PDF se prépare en douce peu après le démarrage : la première ouverture d'un livre ne fige plus
+  if (document.getElementById('pdfjs-lib')) setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => pdfjs().catch(() => {}), { timeout: 4000 }), 3500);
   // Polices standard et tables de caractères : sans elles, le texte de certains PDF ne s'affiche pas (pages blanches)
   const PDF_RES = location.host === 'appassets.local' ? '/pdfjs/' : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/';
   // Deux façons de dessiner les lettres : polices du PDF chargées dans le navigateur (par défaut), ou lettres tracées une à une.
