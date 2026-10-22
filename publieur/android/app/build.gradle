@@ -8,14 +8,14 @@ def ks = file(System.getenv('PUBLIEUR_KS') ?: 'absent.jks')
 
 android {
     namespace 'ca.publieur.app'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'ca.publieur.app'
-        minSdk 26
-        targetSdk 34
-        versionCode 1
-        versionName '0.1'
+        minSdk 29
+        targetSdk 36
+        versionCode 10
+        versionName '1.0'
     }
 
     signingConfigs {

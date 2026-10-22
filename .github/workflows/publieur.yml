@@ -48,7 +48,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         if: github.event_name != 'schedule'
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
 
       - name: Compiler
         if: github.event_name != 'schedule'
@@ -80,3 +80,4 @@ jobs:
           body: Télécharge Publieur.apk depuis ton téléphone Android et installe-le.
           files: Publieur.apk
           make_latest: false
+          prerelease: ${{ github.ref != 'refs/heads/main' }}

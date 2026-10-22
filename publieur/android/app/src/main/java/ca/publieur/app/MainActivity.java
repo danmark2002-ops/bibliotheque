@@ -14,6 +14,7 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
@@ -23,6 +24,8 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -31,6 +34,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.window.OnBackInvokedDispatcher;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -50,9 +54,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -65,7 +71,8 @@ import java.util.zip.ZipFile;
 /**
  * Publieur — publie une application sur Google Play presque tout seul.
  * L'interface (assets/) est servie à https://appassets.local/ ; le pont « Pub » fait ce qu'un navigateur ne peut pas :
- * lire les fichiers .apk/.aab, signer la connexion Google (compte de service) et téléverser de gros fichiers.
+ * lire les fichiers .apk/.aab, signer la connexion Google (compte de service), téléverser et télécharger de gros fichiers,
+ * garder la clé d'accès dans le coffre d'Android.
  * Chaque appel asynchrone répond par window.__nat(id, json).
  */
 public class MainActivity extends Activity {
@@ -85,6 +92,10 @@ public class MainActivity extends Activity {
         FrameLayout root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
+        edgeToEdge(root);
+        // Android 13+ (obligatoire avec Android 16) : le geste « retour » passe par ce rappel, plus par onBackPressed()
+        if (Build.VERSION.SDK_INT >= 33)
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
 
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -121,6 +132,23 @@ public class MainActivity extends Activity {
         handleIntent(getIntent());
     }
 
+    /** Android 15/16 : l'application s'étend sous la barre d'état et la barre de navigation. On garde le contenu à l'abri
+     *  (barres, encoche, clavier) avec une marge égale à leur taille ; la marge prend la couleur du fond de l'application. */
+    private void edgeToEdge(FrameLayout root) {
+        root.setBackgroundColor(Color.parseColor("#0f1412"));
+        if (Build.VERSION.SDK_INT < 30) return; // Android 10 : le contenu reste déjà sous les barres
+        getWindow().setDecorFitsSystemWindows(false);
+        root.setOnApplyWindowInsetsListener((v, in) -> {
+            Insets i = in.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+            v.setPadding(i.left, i.top, i.right, i.bottom);
+            return WindowInsets.CONSUMED;
+        });
+        WindowInsetsController c = getWindow().getInsetsController();
+        if (c != null) c.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS); // icônes claires sur fond sombre
+        getWindow().setNavigationBarContrastEnforced(false);
+        getWindow().setStatusBarContrastEnforced(false);
+    }
+
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
@@ -132,7 +160,7 @@ public class MainActivity extends Activity {
         if (intent == null) return;
         Uri uri = null;
         if (Intent.ACTION_VIEW.equals(intent.getAction())) uri = intent.getData();
-        else if (Intent.ACTION_SEND.equals(intent.getAction())) uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        else if (Intent.ACTION_SEND.equals(intent.getAction())) uri = Build.VERSION.SDK_INT >= 33 ? intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class) : intent.getParcelableExtra(Intent.EXTRA_STREAM);
         if (uri == null) return;
         final Uri src = uri;
         pool.execute(() -> {
@@ -150,8 +178,10 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    public void onBackPressed() {
-        web.evaluateJavascript("window.__back ? window.__back() : false", (r) -> { if (!"true".equals(r)) MainActivity.super.onBackPressed(); });
+    public void onBackPressed() { handleBack(); } // Android 12 et moins
+
+    private void handleBack() {
+        web.evaluateJavascript("window.__back ? window.__back() : false", (r) -> { if (!"true".equals(r)) finish(); });
     }
 
     // ---------- Utilitaires ----------
@@ -163,6 +193,12 @@ public class MainActivity extends Activity {
 
     private void fail(String id, Throwable e) {
         try { reply(id, new JSONObject().put("error", e.getMessage() == null ? e.toString() : e.getMessage())); } catch (Exception ignored) { }
+    }
+
+    private void progress(String id, long sent, long total) {
+        if (id == null) return;
+        final String js = "window.__prog && window.__prog(" + JSONObject.quote(id) + "," + sent + "," + total + ")";
+        runOnUiThread(() -> web.evaluateJavascript(js, null));
     }
 
     private static String mime(String p) {
@@ -196,6 +232,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    private static String cleanName(String name) { return name.replaceAll("[\\\\/:*?\"<>|]", "_"); }
+
+    /** Nouveau fichier dans un sous-dossier unique du dossier de travail. */
+    private File newWorkFile(String name) {
+        File dir = new File(work(), UUID.randomUUID().toString().substring(0, 8)); dir.mkdirs();
+        return new File(dir, cleanName(name));
+    }
+
+    private JSONObject fileJson(File out, long fallbackSize) throws Exception {
+        return new JSONObject().put("path", out.getPath()).put("name", out.getName()).put("size", out.length() > 0 ? out.length() : fallbackSize)
+            .put("url", "https://" + HOST + "/__f?p=" + URLEncoder.encode(out.getPath(), "UTF-8"));
+    }
+
     private JSONObject copyIn(Uri uri) throws Exception {
         String name = "fichier";
         long size = -1;
@@ -207,15 +256,12 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) { }
         if ("fichier".equals(name) && uri.getLastPathSegment() != null) name = uri.getLastPathSegment();
-        name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
-        File dir = new File(work(), UUID.randomUUID().toString().substring(0, 8)); dir.mkdirs();
-        File out = new File(dir, name);
+        File out = newWorkFile(name);
         try (InputStream in = getContentResolver().openInputStream(uri); OutputStream os = new FileOutputStream(out)) {
             byte[] buf = new byte[65536]; int r;
             while ((r = in.read(buf)) > 0) os.write(buf, 0, r);
         }
-        return new JSONObject().put("path", out.getPath()).put("name", name).put("size", out.length() > 0 ? out.length() : size)
-            .put("url", "https://" + HOST + "/__f?p=" + URLEncoder.encode(out.getPath(), "UTF-8"));
+        return fileJson(out, size);
     }
 
     private void openUrl(String url) {
@@ -229,6 +275,29 @@ public class MainActivity extends Activity {
     }
 
     private static String b64url(byte[] b) { return Base64.encodeToString(b, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING); }
+
+    private static String sha256Hex(byte[] data) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : MessageDigest.getInstance("SHA-256").digest(data)) sb.append(String.format("%02X:", b));
+        return sb.substring(0, sb.length() - 1);
+    }
+
+    /** Enregistre un contenu dans Téléchargements/Publieur (le .aab pour la Play Console, la politique de confidentialité…). */
+    private boolean toDownloads(String name, String mimeType, InputStream in) {
+        try (InputStream src = in) {
+            ContentValues v = new ContentValues();
+            v.put(MediaStore.Downloads.DISPLAY_NAME, name);
+            v.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+            v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Publieur");
+            Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+            if (u == null) return false;
+            try (OutputStream os = getContentResolver().openOutputStream(u)) {
+                byte[] buf = new byte[65536]; int n;
+                while ((n = src.read(buf)) > 0) os.write(buf, 0, n);
+            }
+            return true;
+        } catch (Exception e) { return false; }
+    }
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
@@ -249,6 +318,15 @@ public class MainActivity extends Activity {
     // ---------- Pont JavaScript ----------
     class Pub {
         @JavascriptInterface public boolean ok() { return true; }
+
+        /** Numéro de version de l'application (affiché dans l'accueil). */
+        @JavascriptInterface public String version() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
+        }
+
+        /** Coffre : la clé d'accès Google est chiffrée avec le coffre matériel d'Android, jamais gardée en clair. */
+        @JavascriptInterface public boolean vaultPut(String name, String value) { return Secret.put(MainActivity.this, name, value); }
+        @JavascriptInterface public String vaultGet(String name) { return Secret.get(MainActivity.this, name); }
 
         /** kind : app (.aab/.apk), json (clé), images (captures d'écran, plusieurs) */
         @JavascriptInterface public void pick(String kind, String id) {
@@ -271,10 +349,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface public String writeTemp(String name, String b64) {
             try {
                 File dir = new File(work(), "gen"); dir.mkdirs();
-                File f = new File(dir, name.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                File f = new File(dir, cleanName(name));
                 try (OutputStream os = new FileOutputStream(f)) { os.write(Base64.decode(b64, Base64.DEFAULT)); }
                 return f.getPath();
             } catch (Exception e) { return null; }
+        }
+
+        @JavascriptInterface public boolean exists(String path) {
+            try { return safe(path).isFile(); } catch (Exception e) { return false; }
         }
 
         @JavascriptInterface public String zipList(String path) {
@@ -293,23 +375,40 @@ public class MainActivity extends Activity {
             } catch (Exception e) { return null; }
         }
 
+        /** Signataire d'un .aab : certificat de META-INF (nom et empreinte SHA-256). Null si illisible. */
+        @JavascriptInterface public String aabSigner(String path) {
+            try (ZipFile z = new ZipFile(safe(path))) {
+                Enumeration<? extends ZipEntry> en = z.entries();
+                while (en.hasMoreElements()) {
+                    ZipEntry e = en.nextElement();
+                    if (!e.getName().matches("(?i)META-INF/[^/]+\\.(RSA|DSA|EC)")) continue;
+                    try (InputStream in = z.getInputStream(e)) {
+                        Collection<? extends Certificate> certs = CertificateFactory.getInstance("X.509").generateCertificates(in);
+                        for (Certificate c : certs) {
+                            X509Certificate x = (X509Certificate) c;
+                            return new JSONObject().put("signer", x.getSubjectX500Principal().getName()).put("sha256", sha256Hex(x.getEncoded())).toString();
+                        }
+                    }
+                }
+            } catch (Exception ignored) { }
+            return null;
+        }
+
         /** Analyse d'un .apk par Android lui-même : nom, version, SDK, permissions, icône, signature. */
         @JavascriptInterface public String apkInfo(String path) {
             try {
                 File f = safe(path);
                 PackageManager pm = getPackageManager();
-                int flags = PackageManager.GET_PERMISSIONS | PackageManager.GET_META_DATA;
-                flags |= Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
-                PackageInfo pi = pm.getPackageArchiveInfo(f.getPath(), flags);
+                PackageInfo pi = pm.getPackageArchiveInfo(f.getPath(), PackageManager.GET_PERMISSIONS | PackageManager.GET_META_DATA | PackageManager.GET_SIGNING_CERTIFICATES);
                 if (pi == null) return null;
                 pi.applicationInfo.sourceDir = f.getPath();
                 pi.applicationInfo.publicSourceDir = f.getPath();
                 JSONObject o = new JSONObject();
                 o.put("package", pi.packageName);
-                o.put("versionCode", Build.VERSION.SDK_INT >= 28 ? pi.getLongVersionCode() : pi.versionCode);
+                o.put("versionCode", pi.getLongVersionCode());
                 o.put("versionName", pi.versionName);
                 o.put("targetSdk", pi.applicationInfo.targetSdkVersion);
-                if (Build.VERSION.SDK_INT >= 24) o.put("minSdk", pi.applicationInfo.minSdkVersion);
+                o.put("minSdk", pi.applicationInfo.minSdkVersion);
                 o.put("label", String.valueOf(pi.applicationInfo.loadLabel(pm)));
                 JSONArray perms = new JSONArray();
                 if (pi.requestedPermissions != null) for (String p : pi.requestedPermissions) perms.put(p);
@@ -322,15 +421,11 @@ public class MainActivity extends Activity {
                     o.put("icon", Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP));
                 } catch (Exception ignored) { }
                 try {
-                    Signature[] sigs = null;
-                    if (Build.VERSION.SDK_INT >= 28 && pi.signingInfo != null) sigs = pi.signingInfo.getApkContentsSigners();
-                    else sigs = pi.signatures;
+                    Signature[] sigs = pi.signingInfo != null ? pi.signingInfo.getApkContentsSigners() : pi.signatures;
                     if (sigs != null && sigs.length > 0) {
                         X509Certificate cert = (X509Certificate) CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(sigs[0].toByteArray()));
                         o.put("signer", cert.getSubjectX500Principal().getName());
-                        byte[] sha = MessageDigest.getInstance("SHA-256").digest(sigs[0].toByteArray());
-                        StringBuilder sb = new StringBuilder(); for (byte b : sha) sb.append(String.format("%02X:", b));
-                        o.put("sha256", sb.substring(0, sb.length() - 1));
+                        o.put("sha256", sha256Hex(sigs[0].toByteArray()));
                     }
                 } catch (Exception ignored) { }
                 return o.toString();
@@ -369,6 +464,33 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Télécharge un fichier (le .aab d'une version publiée sur GitHub, une capture…) dans le dossier de travail, avec progression. */
+        @JavascriptInterface public void download(String url, String name, String id) {
+            pool.execute(() -> {
+                try {
+                    if (url == null || !url.startsWith("https://")) throw new IOException("Adresse non sécurisée");
+                    HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setConnectTimeout(30000); c.setReadTimeout(120000);
+                    c.setInstanceFollowRedirects(true);
+                    c.setRequestProperty("User-Agent", "Publieur");
+                    int code = c.getResponseCode();
+                    if (code >= 400) { c.disconnect(); throw new IOException("Téléchargement refusé (" + code + ")"); }
+                    long total = c.getContentLengthLong(), got = 0, last = 0;
+                    File out = newWorkFile(name);
+                    try (InputStream in = c.getInputStream(); OutputStream os = new FileOutputStream(out)) {
+                        byte[] buf = new byte[65536]; int r;
+                        while ((r = in.read(buf)) > 0) {
+                            os.write(buf, 0, r); got += r;
+                            long now = System.currentTimeMillis();
+                            if (now - last > 300) { last = now; progress(id, got, total > 0 ? total : got); }
+                        }
+                    }
+                    c.disconnect();
+                    reply(id, fileJson(out, got));
+                } catch (Exception e) { fail(id, e); }
+            });
+        }
+
         @JavascriptInterface public void open(String url) { runOnUiThread(() -> openUrl(url)); }
 
         @JavascriptInterface public void copy(String text) {
@@ -380,43 +502,12 @@ public class MainActivity extends Activity {
 
         /** Copie un fichier (le .aab) dans Téléchargements/Publieur, pour le premier envoi fait à la main dans la Play Console. */
         @JavascriptInterface public boolean copyToDownloads(String src, String name, String mimeType) {
-            try (InputStream in = new FileInputStream(src)) {
-                OutputStream os;
-                if (Build.VERSION.SDK_INT >= 29) {
-                    ContentValues v = new ContentValues();
-                    v.put(MediaStore.Downloads.DISPLAY_NAME, name);
-                    v.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-                    v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Publieur");
-                    Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-                    if (u == null) return false;
-                    os = getContentResolver().openOutputStream(u);
-                } else {
-                    File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Publieur"); d.mkdirs();
-                    os = new FileOutputStream(new File(d, name));
-                }
-                try (OutputStream o = os) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) o.write(buf, 0, n); }
-                return true;
-            } catch (Exception e) { return false; }
+            try { return toDownloads(name, mimeType, new FileInputStream(safe(src))); } catch (Exception e) { return false; }
         }
 
-        /** Enregistre un fichier dans Téléchargements (politique de confidentialité, sauvegarde…). */
+        /** Enregistre un texte dans Téléchargements/Publieur (politique de confidentialité, sauvegarde…). */
         @JavascriptInterface public boolean saveDownload(String name, String mimeType, String b64) {
-            try {
-                byte[] data = Base64.decode(b64, Base64.DEFAULT);
-                if (Build.VERSION.SDK_INT >= 29) {
-                    ContentValues v = new ContentValues();
-                    v.put(MediaStore.Downloads.DISPLAY_NAME, name);
-                    v.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-                    v.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Publieur");
-                    Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-                    if (u == null) return false;
-                    try (OutputStream os = getContentResolver().openOutputStream(u)) { os.write(data); }
-                    return true;
-                }
-                File d = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Publieur"); d.mkdirs();
-                try (OutputStream os = new FileOutputStream(new File(d, name))) { os.write(data); }
-                return true;
-            } catch (Exception e) { return false; }
+            try { return toDownloads(name, mimeType, new ByteArrayInputStream(Base64.decode(b64, Base64.DEFAULT))); } catch (Exception e) { return false; }
         }
 
         @JavascriptInterface public void share(String text) {
@@ -432,6 +523,7 @@ public class MainActivity extends Activity {
         c.setRequestMethod(method);
         c.setConnectTimeout(30000);
         c.setReadTimeout(300000);
+        c.setRequestProperty("User-Agent", "Publieur");
         Iterator<String> it = headers.keys();
         while (it.hasNext()) { String k = it.next(); c.setRequestProperty(k, headers.getString(k)); }
         if (filePath != null && !filePath.isEmpty()) {
@@ -444,11 +536,7 @@ public class MainActivity extends Activity {
                 while ((r = in.read(buf)) > 0) {
                     os.write(buf, 0, r); sent += r;
                     long now = System.currentTimeMillis();
-                    if (progressId != null && now - lastTick > 300) {
-                        lastTick = now;
-                        final String js = "window.__prog && window.__prog(" + JSONObject.quote(progressId) + "," + sent + "," + total + ")";
-                        runOnUiThread(() -> web.evaluateJavascript(js, null));
-                    }
+                    if (progressId != null && now - lastTick > 300) { lastTick = now; progress(progressId, sent, total); }
                 }
             }
         } else if (body != null) {
@@ -462,7 +550,8 @@ public class MainActivity extends Activity {
         String text = in == null ? "" : new String(readAll(in), StandardCharsets.UTF_8);
         c.disconnect();
         JSONObject r = new JSONObject().put("status", code).put("body", text);
-        try { r.put("json", text.trim().startsWith("{") ? new JSONObject(text) : JSONObject.NULL); } catch (Exception ignored) { }
+        String t = text.trim();
+        try { r.put("json", t.startsWith("{") ? new JSONObject(t) : t.startsWith("[") ? new JSONArray(t) : JSONObject.NULL); } catch (Exception ignored) { }
         return r;
     }
 }

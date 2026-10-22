@@ -44,9 +44,24 @@ const copy = (text, what) => { if (Nat.ok()) window.Pub.copy(text); else navigat
 
 // ---------- Mémoire de l'app ----------
 const KEY = 'publieur.v1';
-const S = Object.assign({ key: null, devAccount: false, accountNew: null, invited: false, contactEmail: '', apps: {} }, (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })());
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const VERSION = (() => { try { return window.Pub?.version?.() || '?'; } catch { return '?'; } })();
+const S = Object.assign({ key: null, devAccount: false, accountNew: null, invited: false, contactEmail: '', repos: ['danmark2002-ops/bibliotheque'], apps: {} }, (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } })());
+// La clé d'accès Google (droits d'administrateur sur la Play Console) vit dans le coffre chiffré d'Android,
+// jamais dans le stockage de la page. Une clé enregistrée en clair par une ancienne version est déplacée au démarrage.
+const vault = {
+  inVault: false,
+  init() {
+    if (!Nat.ok() || !window.Pub.vaultGet) return;
+    let stored = ''; try { stored = window.Pub.vaultGet('key'); } catch {}
+    if (stored) { try { S.key = JSON.parse(stored); this.inVault = true; return; } catch {} }
+    if (S.key && S.key.private_key && window.Pub.vaultPut('key', JSON.stringify(S.key))) { this.inVault = true; save(); }
+  },
+  put(k) { if (!window.Pub.vaultPut('key', JSON.stringify(k))) return false; this.inVault = true; return true; },
+  clear() { try { window.Pub.vaultPut('key', ''); } catch {} this.inVault = false; },
+};
+const save = () => { try { const o = Object.assign({}, S); if (vault.inVault) delete o.key; localStorage.setItem(KEY, JSON.stringify(o)); } catch {} };
 const appOf = (pkg) => (S.apps[pkg] = S.apps[pkg] || { pkg, todo: {} });
+const ficheOf = (pkg) => (S.apps[pkg] && S.apps[pkg].fiche) || {};
 
 // ---------- Règles de Google Play (vérifiées en octobre 2026) ----------
 const RULES_CHECKED = 'octobre 2026';
@@ -68,18 +83,78 @@ const L = {
   help12: 'https://support.google.com/googleplay/android-developer/answer/14151465',
 };
 
-// Politiques de confidentialité déjà hébergées (dépôt public GitHub)
-const KNOWN = {
-  'ca.bibliotheque.app': {
-    policy: 'https://github.com/danmark2002-ops/bibliotheque/blob/main/docs/confidentialite/ca.bibliotheque.app.md',
-    category: 'Livres et références',
-    purpose: 'Votre bibliothèque personnelle : lisez et écoutez vos livres, en français',
-    features: ['Lit les PDF, EPUB, Word, Kindle, BD et livres audio', 'Lecture à voix haute avec voix québécoise, vitesse réglable et minuterie', 'Tourne les pages comme un vrai livre', 'Convertit les pages photographiées en texte', 'Livres gratuits du domaine public intégrés', 'Partage de votre bibliothèque avec vos proches'],
-    ads: false, account: false, sends: false,
-    model: 'premium', price: '4.99',
-    premium: { title: 'Bibliothèque Premium', description: 'Le Professeur, les résumés IA, les tons de voix expressifs, la conversion photo → texte et le partage de bibliothèques. Paiement unique.' },
-  },
-};
+// ---------- Dépôts GitHub : les apps fabriquées avec Claude y publient leurs fichiers (.aab), leur fiche, leurs captures et leur politique ----------
+// Convention, pour chaque application « ca.exemple.app » du dépôt :
+//   docs/play/ca.exemple.app/fiche.json        réponses de la fiche (voir publieur/LISEZMOI.md)
+//   docs/play/ca.exemple.app/captures/*.png    captures d'écran (2 à 8)
+//   docs/confidentialite/ca.exemple.app.md     politique de confidentialité
+// Le Publieur les trouve tout seul : rien à saisir, rien à copier.
+const GHAPI = 'https://api.github.com/', GHRAW = 'https://raw.githubusercontent.com/';
+const repoOk = (r) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(r);
+async function ghHttp(url) {
+  const r = await Nat.call('http', ['GET', url, JSON.stringify({ Accept: 'application/vnd.github+json' }), null, null]);
+  if (r.status === 403 || r.status === 429) { const e = new Error('GitHub limite les requêtes pour le moment : réessaie dans quelques minutes.'); e.status = r.status; throw e; }
+  return r;
+}
+const branchOf = {};
+async function defaultBranch(repo) {
+  if (branchOf[repo]) return branchOf[repo];
+  try { const r = await ghHttp(GHAPI + 'repos/' + repo); branchOf[repo] = (r.status === 200 && r.json && r.json.default_branch) || 'main'; } catch (e) { if (e.status) throw e; branchOf[repo] = 'main'; }
+  return branchOf[repo];
+}
+// Les .aab de la dernière version de chaque application du dépôt
+function bundlesIn(rels) {
+  const seen = new Map();
+  for (const r of rels || []) for (const a of r.assets || []) {
+    if (!/\.aab$/i.test(a.name) || seen.has(a.name)) continue;
+    seen.set(a.name, { name: a.name, url: a.browser_download_url, size: a.size, tag: r.tag_name, title: r.name || r.tag_name, date: String(a.updated_at || r.published_at || '').slice(0, 10) });
+  }
+  return [...seen.values()];
+}
+const gh = { items: null, loading: false, error: '' };
+async function loadBundles(force) {
+  if (gh.loading || (gh.items && !force)) return;
+  gh.loading = true; gh.error = ''; if (view.name === 'home') render();
+  const items = [];
+  try {
+    for (const repo of S.repos) {
+      const r = await ghHttp(GHAPI + 'repos/' + repo + '/releases?per_page=40');
+      if (r.status !== 200 || !Array.isArray(r.json)) throw new Error(r.status === 404 ? 'Dépôt introuvable ou privé : ' + repo : 'GitHub a répondu ' + r.status);
+      for (const b of bundlesIn(r.json)) items.push({ ...b, repo });
+    }
+    gh.items = items;
+  } catch (e) { gh.items = null; gh.error = /resolve host|UnknownHost|timeout|timed out|connect/i.test(e.message) ? 'Pas de connexion Internet.' : e.message; }
+  gh.loading = false; if (view.name === 'home') render();
+}
+async function fromGitHub(it) {
+  try {
+    it.busy = 0; render();
+    const f = await Nat.call('download', [it.url, it.name], (s, t) => { it.busy = Math.round((s / t) * 100); const b = document.querySelector('[data-gh="' + it.name + '"]'); if (b) b.textContent = 'Téléchargement ' + it.busy + ' %'; });
+    it.busy = null;
+    await startWith(f, it.repo);
+  } catch (e) { it.busy = null; render(); toast(e.message); }
+}
+// Cherche, dans les dépôts suivis, la fiche, la politique et les captures de l'application
+async function discover(pkg, preferred) {
+  const app = appOf(pkg);
+  const repos = [...(preferred ? [preferred] : []), ...S.repos.filter((r) => r !== preferred)];
+  for (const repo of repos) {
+    try {
+      const br = await defaultBranch(repo);
+      const base = GHRAW + repo + '/' + br + '/';
+      const fr = await ghHttp(base + 'docs/play/' + pkg + '/fiche.json');
+      const pr = await ghHttp(base + 'docs/confidentialite/' + pkg + '.md');
+      if (fr.status !== 200 && pr.status !== 200) continue;
+      app.repo = repo;
+      if (fr.status === 200) { try { app.fiche = JSON.parse(fr.body); } catch { toast('fiche.json illisible dans ' + repo); } }
+      if (pr.status === 200) { app.policyUrl = 'https://github.com/' + repo + '/blob/' + br + '/docs/confidentialite/' + pkg + '.md'; app.policyFromRepo = true; }
+      const sr = await ghHttp(GHAPI + 'repos/' + repo + '/contents/docs/play/' + pkg + '/captures?ref=' + encodeURIComponent(br));
+      app.shotUrls = sr.status === 200 && Array.isArray(sr.json) ? sr.json.filter((x) => x.type === 'file' && /\.(png|jpe?g)$/i.test(x.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 8).map((x) => x.download_url) : [];
+      save(); return true;
+    } catch (e) { if (e.status) { toast(e.message); return false; } }
+  }
+  return false;
+}
 const PREMIUM_ID = 'premium', PREMIUM_OPT = 'achat-unique';
 const hasBilling = (perms) => (perms || []).includes('com.android.vending.BILLING');
 
@@ -151,6 +226,8 @@ async function analyze(file) {
     info = window.AAB.parse(man, res); info.kind = 'aab';
     const list = JSON.parse(window.Pub.zipList(file.path) || '[]');
     info.signed = list.some((e) => /^META-INF\/[^/]+\.(RSA|DSA|EC)\|/i.test(e));
+    const sg = window.Pub.aabSigner ? window.Pub.aabSigner(file.path) : null;
+    if (sg) { const o = JSON.parse(sg); info.signer = o.signer; info.sha256 = o.sha256; info.debug = /Android Debug/i.test(o.signer || ''); }
     if (info.iconFile) { const b = window.Pub.zipRead(file.path, info.iconFile); if (b) info.icon = b; info.iconMime = /\.webp$/i.test(info.iconFile) ? 'image/webp' : 'image/png'; }
   } else throw new Error('Choisis un fichier .aab (recommandé) ou .apk.');
   info.file = file; info.size = file.size;
@@ -182,7 +259,8 @@ function checks(info) {
   else add(app.created && app.apkBased ? 'warn' : 'bad', 'Format .apk', 'Google Play n’accepte plus les .apk pour les nouvelles applications : il faut le .aab. Pour les applis que Claude fabrique, le .aab est publié à côté de l’APK dans GitHub (« Releases »).', `Fais produire un fichier .aab (Android App Bundle) pour ${l}, à côté de l'APK.`);
   if (!info.signed) add('bad', 'Fichier non signé', 'Google exige un fichier signé avec ta clé d’envoi.', `Signe le .aab de ${l} avec une clé de version (release).`);
   else if (info.debug) add('bad', 'Signé en mode test', 'Google refuse les fichiers « debug ».', `Produis un .aab release signé (pas debug) pour ${l}.`);
-  else add('ok', 'Signé', info.signer ? 'Signataire : ' + info.signer.replace(/,.*/, '') : 'Signature présente.');
+  else if (app.signerSha256 && info.sha256 && app.signerSha256 !== info.sha256) add('warn', 'La clé de signature a changé', 'Ce fichier n’est pas signé avec la même clé que la dernière version envoyée. Google refusera les mises à jour signées avec une autre clé d’envoi (à moins de l’avoir réinitialisée dans la Play Console).', `Signe le .aab de ${l} avec la même clé d'envoi que la version précédente (empreinte SHA-256 ${app.signerSha256}).`);
+  else add('ok', 'Signé', (info.signer ? 'Signataire : ' + info.signer.replace(/,.*/, '') : 'Signature présente.') + (info.sha256 ? ' · empreinte ' + info.sha256.slice(0, 11) + '…' : ''));
   const req = requiredTarget();
   if (!info.targetSdk || info.targetSdk < req) add('bad', `Vise ${ANDROID_NAME[info.targetSdk] || 'API ' + info.targetSdk} : trop ancien`, `Google exige ${ANDROID_NAME[req] || 'API ' + req} (API ${req}) depuis le 31 août 2026 pour les nouvelles apps et les mises à jour.`, targetPrompt(l));
   else add('ok', `Vise ${ANDROID_NAME[info.targetSdk] || 'API ' + info.targetSdk}`, 'Version d’Android acceptée par Google.');
@@ -234,6 +312,16 @@ async function makeFeature(info, iconCanvas, tagline) {
   return c;
 }
 // Capture d'écran : Google refuse un côté plus de 2 fois plus long que l'autre → on recadre (barres du haut et du bas)
+async function normalizeShot(url, n) { const c = await fitShot(url); return { path: window.Pub.writeTemp(`capture-${Date.now()}-${n}.png`, b64of(c)), url: c.toDataURL('image/jpeg', 0.7) }; }
+// Captures du dépôt GitHub : téléchargées et mises au bon format ; refaites si le dépôt les a changées ou si le téléphone a vidé son dossier de travail
+async function ensureShots(app) {
+  if (!app.shotUrls || !app.shotUrls.length) return;
+  const sig = app.shotUrls.join('|');
+  if (app.shotsSig === sig && (app.shotsPaths || []).length && app.shotsPaths.every((p) => window.Pub.exists(p))) return;
+  const out = [];
+  for (const [i, u] of app.shotUrls.entries()) { try { const f = await Nat.call('download', [u, 'source-' + i + '.png']); out.push((await normalizeShot(f.url, i)).path); } catch (e) { toast('Capture ' + (i + 1) + ' : ' + e.message); } }
+  if (out.length) { app.shotsPaths = out; app.shotsSig = sig; save(); }
+}
 async function fitShot(url) {
   const img = await loadImg(url); let w = img.naturalWidth, hh = img.naturalHeight, sx = 0, sy = 0, sw = w, sh = hh;
   if (hh > 2 * w) { sh = 2 * w; sy = Math.round((hh - sh) / 2); } else if (w > 2 * hh) { sw = 2 * hh; sx = Math.round((w - sw) / 2); }
@@ -244,7 +332,7 @@ async function fitShot(url) {
 
 // ---------- Textes générés ----------
 function listingFor(info, a) {
-  const k = KNOWN[info.package] || {};
+  const k = ficheOf(info.package);
   const name = info.label.slice(0, 30);
   const purpose = (a.purpose || k.purpose || '').trim().replace(/\.$/, '');
   const features = (Array.isArray(a.features) ? a.features : String(a.features || '').split('\n')).map((x) => x.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
@@ -323,13 +411,35 @@ function vHome() {
     out.push(h('div', { class: 'card' }, h('h2', {}, 'Préparer ton compte (une seule fois)'), h('p', {}, `${n} étape${n > 1 ? 's' : ''} sur 3 terminée${n > 1 ? 's' : ''}. Environ 15 minutes, à faire une seule fois.`),
       h('div', { class: 'bar' }, h('i', { style: { width: (n / 3) * 100 + '%' } })), h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => go('setup') }, n ? 'Continuer' : 'Commencer'))));
   }
-  out.push(h('div', { class: 'card go' }, h('h2', {}, 'Publier une application'), h('p', {}, 'Choisis le fichier .aab (ou .apk) : le Publieur vérifie tout, prépare la fiche et l’envoie à Google.'),
-    h('div', { class: 'row' }, h('button', { class: 'btn primary big', onclick: pickApp }, 'Choisir le fichier'))));
+  if (!gh.items && !gh.loading && !gh.error) setTimeout(() => loadBundles(), 0);
+  out.push(h('div', { class: 'card go applist' }, h('h2', {}, 'Publier une application'), vBundles(),
+    h('p', {}, 'Ou choisis un fichier .aab (ou .apk) sur ton téléphone : le Publieur vérifie tout, prépare la fiche et l’envoie à Google.'),
+    h('div', { class: 'row' }, h('button', { class: 'btn big' + (gh.items && gh.items.length ? '' : ' primary'), onclick: pickApp }, 'Choisir un fichier'))));
   const apps = Object.values(S.apps).filter((a) => a.label);
   if (apps.length) out.push(h('div', { class: 'card applist' }, h('h2', {}, 'Mes applications'), apps.map((a) => h('button', { class: 'item', onclick: () => go('app', { pkg: a.pkg }) },
     a.iconUrl ? h('img', { src: a.iconUrl, alt: '' }) : h('div', { class: 'ph' }, initials(a.label)), h('div', { class: 'grow' }, h('b', {}, a.label), h('br'), h('small', {}, a.pkg)), statusChip(a)))));
-  out.push(h('p', { class: 'muted', style: { textAlign: 'center', marginTop: '18px' } }, `Règles de Google Play vérifiées : ${RULES_CHECKED}.`));
+  out.push(vRepos());
+  out.push(h('p', { class: 'muted', style: { textAlign: 'center', marginTop: '18px' } }, `Publieur ${VERSION} · Règles de Google Play vérifiées : ${RULES_CHECKED}.`));
   return out;
+}
+// Les .aab trouvés dans les dépôts GitHub suivis : un toucher et le Publieur télécharge, vérifie et prépare tout
+function vBundles() {
+  if (gh.loading && !gh.items) return h('p', { class: 'muted' }, h('span', { class: 'spin' }), ' Recherche de tes applications sur GitHub…');
+  if (gh.error) return h('div', {}, h('p', { class: 'muted' }, gh.error), h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => loadBundles(true) }, 'Réessayer')));
+  if (!gh.items) return null;
+  if (!gh.items.length) return h('p', { class: 'muted' }, 'Aucun fichier .aab trouvé dans tes dépôts GitHub.');
+  return h('div', {}, h('p', {}, 'Dernières versions trouvées dans ton dépôt GitHub : un seul toucher.'),
+    gh.items.map((it) => h('div', { class: 'item' }, h('div', { class: 'grow' }, h('b', {}, it.name.replace(/\.aab$/i, '')), h('br'), h('small', {}, `${it.title} · ${it.date} · ${fmtSize(it.size)}`)),
+      h('button', { class: 'btn small primary', 'data-gh': it.name, disabled: it.busy != null ? true : null, onclick: () => fromGitHub(it) }, it.busy != null ? 'Téléchargement ' + it.busy + ' %' : 'Publier'))));
+}
+let reposOpen = false;
+function vRepos() {
+  const inp = h('input', { class: 't', placeholder: 'propriétaire/dépôt' });
+  const changed = () => { save(); gh.items = null; gh.error = ''; render(); };
+  const add = () => { const r = inp.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, ''); if (!repoOk(r)) { toast('Écris : propriétaire/dépôt'); return; } if (!S.repos.includes(r)) S.repos.push(r); changed(); };
+  return h('details', { class: 'card', open: reposOpen ? true : null, ontoggle: (e) => { reposOpen = e.target.open; } }, h('summary', {}, 'Dépôts GitHub suivis (' + S.repos.length + ')'),
+    S.repos.map((r) => h('div', { class: 'copyline' }, h('span', {}, r), h('button', { class: 'btn small', onclick: () => { S.repos = S.repos.filter((x) => x !== r); changed(); } }, 'Retirer'))),
+    h('label', { class: 'f' }, 'Ajouter un dépôt public'), inp, h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: add }, 'Ajouter')));
 }
 function statusChip(a) {
   if (a.live) return h('span', { class: 'chip go' }, 'En ligne');
@@ -347,9 +457,16 @@ async function pickApp() {
 }
 let lastIncoming = '';
 window.__incoming = (j) => { let arr; try { arr = JSON.parse(j); } catch { return; } const f = arr[0]; if (!f || f.path === lastIncoming) return; lastIncoming = f.path; startWith(f).catch((e) => toast(e.message)); };
-async function startWith(f) {
+// Un fichier arrive (choisi, partagé ou téléchargé depuis GitHub) : analyse, puis recherche de la fiche, de la politique et des captures
+async function startWith(f, repo) {
   const info = await analyze(f);
-  go('publish', { info, step: 'check', answers: Object.assign({ ads: false, account: false, sends: false }, KNOWN[info.package] || {}, S.apps[info.package]?.answers || {}) });
+  const app = appOf(info.package);
+  toast('Recherche de la fiche dans GitHub…');
+  await discover(info.package, repo || app.repo);
+  await ensureShots(app);
+  const k = app.fiche || {};
+  const fromFiche = {}; for (const key of ['purpose', 'features', 'ads', 'account', 'sends', 'model', 'price', 'premium']) if (k[key] !== undefined) fromFiche[key] = k[key];
+  go('publish', { info, step: 'check', answers: Object.assign({ ads: false, account: false, sends: false }, fromFiche, app.answers || {}) });
 }
 
 // ---------- Préparation du compte ----------
@@ -374,7 +491,8 @@ function vSetup() {
   const email = S.key?.client_email || '';
   const s2 = h('li', { class: cls(1) }, h('div', { class: 'dot' }, st[1] ? '✓' : '2'), h('div', {},
     h('h3', {}, 'Clé d’accès pour le Publieur'),
-    st[1] ? h('small', {}, 'Clé importée et acceptée par Google : ' + email) : [
+    st[1] ? [h('small', {}, 'Clé importée, acceptée par Google et chiffrée dans le coffre du téléphone : ' + email),
+      h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: removeKey }, 'Retirer la clé de ce téléphone'))] : [
       h('p', {}, 'Elle permet au Publieur d’envoyer tes applis à ta place. Dans Google Cloud (gratuit), avec le même compte Google :'),
       h('ol', { style: { margin: '6px 0', paddingLeft: '20px', color: 'var(--ink-2)' } },
         h('li', {}, 'Crée un projet (nom : Publieur). ', linkBtn('Ouvrir', L.project)),
@@ -395,6 +513,10 @@ function vSetup() {
   if (setupDone()) out.push(h('div', { class: 'card go' }, h('h2', {}, 'Tout est prêt'), h('p', {}, 'Tu peux maintenant publier une application en un bouton.'), h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: () => { hist.length = 0; view = { name: 'home' }; render(); } }, 'Aller à l’accueil'))));
   return out;
 }
+function removeKey() {
+  if (!confirm('Retirer la clé ? Le Publieur ne pourra plus publier tant que tu n’en importes pas une nouvelle.')) return;
+  S.key = null; S.invited = false; vault.clear(); G.tok = null; save(); render(); toast('Clé retirée de ce téléphone');
+}
 async function importKey() {
   try {
     const r = await Nat.call('pick', ['json']); const f = r.files && r.files[0]; if (!f) return;
@@ -405,7 +527,8 @@ async function importKey() {
     const prev = S.key; S.key = { type: k.type, client_email: k.client_email, private_key: k.private_key, token_uri: k.token_uri, project_id: k.project_id };
     G.tok = null;
     try { await G.token(); } catch (e) { S.key = prev; const x = explain(e); throw new Error(x.title + '. ' + x.detail); }
-    save(); render(); toast('Clé acceptée par Google');
+    if (!vault.put(S.key)) { S.key = prev; throw new Error('Le coffre sécurisé du téléphone est indisponible : la clé n’a pas été enregistrée.'); }
+    save(); render(); toast('Clé acceptée par Google, gardée dans le coffre du téléphone');
   } catch (e) { toast(e.message); }
 }
 
@@ -449,7 +572,7 @@ function vListing(v) {
     inp.value = L1[key] || '';
     return [h('label', { class: 'f' }, label, cnt), inp];
   };
-  const purpose = h('input', { class: 't', placeholder: 'Ex. : Lire et écouter ses livres en français', value: a.purpose || KNOWN[info.package]?.purpose || '', onchange: (e) => { a.purpose = e.target.value; regen(); } });
+  const purpose = h('input', { class: 't', placeholder: 'Ex. : Lire et écouter ses livres en français', value: a.purpose || ficheOf(info.package).purpose || '', onchange: (e) => { a.purpose = e.target.value; regen(); } });
   const pickIcon = async () => { const r = await Nat.call('pick', ['images']); const f = r.files?.[0]; if (!f) return; const img = await loadImg(f.url); const c = canvas(512, 512); c.getContext('2d').drawImage(img, 0, 0, 512, 512); v.iconC = c; v.featC = null; render(); };
   // images générées
   const imgs = h('div', {});
@@ -465,11 +588,11 @@ function vListing(v) {
   const shots = v.shots || (v.shots = app.shotsPaths ? app.shotsPaths.map((p) => ({ path: p, url: 'https://appassets.local/__f?p=' + encodeURIComponent(p) })) : []);
   const addShots = async () => {
     const r = await Nat.call('pick', ['images']);
-    for (const f of r.files || []) { try { const c = await fitShot(f.url); const path = window.Pub.writeTemp(`capture-${Date.now()}-${shots.length}.png`, b64of(c)); shots.push({ path, url: c.toDataURL('image/jpeg', 0.7) }); } catch (e) { toast(e.message); } }
+    for (const f of r.files || []) { try { shots.push(await normalizeShot(f.url, shots.length)); } catch (e) { toast(e.message); } }
     render();
   };
   const policy = policyFor(info, a);
-  const known = KNOWN[info.package]?.policy;
+  const known = app.policyFromRepo ? app.policyUrl : '';
   const ok = shots.length >= 2 && L1.title && L1.shortDescription && L1.fullDescription.length >= 10;
   return [
     h('div', { class: 'card' }, h('h2', {}, 'Questions rapides, un clic chacune'),
@@ -478,11 +601,11 @@ function vListing(v) {
     vModel(v),
     h('div', { class: 'card' }, h('h2', {}, 'Textes de la fiche (français, Canada)'), field('title', 'Nom', 30), field('shortDescription', 'Description courte', 80), field('fullDescription', 'Description complète', 4000, true)),
     h('div', { class: 'card' }, imgs),
-    h('div', { class: 'card' }, h('h2', {}, `Captures d’écran (${shots.length}/8)`), h('p', {}, 'Google en exige au moins 2. Fais des captures de l’app sur ton téléphone, puis choisis-les : le Publieur les met au bon format.'),
+    h('div', { class: 'card' }, h('h2', {}, `Captures d’écran (${shots.length}/8)`), h('p', {}, app.shotUrls && app.shotUrls.length ? 'Reprises de ton dépôt GitHub. Touche une capture pour la retirer.' : 'Google en exige au moins 2. Fais des captures de l’app sur ton téléphone, puis choisis-les : le Publieur les met au bon format.'),
       shots.length ? h('div', { class: 'shots' }, shots.map((s, i) => h('img', { src: s.url, alt: 'Capture ' + (i + 1), onclick: () => { if (confirm('Retirer cette capture ?')) { shots.splice(i, 1); render(); } } }))) : null,
       h('div', { class: 'row' }, h('button', { class: 'btn' + (shots.length < 2 ? ' primary' : ''), onclick: addShots }, shots.length ? 'Ajouter des captures' : 'Choisir les captures'))),
     h('div', { class: 'card' }, h('h2', {}, 'Politique de confidentialité'),
-      known ? [h('p', {}, 'Déjà en ligne :'), h('div', { class: 'copyline' }, h('span', {}, known), h('button', { class: 'btn small', onclick: () => copy(known, 'Adresse') }, 'Copier'))]
+      known ? [h('p', {}, 'Trouvée dans ton dépôt GitHub (rien à faire) :'), h('div', { class: 'copyline' }, h('span', {}, known), h('button', { class: 'btn small', onclick: () => copy(known, 'Adresse') }, 'Copier'))]
         : [h('p', {}, 'Rédigée pour toi d’après les permissions de l’app. Google demande une adresse web : demande à Claude de la mettre en ligne (gratuit, une minute).'),
           h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => copy(`Mets en ligne cette politique de confidentialité pour mon application ${info.label} (${info.package}) et donne-moi l'adresse :\n\n${policy}`, 'Demande pour Claude') }, 'Copier la demande pour Claude'),
             h('button', { class: 'btn small', onclick: () => { window.Pub.saveDownload(`confidentialite-${info.package}.md`, 'text/markdown', btoa(unescape(encodeURIComponent(policy)))) ? toast('Enregistrée dans Téléchargements/Publieur') : toast('Impossible d’enregistrer'); } }, 'Enregistrer')),
@@ -500,7 +623,7 @@ function vListing(v) {
 
 // ---------- Modèle de revenus : gratuite, ou gratuite + Premium (achat unique) ----------
 function vModel(v) {
-  const info = v.info, a = v.answers, k = KNOWN[info.package] || {};
+  const info = v.info, a = v.answers, k = ficheOf(info.package);
   if (!a.model) a.model = hasBilling(info.permissions) ? 'premium' : 'free';
   if (!a.premium) a.premium = { ...(k.premium || { title: `${info.label} Premium`, description: 'Toutes les fonctions avancées, pour toujours. Paiement unique.' }) };
   if (!a.price) a.price = k.price || '4.99';
@@ -631,6 +754,7 @@ async function runPublish(v, log, bar, result, card) {
     await G.req('PUT', `${pkg}/edits/${editId}/listings/${LANG}`, { language: LANG, title: L1.title, shortDescription: L1.shortDescription, fullDescription: L1.fullDescription });
     cur.ok(); pct(78);
     cur = step('Icône, bannière et captures d’écran');
+    await ensureShots(app);
     const iconPath = window.Pub.writeTemp(`icone-${pkg}.png`, b64of(v.iconC || (await makeIcon(info))));
     const featPath = window.Pub.writeTemp(`banniere-${pkg}.jpg`, b64of(v.featC || (await makeFeature(info, v.iconC || (await makeIcon(info)), L1.shortDescription)), 'image/jpeg', 0.92));
     const img = async (type, path, ctype) => G.req('POST', `${pkg}/edits/${editId}/listings/${LANG}/${type}`, undefined, { file: path, ctype });
@@ -644,7 +768,11 @@ async function runPublish(v, log, bar, result, card) {
     try { await G.req('PUT', `${pkg}/edits/${editId}/tracks/${track}`, release('completed')); }
     catch (e) { if (/draft/i.test(e.raw || e.message)) { draft = true; await G.req('PUT', `${pkg}/edits/${editId}/tracks/${track}`, release('draft')); } else throw e; }
     cur.ok(draft ? `Version placée en ${trackName} (brouillon : nouvelle app)` : undefined); pct(93);
-    cur = step('Validation chez Google');
+    cur = step('Vérification chez Google avant la confirmation');
+    try { await G.req('POST', `${pkg}/edits/${editId}:validate`); }
+    catch (e) { if (!/changesNotSentForReview|sent for review|draft/i.test(e.raw || e.message)) throw e; } // une nouvelle app en brouillon se valide à la confirmation
+    cur.ok(); pct(95);
+    cur = step('Confirmation chez Google');
     let manual = false;
     try { await G.req('POST', `${pkg}/edits/${editId}:commit`); }
     catch (e) { if (/changesNotSentForReview|sent for review automatically|cannot be sent for review/i.test(e.raw || e.message)) { manual = true; await G.req('POST', `${pkg}/edits/${editId}:commit?changesNotSentForReview=true`); } else throw e; }
@@ -654,7 +782,7 @@ async function runPublish(v, log, bar, result, card) {
       try { const r = await createPremium(pkg, app); app.premiumReady = true; app.premiumError = null; cur.ok(`Premium en vente : ${r.price}`); }
       catch (e) { app.premiumReady = false; app.premiumError = explain(e, { label: info.label }); cur.err(); cur.text('Premium : ' + app.premiumError.title + ' (voir la fiche de l’app)'); cur = null; }
     }
-    Object.assign(app, { sent: Date.now(), draft, manual, lastVersionCode: Number(up.versionCode || info.versionCode), lastVersionName: info.versionName, track, created: true, permissions: info.permissions });
+    Object.assign(app, { signerSha256: info.sha256 || app.signerSha256, sent: Date.now(), draft, manual, lastVersionCode: Number(up.versionCode || info.versionCode), lastVersionName: info.versionName, track, created: true, permissions: info.permissions });
     save();
     card.firstChild.textContent = 'Envoyé à Google ✅';
     result.replaceChildren(h('div', { class: 'card go' }, h('h2', {}, draft || manual ? 'Presque fini' : 'C’est envoyé'),
@@ -671,9 +799,9 @@ async function runPublish(v, log, bar, result, card) {
 
 // ---------- Fiche d'une application : ce qu'il reste à faire, suivi du test ----------
 function todoFor(a) {
-  const p = a.permissions || [], ans = a.answers || {}, k = KNOWN[a.pkg] || {};
+  const p = a.permissions || [], ans = a.answers || {}, k = a.fiche || {};
   const t = [];
-  const policy = k.policy || a.policyUrl || '';
+  const policy = a.policyUrl || '';
   t.push({ id: 'store', title: 'Paramètres de la fiche', where: 'Développer la présence sur le Play Store → Paramètres de la fiche', answers: [['Catégorie', k.category || 'Outils'], ['Courriel', S.contactEmail || '(ton courriel)']] });
   t.push({ id: 'policy', title: 'Politique de confidentialité', where: 'Contenu de l’app → Règles relatives à la confidentialité', answers: [['Adresse', policy || 'Demande à Claude de la mettre en ligne (bouton dans la fiche)']] });
   t.push({ id: 'access', title: 'Accès à l’application', where: 'Contenu de l’app → Accès aux applications', answers: [['Réponse', ans.account ? 'Certaines fonctionnalités sont limitées : fournir un compte de test' : 'Toutes les fonctionnalités sont disponibles sans restriction d’accès']] });
@@ -693,7 +821,7 @@ function todoFor(a) {
     t.push({ id: 'testers', title: 'Liste de testeurs (12 personnes ou plus)', where: 'Tester et publier → Tests → Test fermé → Testeurs', answers: [['Créer une liste', 'Ajoute au moins 12 adresses Gmail (14 à 16 c’est plus sûr)'], ['Lien à leur envoyer', L.testing(a.pkg)]], invite: true });
   }
   if (a.draft || a.manual) t.push({ id: 'review', title: 'Envoyer en examen', where: 'Vue d’ensemble de la publication → Envoyer les modifications pour examen', answers: [['Quand', 'Après avoir terminé les étapes ci-dessus']] });
-  return t;
+  return t.map((x) => (k.todo && k.todo[x.id] ? { ...x, answers: k.todo[x.id] } : x)); // réponses propres à l'app, écrites dans sa fiche.json
 }
 function vApp(v) {
   const a = S.apps[v.pkg]; if (!a) return [header('Application'), h('p', {}, 'Introuvable.')];
@@ -733,4 +861,5 @@ function vApp(v) {
 const inviteText = (a) => `Bonjour ! J'aurais besoin de ton aide pour tester mon application « ${a.label} » avant sa sortie sur Google Play (Google exige 14 jours de test).\n\n1. Ouvre ce lien avec ton compte Gmail : ${L.testing(a.pkg)}\n2. Touche « Devenir testeur », puis installe l'app depuis Google Play.\n3. Ouvre-la quelques fois par semaine pendant 2 semaines et garde-la installée.\n\nMerci beaucoup !`;
 
 window.__view = () => view; window.__render = render; // pour les tests automatiques
+vault.init();
 render();
