@@ -125,9 +125,11 @@ class Faux {
         if (m[1] === 'inconnu/depot') return Faux.res(404, { message: 'Not Found' });
         const asset = (tag, name, size, d) => ({ name, size, updated_at: d, browser_download_url: `https://github.com/${m[1]}/releases/download/${tag}/${name}` });
         return Faux.res(200, [
+        // GitHub range les versions par date de création de l'étiquette, pas par date de publication : l'ordre réel peut être trompeur
+          { tag_name: 'apk-100', name: 'Bibliothèque — APK 100', published_at: OLD, assets: [asset('apk-100', 'Bibliotheque.apk', 8900000, OLD), asset('apk-100', 'Bibliotheque.aab', 9400000, OLD)] },
           { tag_name: 'publieur-3', name: 'Publieur — APK 3', published_at: NEW, assets: [asset('publieur-3', 'Publieur.apk', 50069, NEW)] },
           { tag_name: 'apk-101', name: 'Bibliothèque — APK 101', published_at: NEW, assets: [asset('apk-101', 'Bibliotheque.apk', 9000000, NEW), asset('apk-101', 'Bibliotheque.aab', 9451645, NEW)] },
-          { tag_name: 'apk-100', name: 'Bibliothèque — APK 100', published_at: OLD, assets: [asset('apk-100', 'Bibliotheque.apk', 8900000, OLD), asset('apk-100', 'Bibliotheque.aab', 9400000, OLD)] },
+          { tag_name: 'apk-102', name: 'Bibliothèque — APK 102', published_at: '2026-10-22T08:00:00Z', prerelease: true, assets: [asset('apk-102', 'Bibliotheque.apk', 9000000, NEW), asset('apk-102', 'Bibliotheque.aab', 9451645, NEW)] },
         ]);
       }
       if ((m = p.match(/^\/repos\/([^/]+\/[^/]+)\/contents\/docs\/play\/([^/]+)\/captures$/))) {

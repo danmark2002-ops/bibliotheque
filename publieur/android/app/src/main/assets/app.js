@@ -105,7 +105,12 @@ async function defaultBranch(repo) {
 // Les .aab de la dernière version de chaque application du dépôt
 function bundlesIn(rels) {
   const seen = new Map();
-  for (const r of rels || []) for (const a of r.assets || []) {
+  // GitHub range les versions par date de création de l'étiquette, pas par date de publication : on trie nous-mêmes, la plus récente d'abord.
+  // Les brouillons et les préversions (essais de compilation) ne sont jamais proposés pour Google Play.
+  const when = (r) => Date.parse(r.published_at || r.created_at || '') || 0;
+  const num = (r) => parseInt((String(r.tag_name || '').match(/(\d+)\s*$/) || [])[1] || '0', 10);
+  const list = (rels || []).filter((r) => !r.draft && !r.prerelease).sort((a, b) => when(b) - when(a) || num(b) - num(a));
+  for (const r of list) for (const a of r.assets || []) {
     if (!/\.aab$/i.test(a.name) || seen.has(a.name)) continue;
     seen.set(a.name, { name: a.name, url: a.browser_download_url, size: a.size, tag: r.tag_name, title: r.name || r.tag_name, date: String(a.updated_at || r.published_at || '').slice(0, 10) });
   }

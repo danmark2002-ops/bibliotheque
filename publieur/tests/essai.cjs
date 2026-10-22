@@ -118,7 +118,7 @@ async function toSend(o) {
   await T('Accueil : version, liste GitHub (.aab seulement, dernière version de chaque app)', async () => {
     const o = await open({ seed: ready() }); await wait(o.page, 'Dernières versions trouvées');
     const t = await text(o.page);
-    has(t, 'Publieur 1.0-test', 'version affichée'); has(t, 'Bibliotheque'); has(t, 'Bibliothèque — APK 101', 'dernière version'); lacks(t, 'APK 100'); lacks(t, 'Publieur.apk');
+    has(t, 'Publieur 1.0-test', 'version affichée'); has(t, 'Bibliotheque'); has(t, 'Bibliothèque — APK 101', 'dernière version (même si GitHub la range ailleurs)'); lacks(t, 'APK 100'); lacks(t, 'APK 102', 'préversion jamais proposée'); lacks(t, 'Publieur.apk');
     eq(await o.page.locator('[data-gh]').count(), 1, 'une seule application listée');
     noErrs(o);
   });
