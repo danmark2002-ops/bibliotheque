@@ -1,0 +1,36 @@
+{
+  "category": "Livres et références",
+  "purpose": "Votre bibliothèque personnelle : lisez et écoutez vos livres, en français",
+  "features": [
+    "Lit les PDF, EPUB, Word, Kindle, BD et livres audio",
+    "Lecture à voix haute avec voix québécoise, vitesse réglable et minuterie",
+    "Tourne les pages comme un vrai livre",
+    "Convertit les pages photographiées en texte",
+    "Livres gratuits du domaine public intégrés",
+    "Partage de votre bibliothèque avec vos proches, chiffré",
+    "Résumés et Professeur par IA, avec votre propre clé gratuite (facultatif)"
+  ],
+  "ads": false,
+  "account": false,
+  "sends": true,
+  "model": "premium",
+  "price": "4.99",
+  "premium": {
+    "title": "Bibliothèque Premium",
+    "description": "Le Professeur, les résumés IA, les tons de voix expressifs, la conversion photo → texte et le partage de bibliothèques. Paiement unique."
+  },
+  "todo": {
+    "safety": [
+      ["Collecte ou partage de données ?", "Oui"],
+      ["Données chiffrées en transit ?", "Oui — toutes les requêtes en ligne utilisent HTTPS"],
+      ["Demande de suppression des données ?", "Non — pas de compte, rien n’est conservé par le développeur (désinstaller l’app efface tout)"],
+      ["Cocher : Activité dans l’appli", "Historique de recherche dans l’appli — collecté, non partagé, finalité « Fonctionnalités de l’appli », facultatif (mots cherchés dans les catalogues, le dictionnaire, la traduction, les images de vidéo)"],
+      ["Cocher : Fichiers et documents", "Fichiers et documents — collecté, non partagé, finalité « Fonctionnalités de l’appli », facultatif (extraits de livres envoyés à la traduction ou à l’IA avec ta propre clé)"],
+      ["Cocher : Infos et performances de l’appli", "Diagnostics — collecté, non partagé, finalité « Analyses », obligatoire (composants Google ML Kit : reconnaissance de texte, Gemini Nano)"],
+      ["Cocher : Appareil ou autres ID", "ID de l’appareil ou autres ID — collecté, non partagé, finalité « Analyses », obligatoire (ML Kit ; adresse IP vue par Google Fonts au démarrage)"],
+      ["Laisser décoché", "Position, infos personnelles, infos financières (Google Play gère le paiement), santé, messages, photos et vidéos (la reconnaissance de texte reste sur le téléphone), audio (la reconnaissance vocale est celle d’Android : l’app ne reçoit que du texte), contacts"],
+      ["Pourquoi « non partagé »", "Google ne compte pas comme partage un envoi lancé par l’utilisateur et attendu par lui (chercher, traduire, demander un résumé). Le partage de bibliothèque est chiffré de bout en bout : rien à déclarer."],
+      ["À confirmer avant d’envoyer", "Ces réponses suivent les définitions de Google (collecte = envoi hors de l’appareil). Google Cast et Gemini Nano n’ont pas de fiche de données lisible : si la Play Console pose la question, réponds comme pour ML Kit."]
+    ]
+  }
+}
