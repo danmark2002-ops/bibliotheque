@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
-"""Assemble Bibliotheque.html : un seul fichier, sans serveur ni connexion obligatoire."""
+"""Assemble Bibliotheque.html (APK) et bibliotheque-web.html (iPhone). Polices dans fonts/, moteur PDF dans pdfjs/ (APK)."""
 import base64, pathlib, re, sys
 
 root = pathlib.Path(__file__).resolve().parent
 pub = root.parent / 'server' / 'public'
-pdfjs = pathlib.Path(sys.argv[1])  # dossier pdfjs-dist/build
-cdn = '--cdn' in sys.argv  # page publiée : pdf.js chargé depuis le CDN au lieu d'être embarqué
+cdn = '--cdn' in sys.argv  # page publiée (iPhone) : pdf.js chargé depuis le CDN ; l'APK le sert à part (assets/pdfjs), hors de la page
 
 css = (pub / 'app.css').read_text()
 app = (pub / 'app.js').read_text()
 local = (root / 'local.js').read_text()
-lib = base64.b64encode((pdfjs / 'pdf.min.mjs').read_bytes()).decode()
-worker = base64.b64encode((pdfjs / 'pdf.worker.min.mjs').read_bytes()).decode()
 icon = base64.b64encode((pub / 'icon.svg').read_bytes()).decode()
 
 # version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
 apple = '\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Bibliothèque">\n<link rel="apple-touch-icon" href="icon-180.png">' if cdn else ''
-embedded = "" if cdn else f'<script id="pdfjs-lib" type="text/plain">{lib}</script>\n<script id="pdfjs-worker" type="text/plain">{worker}</script>\n'
 html = f"""<!doctype html>
 <html lang="fr">
 <head>
@@ -25,9 +21,8 @@ html = f"""<!doctype html>
 <meta name="theme-color" content="#140f0b">
 <title>Bibliothèque</title>
 <link rel="icon" href="data:image/svg+xml;base64,{icon}">{apple}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/inter.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="fonts/fraunces-italic.woff" as="font" type="font/woff" crossorigin>
 <style>
 {css}
 </style>
@@ -35,7 +30,7 @@ html = f"""<!doctype html>
 <body>
 <div id="app"><div class="boot"><div class="boot-mark">❦</div></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
-{embedded}<script>
+<script>
 {local}
 </script>
 <script>

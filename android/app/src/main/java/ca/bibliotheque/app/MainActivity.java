@@ -193,6 +193,9 @@ public class MainActivity extends Activity {
         if (path.endsWith(".css")) return "text/css";
         if (path.endsWith(".svg")) return "image/svg+xml";
         if (path.endsWith(".png")) return "image/png";
+        if (path.endsWith(".woff")) return "font/woff";
+        if (path.endsWith(".woff2")) return "font/woff2";
+        if (path.endsWith(".txt")) return "text/plain";
         return "application/octet-stream";
     }
 

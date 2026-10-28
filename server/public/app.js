@@ -205,12 +205,30 @@ const DECO = [
   // 5 · constellation
   svgWrap(`<g stroke="currentColor" stroke-width=".6" opacity=".4" fill="none"><path d="M30 250L70 222L112 240L150 205L176 232"/><path d="M70 222L88 188L120 176L150 205"/></g><g fill="currentColor" opacity=".8">${[[30, 250, 2.2], [70, 222, 3], [112, 240, 2], [150, 205, 3.4], [176, 232, 2], [88, 188, 2.2], [120, 176, 2.6]].map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}</g>`),
 ];
+// Étagère légère : sur chaque livre, l'ornement de couverture et les petites icônes sont des images CSS
+// (un élément chacun) plutôt que des dessins SVG de 5 à 20 éléments — 300 livres = des milliers d'éléments en moins.
+(() => {
+  const url = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  const deco = DECO.map((x, i) => `.gen .deco.d${i}{background-image:${url(x.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ').replace(/currentColor/g, '#f6ecd8'))}}`);
+  document.head.append(h('style', {}, deco.join('\n')));
+})();
+// Petites icônes : images déjà colorées aux couleurs du décor (un masque CSS ralentissait le défilement, mesuré)
+function tiPaint() {
+  const cs = getComputedStyle(document.documentElement), v = (k) => cs.getPropertyValue(k).trim();
+  const url = (n, c) => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[n].replace(/currentColor/g, c)}</svg>`)}")`;
+  const css = ['star', 'starFill', 'clock', 'checks', 'collection', 'move', 'dots'].map((n) =>
+    `.ti.i-${n}{background-image:${url(n, v('--ink-3'))}}.ti.i-${n}:hover,.ti.i-${n}:focus-visible{background-image:${url(n, v('--ink'))}}.ti.i-${n}.on,.ti.i-${n}.more,.ti.i-${n}.hot{background-image:${url(n, v('--brass'))}}`);
+  css.push(`.ti.i-starFill.on{background-image:${url('starFill', '#f2c14e')}}`);
+  let st = document.getElementById('ti-style'); if (!st) { st = h('style', { id: 'ti-style' }); document.head.append(st); }
+  st.textContent = css.join('\n');
+}
 function genCover(b) {
   const v = hashStr(b.title + (b.author || '')) % DECO.length;
   return h('div', { class: 'gen v' + v },
-    h('div', { class: 'deco', html: DECO[v] }),
+    h('div', { class: 'deco d' + v }),
     h('div', { class: 'orn' }, '❦'),
-    h('div', { class: 'mid' }, h('div', { class: 't' }, b.title), h('div', { class: 'rule' }), h('div', { class: 'a' }, b.author || '')));
+    // la taille du titre suit la largeur de la couverture et son mot le plus long : plus de mot coupé en deux (« Microbiot-e »)
+    h('div', { class: 'mid' }, h('div', { class: 't', style: { '--L': Math.max(8, ...String(b.title).split(/\s+/).map((w) => w.length)) } }, b.title), h('div', { class: 'rule' }), h('div', { class: 'a' }, b.author || '')));
 }
 function bookEl(b) {
   const pct = b.progress && b.pages ? Math.round((b.progress.page / b.pages) * 100) : 0;
@@ -330,8 +348,8 @@ async function deleteForever(b) {
 
 // Toutes petites icônes sous chaque livre de l'étagère
 function tinyIcons(b) {
-  const ic = (name, label, on, fn) => h('span', { class: 'ti' + (on ? ' on' : ''), role: 'button', tabindex: '0', title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false',
-    onclick: (e) => { e.stopPropagation(); e.preventDefault(); fn(); } }, icon(name));
+  const ic = (name, label, on, fn) => h('span', { class: 'ti i-' + name + (on ? ' on' : ''), role: 'button', tabindex: '0', title: label, 'aria-label': label, 'aria-pressed': on ? 'true' : 'false',
+    onclick: (e) => { e.stopPropagation(); e.preventDefault(); fn(); } });
   return h('span', { class: 'tiny' },
     ic(b.fav ? 'starFill' : 'star', 'Favori', b.fav, () => toggleFav(b)),
     ic('clock', 'À lire', b.state === 'alire', () => toggleState(b, 'alire')),
@@ -473,17 +491,46 @@ const EMPTY = {
   col: 'Cette collection est vide. Touche le bouton collections sous un livre pour l\'y ranger.',
   trash: 'La poubelle est vide.',
 };
+// Démarrage rapide : seuls les rayons visibles (et ceux du dessus) sont garnis tout de suite ; les suivants le sont
+// juste après, par petites bouchées pendant que le téléphone est libre, toujours sous l'écran — rien ne bouge sous les yeux.
+// Ils restent ensuite tous dessinés d'avance (les dessiner à leur arrivée à l'écran faisait sauter le défilement).
+const Shelves = { h: 0, job: 0, pend: [],
+  fill(k) { // garnit les k prochains rayons en attente
+    for (const p of this.pend.splice(0, k)) { if (!p.row.isConnected) continue; const row = h('div', { class: 'shelf-books', style: { gridTemplateColumns: p.cols } }, p.bs.map(bookEl)); p.row.replaceWith(row); }
+  },
+  flush() { if (this.pend.length) { this.job++; this.fill(this.pend.length); warmCovers(); } }, // tout de suite (télécommande, par exemple)
+  start() {
+    const job = ++this.job;
+    const step = () => {
+      if (job !== this.job || !this.pend.length) { if (job === this.job) warmCovers(); return; }
+      this.fill(3);
+      (window.requestIdleCallback || ((f) => setTimeout(f, 16)))(step, { timeout: 120 });
+    };
+    requestAnimationFrame(() => { // hauteur réelle d'un rayon, pour que les rayons en attente aient déjà la bonne taille
+      const done = document.querySelector('.case .shelf-books:not(.wait)'); if (done && done.offsetHeight > 60) this.h = done.offsetHeight;
+      document.querySelectorAll('.case .shelf-books.wait').forEach((x) => { x.style.height = (this.h || 240) + 'px'; });
+      setTimeout(step, 0);
+    });
+  },
+};
 function caseFor(groups, owner) {
-  const n = perRow();
+  const n = perRow(), cols = `repeat(${n}, 1fr)`;
   const caseEl = h('div', { class: 'case' + (S.organize ? ' organize' : '') });
+  Shelves.job++; Shelves.pend = [];
+  const keep = Math.ceil((scrollY + innerHeight * 1.5) / (Shelves.h || 220)) + 1; // rayons garnis tout de suite
+  let idx = 0;
   for (const [label, bs] of groups) {
     if (label) caseEl.append(h('div', { class: 'shelf-label' }, label, h('em', {}, bs.length)));
     const rows = Math.max(groups.length === 1 ? (owner || bs.length ? 2 : 1) : 1, Math.ceil(bs.length / n));
-    for (let r = 0; r < rows; r++) {
-      const row = h('div', { class: 'shelf-books', style: { gridTemplateColumns: `repeat(${n}, 1fr)` } }, bs.slice(r * n, r * n + n).map(bookEl));
+    for (let r = 0; r < rows; r++, idx++) {
+      const part = bs.slice(r * n, r * n + n);
+      let row;
+      if (idx < keep || !part.length) row = h('div', { class: 'shelf-books', style: { gridTemplateColumns: cols } }, part.map(bookEl));
+      else { row = h('div', { class: 'shelf-books wait', style: { gridTemplateColumns: cols, height: (Shelves.h || 240) + 'px' } }); Shelves.pend.push({ row, bs: part, cols }); }
       caseEl.append(h('div', { class: 'shelf' }, row, h('div', { class: 'plank' })));
     }
   }
+  if (Shelves.pend.length) Shelves.start();
   return caseEl;
 }
 
@@ -986,7 +1033,7 @@ S.lib = store.get('lib', 'main');
 const curLib = () => (S.lib === 'all' ? null : libs().find((x) => x.id === S.lib) || libs()[0]);
 const libName = () => (curLib() ? curLib().name : 'Toutes les bibliothèques');
 const inLib = (b) => S.lib === 'all' || (b.lib || 'main') === curLib().id;
-function applyDecor() { document.documentElement.dataset.decor = curLib() ? curLib().decor : store.get('decorAll', 'ebene'); }
+function applyDecor() { document.documentElement.dataset.decor = curLib() ? curLib().decor : store.get('decorAll', 'ebene'); tiPaint(); }
 applyDecor();
 function switchLib(id) { S.lib = id; store.set('lib', id); applyDecor(); S.nav = { k: 'all' }; store.set('nav', S.nav); S.filter = ''; renderLibrary(); scrollTo(0, 0); }
 
@@ -4333,6 +4380,7 @@ const TV = {
   first() { const f = this.focusables(this.scope())[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
   held: null,
   key(e) {
+    Shelves.flush();
     let a = document.activeElement;
     const typing = a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
     // appui long sur OK (ou touche Menu) sur un livre : le menu du livre, comme un appui long au doigt

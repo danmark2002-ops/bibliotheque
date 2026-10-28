@@ -12,7 +12,7 @@ La reconnaissance du texte des pages photographiées et l'IA intégrée au tél�
 
 ## Au démarrage de l'application
 
-- **Polices d'écriture** : l'application charge ses polices (Fraunces, Literata, Inter) depuis Google Fonts. Google reçoit alors l'adresse IP de votre appareil et les informations habituelles d'une requête web, mais rien sur ce que vous lisez. Sans connexion Internet, l'application utilise les polices du téléphone.
+- **Polices d'écriture** : les polices (Fraunces, Literata, Inter) sont intégrées à l'application ; aucune n'est téléchargée.
 
 ## Fonctions qui utilisent Internet, seulement quand vous les lancez
 
@@ -24,7 +24,7 @@ La reconnaissance du texte des pages photographiées et l'IA intégrée au tél�
 - **Diffusion sur la télé** : Google Cast est utilisé seulement si vous l'activez. La vidéo est lue directement depuis votre téléphone par le Wi-Fi de la maison, grâce à un petit serveur temporaire qui n'est pas accessible depuis Internet.
 - **Lecture à voix haute et commandes vocales** : la lecture utilise le moteur vocal de votre téléphone et les commandes vocales utilisent le service de reconnaissance vocale d'Android (en général celui de Google). Selon les réglages de votre téléphone, ces services peuvent traiter le texte ou le son en ligne, selon leurs propres conditions. Le son n'est ni enregistré ni envoyé au développeur.
 
-Ces services ont leurs propres politiques de confidentialité. En dehors des polices ci-dessus, rien n'est envoyé sans une action de votre part.
+Ces services ont leurs propres politiques de confidentialité.
 
 ## Autorisations
 
@@ -57,6 +57,6 @@ Last updated: October 22, 2026 (app version 10.1)
 
 Bibliothèque works primarily on your device. The developer runs no server that receives your data, requires no account, shows no ads and uses no analytics or tracking tools. Your books, libraries, reading progress and settings stay on your device; keys you enter are stored encrypted with Android Keystore.
 
-Text recognition and Gemini Nano run on the device; they rely on Google components (ML Kit, Google Play services) that may send technical diagnostics to Google. At startup the app loads its fonts from Google Fonts, so Google receives your device's IP address. When you start them, internet features send only what they need: searches to public-domain catalogs (Gutendex/Project Gutenberg, Wikisource), words to Wiktionary or MyMemory for definitions and translation, text to Gemini or Claude if you use your own API key, keywords to Wikimedia Commons and Openverse for video images. Library sharing by link encrypts the package on your phone before upload to a temporary host (Litterbox, 72 h, or Uguu, 3 h); the decryption key lives only after the « # » of the link and is never sent to a server. Text-to-speech and voice commands use your phone's speech services, which may process data online depending on your settings. Google Cast streams video from your phone over your home Wi-Fi only when you enable it.
+Text recognition and Gemini Nano run on the device; they rely on Google components (ML Kit, Google Play services) that may send technical diagnostics to Google. Fonts are bundled with the app; nothing is downloaded at startup. When you start them, internet features send only what they need: searches to public-domain catalogs (Gutendex/Project Gutenberg, Wikisource), words to Wiktionary or MyMemory for definitions and translation, text to Gemini or Claude if you use your own API key, keywords to Wikimedia Commons and Openverse for video images. Library sharing by link encrypts the package on your phone before upload to a temporary host (Litterbox, 72 h, or Uguu, 3 h); the decryption key lives only after the « # » of the link and is never sent to a server. Text-to-speech and voice commands use your phone's speech services, which may process data online depending on your settings. Google Cast streams video from your phone over your home Wi-Fi only when you enable it.
 
 The optional Premium upgrade is a one-time purchase handled entirely by Google Play: the app never sees your payment details and only receives Google Play's confirmation. Uninstalling the app or clearing its data erases everything on your device. The developer retains no data about you.

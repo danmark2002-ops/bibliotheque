@@ -34,20 +34,19 @@ window.LocalAPI = (() => {
   const put = (store, val, key) => tx(store, 'readwrite', (o, s) => { if (!o) { mem[s].set(key ?? val.id ?? val.book, val); return; } return rq(key !== undefined ? o.put(val, key) : o.put(val)); });
   const del = (store, key) => tx(store, 'readwrite', (o, s) => o ? rq(o.delete(key)) : mem[s].delete(key));
 
-  // ---------- pdf.js (embarqué dans le fichier) ----------
+  // ---------- pdf.js (fichiers à part, chargés à la demande) ----------
   let pdfjsP = null;
+  const LOCAL_PDF = location.host === 'appassets.local' || /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
   function pdfjs() {
     if (pdfjsP) return pdfjsP;
     pdfjsP = (async () => {
-      // mesuré : la boucle de décodage ne prend que quelques dizaines de ms ; c'est la préparation du moteur qui coûte, d'où le préchargement plus bas
-      const dec = async (id) => { const b = atob(document.getElementById(id).textContent.trim()); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return new Blob([u], { type: 'text/javascript' }); };
-      let lib, worker;
+      // APK : moteur servi à part (assets/pdfjs), chargé seulement quand on ouvre un PDF ; page publiée : CDN
       const CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
-      let m = null;
-      if (document.getElementById('pdfjs-lib')) {
-        try { const [a, w] = await Promise.all([dec('pdfjs-lib'), dec('pdfjs-worker')]); lib = URL.createObjectURL(a); worker = URL.createObjectURL(w); m = await import(lib); } catch { m = null; }
+      let m = null, worker = null;
+      if (LOCAL_PDF) {
+        try { m = await import(new URL('pdfjs/pdf.min.mjs', location.href).href); worker = new URL('pdfjs/pdf.worker.min.mjs', location.href).href; } catch { m = null; }
       }
-      if (!m) { worker = CDN + 'pdf.worker.min.mjs'; m = await import(CDN + 'pdf.min.mjs'); } // version en ligne (page publiée)
+      if (!m) { worker = CDN + 'pdf.worker.min.mjs'; m = await import(CDN + 'pdf.min.mjs'); }
       m.GlobalWorkerOptions.workerSrc = worker;
       return m;
     })();
@@ -55,7 +54,7 @@ window.LocalAPI = (() => {
     return pdfjsP;
   }
   // le moteur PDF se prépare en douce peu après le démarrage : la première ouverture d'un livre ne fige plus
-  if (document.getElementById('pdfjs-lib')) setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => pdfjs().catch(() => {}), { timeout: 4000 }), 3500);
+  if (LOCAL_PDF) setTimeout(() => (window.requestIdleCallback || ((f) => f()))(() => pdfjs().catch(() => {}), { timeout: 4000 }), 3500);
   // Polices standard et tables de caractères : sans elles, le texte de certains PDF ne s'affiche pas (pages blanches)
   const PDF_RES = location.host === 'appassets.local' ? '/pdfjs/' : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/';
   // Deux façons de dessiner les lettres : polices du PDF chargées dans le navigateur (par défaut), ou lettres tracées une à une.
