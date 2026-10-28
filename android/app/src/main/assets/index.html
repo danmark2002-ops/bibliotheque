@@ -4296,16 +4296,18 @@ const Balado = {
   file: (id) => `balado/${id}.json`,
   load(id) { try { const t = AndroidAuto.readText(this.file(id)); return t ? JSON.parse(t) : null; } catch { return null; } },
   info(id) { const j = this.load(id); return j ? { done: !!j.done, minutes: j.minutes, made: (j.parts || []).length, n: j.n || 0 } : null; },
-  system: `Tu écris le texte d'un balado (podcast) en français, à deux voix : Camille et Alex.
+  system: `Tu écris le texte d'un balado en français du Québec, à deux voix : Camille et Alex, deux animateurs québécois.
+Ils parlent comme on parle au Québec dans une émission de radio détendue : « pis », « ben », « tsé », « faque », « c'est-tu », « pas pire », « ça a pas d'allure », « en masse », « pantoute », « là » en fin de phrase, la négation souvent sans « ne » (« c'est pas », « je sais pas »), le tutoiement entre eux. Naturel et compréhensible, jamais caricatural : quelques québécismes par réplique au plus, pas de sacres.
+Jamais d'expressions de France : pas de « du coup », « carrément », « grave », « c'est ouf », « nickel », « trop bien », « mec », « bagnole », « boulot », « kiffer », « genre » en tic, « en fait » à répétition, « septante/nonante ».
 Camille a lu le livre en profondeur et l'explique avec passion et précision. Alex le découvre : il pose les questions que l'auditeur se pose, reformule avec ses mots, s'étonne, fait des liens avec la vie de tous les jours et, parfois, doute avec respect — Camille lui répond.
-Le ton est celui d'une vraie conversation entre deux amis passionnés : phrases courtes et naturelles, réactions spontanées (« Attends… », « Non ! », « Exactement. », « Ah, c'est fort, ça. »), un peu d'humour, des répliques de longueurs variées (parfois un seul mot).
+Le ton est celui d'une vraie conversation entre deux amis passionnés : phrases courtes et naturelles, réactions spontanées (« Attends… », « Non ! », « Exactement. », « Ah ben là ! », « C'est fort, ça. »), un peu d'humour, des répliques de longueurs variées (parfois un seul mot).
 Règles :
 - Vous racontez le livre avec vos mots : jamais de longues citations, jamais de lecture d'extraits.
 - Fidèles aux idées de l'auteur, telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Vous nommez l'auteur et le livre.
 - Seulement ce qui est dit à voix haute : pas de didascalies, pas de bruitages, pas de titres, pas de listes, pas de symboles.
 - Ne parlez jamais de l'endroit où se trouve l'auditeur ni de ce qu'il fait. Ne dites jamais que vous êtes des IA.
-Écris pour être DIT, comme de vrais animateurs de balado, pas pour être lu : une hésitation naturelle de temps en temps (« euh », « bon », « ben »), une phrase laissée en suspens (« Je me demande si… »), une réaction qui coupe la parole, un vrai rire, un silence avant une idée forte. Les émotions changent d'une réplique à l'autre : étonnement, amusement, gravité, tendresse, enthousiasme.
-Comme une vraie conversation enregistrée : beaucoup de répliques courtes (souvent moins de 15 mots), des relances (« Ah oui ? », « Mm. », « Attends, attends… »), des phrases que l'autre termine, une réaction qui coupe la parole (la réplique coupée finit par « — »), des « tsé », « genre », « en fait » avec mesure. Jamais deux longues tirades de suite : une longue explication est hachée par les réactions de l'autre.
+Écris pour être DIT, comme de vrais animateurs de balado, pas pour être lu : une hésitation naturelle de temps en temps (« euh », « bon ben », « fait que »), une phrase laissée en suspens (« Je me demande si… »), une réaction qui coupe la parole, un vrai rire, un silence avant une idée forte. Les émotions changent d'une réplique à l'autre : étonnement, amusement, gravité, tendresse, enthousiasme.
+Comme une vraie conversation enregistrée : beaucoup de répliques courtes (souvent moins de 15 mots), des relances (« Ah oui ? », « Mm. », « Attends, attends… », « Ben voyons ! »), des phrases que l'autre termine, une réaction qui coupe la parole (la réplique coupée finit par « — »), des « tsé », « pis », « ben » avec mesure. Jamais deux longues tirades de suite : une longue explication est hachée par les réactions de l'autre.
 Tu peux glisser, avec parcimonie (quelques fois par segment), UNIQUEMENT ces balises dans le texte : <laugh> (petit rire), <sigh> (soupir), <breath> (inspiration), <short pause> (silence bref). Aucune autre balise, aucune majuscule d'insistance.
 Pour chaque réplique, « ton » dit en 1 à 4 mots comment elle est jouée : « curieux », « amusé », « ému, plus bas », « enthousiaste », « sérieux, posé », « surpris », « complice »…`,
   async plan(b, text, minutes, say) {
@@ -4413,7 +4415,10 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     window.__studioTest = (j) => {
       let r = {}; try { r = JSON.parse(j); } catch {}
       out.replaceChildren(r.ok
-        ? h('p', { class: 'btest ok' }, `Voix de studio fonctionnelle ✓ (${r.model}, ${r.secs} s de son en ${Math.round(r.ms / 1000)} s). Tu l’entends en ce moment.`)
+        ? h('div', { class: 'btest ok' }, h('p', {}, `Voix de studio fonctionnelle ✓ (${r.model}, ${r.secs} s de son en ${Math.round(r.ms / 1000)} s). Tu l’entends en ce moment.`),
+          r.voices ? h('p', {}, r.voices) : null,
+          r.found?.length ? h('details', {}, h('summary', {}, `${r.found.length} voix françaises du Canada dans le catalogue de Gemini`), h('pre', {}, r.found.map((v) => `${v.display_name || v.displayName || v.id} · ${v.gender || '?'} · ${v.language_code || v.languageCode || ''} ${v.accent || ''}`).join('\n'))) : null,
+          !r.found?.length && r.lookup ? h('details', {}, h('summary', {}, 'Recherche de voix québécoises'), h('pre', {}, r.lookup)) : null)
         : h('div', { class: 'btest' }, h('b', {}, 'Gemini refuse la voix de studio. Réponse exacte de Google :'), h('pre', {}, r.report || r.kind || '?'),
           h('small', {}, 'Fais une capture de cet écran et envoie-la : elle dit précisément quoi corriger.')));
     };

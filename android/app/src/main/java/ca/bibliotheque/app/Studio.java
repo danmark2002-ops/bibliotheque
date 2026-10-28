@@ -19,7 +19,11 @@ final class Studio {
 
     /** Camille (femme, chaleureuse) et Alex (homme, vif) : voix préenregistrées de Gemini */
     static final String[] NAMES = {"Camille", "Alex"};
-    static final String[] VOICES = {"Sulafat", "Puck"};
+    static final String[] DEFAULT = {"Sulafat", "Puck"};
+    /** Voix utilisées : celles de Gemini par défaut, ou deux voix québécoises (fr-CA) si le catalogue de Gemini en offre (voir Voix.local) */
+    static volatile String[] voices = DEFAULT.clone();
+    /** Vrai si Gemini a refusé les voix québécoises dans un dialogue (on est revenu aux voix par défaut) */
+    static volatile boolean localRefused;
     /** Les noms de modèles changent avec le temps : on essaie dans l'ordre, et on retient celui qui répond. */
     static final String[] MODELS = {"gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview"}; // les trois ont un palier gratuit (page des prix de Google)
     static final int APIS = 2; // 0 : « interactions » (actuelle) · 1 : generateContent (ancienne)
@@ -83,17 +87,24 @@ final class Studio {
             if (i > 0) b.append(',');
             b.append("{\"type\":\"text\",\"text\":\"").append(esc(l.text)).append("\",\"annotations\":[{\"type\":\"speech_metadata\",\"speaker\":\"")
                 .append(NAMES[l.sp]).append('"');
-            if (!l.style.isEmpty()) b.append(",\"style\":\"").append(esc(l.style)).append('"');
+            String st = accent(l.style);
+            if (!st.isEmpty()) b.append(",\"style\":\"").append(esc(st)).append('"');
             b.append("}]}");
         }
         b.append("]}],\"response_format\":{\"type\":\"audio\"},\"generation_config\":{\"speech_config\":{\"mode\":\"conversational\",\"speakers\":[")
-            .append("{\"speaker\":\"").append(NAMES[0]).append("\",\"voice\":\"").append(VOICES[0]).append("\"},")
-            .append("{\"speaker\":\"").append(NAMES[1]).append("\",\"voice\":\"").append(VOICES[1]).append("\"}]}}}");
+            .append("{\"speaker\":\"").append(NAMES[0]).append("\",\"voice\":\"").append(esc(voices[0])).append("\"},")
+            .append("{\"speaker\":\"").append(NAMES[1]).append("\",\"voice\":\"").append(esc(voices[1])).append("\"}]}}}");
         return b.toString();
     }
 
+    /** Sans voix québécoise dans le catalogue, on demande l'accent dans le jeu de chaque réplique */
+    static String accent(String style) {
+        if (!java.util.Arrays.equals(voices, DEFAULT)) return style;
+        return style.isEmpty() ? "accent québécois" : style + ", accent québécois";
+    }
+
     static String bodyGenerate(List<Line> lines) {
-        StringBuilder txt = new StringBuilder("Dis cette conversation de balado, en français, comme deux amis passionnés qui parlent pour de vrai (naturel, émotion, rythme vivant) :\n");
+        StringBuilder txt = new StringBuilder("Dis cette conversation de balado en français du Québec, avec l'accent québécois, comme deux amis québécois passionnés qui parlent pour de vrai (naturel, émotion, rythme vivant) :\n");
         for (Line l : turns(lines)) {
             txt.append(NAMES[l.sp]);
             if (!l.style.isEmpty()) txt.append(" (").append(l.style).append(')');
@@ -101,8 +112,8 @@ final class Studio {
         }
         return "{\"contents\":[{\"parts\":[{\"text\":\"" + esc(txt.toString()) + "\"}]}],\"generationConfig\":{\"responseModalities\":[\"AUDIO\"],"
             + "\"speechConfig\":{\"multiSpeakerVoiceConfig\":{\"speakerVoiceConfigs\":["
-            + "{\"speaker\":\"" + NAMES[0] + "\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"" + VOICES[0] + "\"}}},"
-            + "{\"speaker\":\"" + NAMES[1] + "\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"" + VOICES[1] + "\"}}}]}}}}";
+            + "{\"speaker\":\"" + NAMES[0] + "\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"" + esc(voices[0]) + "\"}}},"
+            + "{\"speaker\":\"" + NAMES[1] + "\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"" + esc(voices[1]) + "\"}}}]}}}}";
     }
 
     // ------------------------------------------------------------------------------------------ réponse
@@ -227,8 +238,40 @@ final class Studio {
     /** Modèle qui a fabriqué le dernier son */
     static volatile String lastModel = "";
 
-    /** Un son pour ces répliques. Essaie les combinaisons (modèle, interface) à partir de la dernière qui a marché. */
+    /**
+     * Un son pour ces répliques. Avec des voix québécoises : si Gemini les refuse dans un dialogue, on revient aux voix
+     * par défaut (le balado ne doit jamais échouer pour ça) et on le retient.
+     */
     static Audio render(String key, List<Line> lines) throws Fail {
+        if (java.util.Arrays.equals(voices, DEFAULT)) return renderWith(key, lines);
+        try { return renderWith(key, lines); }
+        catch (Fail f) {
+            if (!f.kind.equals("off") && !f.kind.equals("empty")) throw f;
+            String why = report;
+            voices = DEFAULT.clone(); localRefused = true;
+            Audio a = renderWith(key, lines);
+            report = "Voix québécoises refusées dans un dialogue : " + why;
+            return a;
+        }
+    }
+
+    /** Le catalogue de voix de Gemini (filtres de l'adresse : language_code=fr-CA…) : {code, texte} */
+    static Object[] listVoices(String key, String query) throws Fail {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL(base + "/v1beta/voices?" + query).openConnection();
+            try {
+                c.setConnectTimeout(15000); c.setReadTimeout(30000);
+                c.setRequestProperty("x-goog-api-key", key);
+                int code = c.getResponseCode();
+                InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+                ByteArrayOutputStream b = new ByteArrayOutputStream();
+                if (in != null) { byte[] buf = new byte[16384]; int n; while ((n = in.read(buf)) > 0) b.write(buf, 0, n); in.close(); }
+                return new Object[]{code, b.toString("UTF-8")};
+            } finally { c.disconnect(); }
+        } catch (Exception e) { throw new Fail("net", "réseau : " + e.getMessage(), 0); }
+    }
+
+    private static Audio renderWith(String key, List<Line> lines) throws Fail {
         Fail last = null;
         StringBuilder rep = new StringBuilder();
         int total = MODELS.length * APIS;

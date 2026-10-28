@@ -95,7 +95,7 @@ final class Voix {
             StringBuilder h = new StringBuilder();
             byte[] d = md.digest();
             for (int i = 0; i < 6; i++) h.append(String.format("%02x", d[i]));
-            return h.toString() + Studio.VOICES[0] + Studio.VOICES[1];
+            return h.toString() + Studio.voices[0] + Studio.voices[1];
         } catch (Exception e) { return String.valueOf(System.nanoTime()); }
     }
 
@@ -161,6 +161,102 @@ final class Voix {
         d.delete();
     }
 
+    // ------------------------------------------------------------------------------------------ voix québécoises
+    /**
+     * Cherche dans le catalogue de voix de Gemini une voix de femme et une voix d'homme du Québec / Canada français
+     * (language_code fr-CA, sinon région CA en français). Le résultat est gardé une semaine (voix/quebec.json).
+     * Rend une phrase pour l'écran : quelles voix sont utilisées, et pourquoi.
+     */
+    static String local(File files, String key) {
+        File f = new File(new File(files, "voix"), "quebec.json");
+        JSONObject j = null;
+        try { if (f.exists()) j = new JSONObject(new String(Compat.readAll(f), "UTF-8")); } catch (Exception ignored) { }
+        boolean fresh = j != null && System.currentTimeMillis() - j.optLong("at") < 7 * 24 * 3600_000L;
+        if (!fresh) {
+            j = new JSONObject();
+            try {
+                j.put("at", System.currentTimeMillis());
+                JSONArray all = new JSONArray(); StringBuilder rep = new StringBuilder();
+                for (String q : new String[]{"language_code=fr-CA&page_size=200", "region_code=CA&language_code=fr-CA&page_size=200", "region_code=CA&page_size=200"}) {
+                    Object[] r = Studio.listVoices(key, q);
+                    int code = (Integer) r[0]; String body = (String) r[1];
+                    rep.append(q).append(" → ").append(code == 200 ? "" : Studio.gmsg(code, body)).append('\n');
+                    if (code != 200) continue;
+                    JSONArray v = new JSONObject(body).optJSONArray("voices");
+                    if (v == null) continue;
+                    for (int i = 0; i < v.length(); i++) {
+                        JSONObject x = v.getJSONObject(i);
+                        String lc = x.optString("language_code", x.optString("languageCode", "")).toLowerCase();
+                        if (!lc.startsWith("fr")) continue; // la région CA comprend aussi l'anglais
+                        all.put(x);
+                    }
+                    if (all.length() > 0) break;
+                }
+                j.put("found", all).put("report", rep.toString().trim());
+                JSONArray fem = forms(all, "female"), mal = forms(all, "male");
+                j.put("f", fem).put("m", mal).put("form", 0).put("refused", fem.length() == 0 || mal.length() == 0);
+            } catch (Studio.Fail e) {
+                if (e.kind.equals("net")) { Studio.voices = Studio.DEFAULT.clone(); return "Pas de réseau pour chercher les voix québécoises : voix de Gemini pour l'instant."; } // on cherchera la prochaine fois
+                try { j.put("refused", true).put("report", String.valueOf(e.getMessage())); } catch (Exception ignored) { }
+            } catch (Exception e) { try { j.put("refused", true).put("report", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
+            save(f, j);
+        }
+        return apply(j);
+    }
+
+    /** Les formes possibles de l'identifiant de la voix (id complet, puis dernier morceau, puis nom affiché) : on ne sait pas encore laquelle le dialogue accepte */
+    private static JSONArray forms(JSONArray all, String gender) throws Exception {
+        JSONArray out = new JSONArray();
+        JSONObject best = null;
+        for (int i = 0; i < all.length(); i++) {
+            JSONObject x = all.getJSONObject(i);
+            if (!gender.equalsIgnoreCase(x.optString("gender"))) continue;
+            String t = x.optString("type", "prebuilt").toLowerCase();
+            if (best == null || (t.contains("prebuilt") && !best.optString("type", "prebuilt").toLowerCase().contains("prebuilt"))) best = x;
+        }
+        if (best == null) return out;
+        String id = best.optString("id", best.optString("name", "")), dn = best.optString("display_name", best.optString("displayName", ""));
+        java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+        if (!id.isEmpty()) set.add(id);
+        if (id.contains("/")) set.add(id.substring(id.lastIndexOf('/') + 1));
+        if (!dn.isEmpty()) set.add(dn);
+        for (String v : set) out.put(v);
+        return out;
+    }
+
+    private static String apply(JSONObject j) {
+        JSONArray fe = j.optJSONArray("f"), ma = j.optJSONArray("m");
+        int k = j.optInt("form", 0);
+        if (j.optBoolean("refused") || fe == null || ma == null || k >= Math.min(fe.length(), ma.length())) {
+            Studio.voices = Studio.DEFAULT.clone();
+            JSONArray fd = j.optJSONArray("found");
+            return fd == null || fd.length() == 0 ? "Gemini n'offre pas de voix québécoise avec ta clé : voix de Gemini, texte en français d'ici."
+                : "Voix québécoises trouvées, mais Gemini les refuse dans un dialogue : voix de Gemini, texte en français d'ici.";
+        }
+        Studio.voices = new String[]{fe.optString(Math.min(k, fe.length() - 1)), ma.optString(Math.min(k, ma.length() - 1))};
+        return "Voix québécoises : " + Studio.voices[0] + " (Camille) et " + Studio.voices[1] + " (Alex).";
+    }
+
+    static void localRefused(File files) {
+        Studio.localRefused = false;
+        File f = new File(new File(files, "voix"), "quebec.json");
+        try {
+            JSONObject j = new JSONObject(new String(Compat.readAll(f), "UTF-8"));
+            j.put("form", j.optInt("form", 0) + 1).put("why", Studio.report);
+            save(f, j); // la forme suivante sera essayée au prochain lancement ; d'ici là, voix par défaut
+        } catch (Exception ignored) { }
+    }
+
+    /** Ce qu'on sait des voix québécoises, pour l'écran de test : {say, found, report} */
+    static String localInfo(File files) {
+        try { JSONObject j = new JSONObject(new String(Compat.readAll(new File(new File(files, "voix"), "quebec.json")), "UTF-8")); j.put("say", apply(j)); return j.toString(); }
+        catch (Exception e) { return "{}"; }
+    }
+
+    private static void save(File f, JSONObject j) {
+        try { f.getParentFile().mkdirs(); try (FileOutputStream o = new FileOutputStream(f)) { o.write(j.toString().getBytes("UTF-8")); } } catch (Exception ignored) { }
+    }
+
     // ------------------------------------------------------------------------------------------ fabrication
     private static final ExecutorService POOL = Executors.newSingleThreadExecutor();
     private static final Object LOCK = new Object();
@@ -206,6 +302,7 @@ final class Voix {
     static void work(File files, String key, String id) {
         if (blocked()) return;
         loadSize(files);
+        local(files, key);
         File f = new File(new File(files, "auto"), "balado/" + id + ".json");
         while (true) {
             Script s; List<Scene> sc;
@@ -230,6 +327,7 @@ final class Voix {
                 }
             }
             if (a == null) { block("minute"); return; }
+            if (Studio.localRefused) { localRefused(files); x = new Scene(x.first, x.last, hash(s, x.first, x.last)); } // voix québécoises refusées : ce son est fait avec les voix par défaut
             int chars = 0;
             for (int i = x.first; i <= x.last; i++) chars += Studio.weight(s.voice.get(i));
             double secs = a.pcm.length / (double) a.rate;

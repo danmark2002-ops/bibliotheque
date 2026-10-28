@@ -1485,11 +1485,15 @@ public class MainActivity extends Activity {
                 long t0 = System.currentTimeMillis();
                 try {
                     if (key.isEmpty()) throw new Studio.Fail("key", "Aucune clé Gemini enregistrée.", 0);
+                    try { new java.io.File(new java.io.File(getFilesDir(), "voix"), "quebec.json").delete(); } catch (Exception ignored) { } // le test cherche de nouveau les voix québécoises
+                    r.put("voices", Voix.local(getFilesDir(), key));
                     List<Studio.Line> l = new ArrayList<>();
                     l.add(new Studio.Line(0, "Alors, Alex… <short pause> tu l'as lu, ce livre-là ?", "complice, curieuse"));
                     l.add(new Studio.Line(1, "<laugh> Ben oui ! Pis franchement, je m'attendais pas à ça pantoute.", "amusé, enthousiaste"));
                     Studio.Audio a = Studio.render(key, l);
                     r.put("ok", true).put("model", Studio.lastModel).put("secs", Math.round(a.pcm.length * 10.0 / a.rate) / 10.0);
+                    if (Studio.localRefused) { Voix.localRefused(getFilesDir()); r.put("voices", "Gemini refuse les voix québécoises dans un dialogue : voix de Gemini, texte en français d'ici."); }
+                    try { JSONObject q = new JSONObject(Voix.localInfo(getFilesDir())); r.put("found", q.optJSONArray("found")).put("lookup", q.optString("report")); } catch (Exception ignored) { }
                     Voix.unblock();
                     playTest(a);
                 } catch (Studio.Fail f) {
