@@ -23,8 +23,13 @@ Mise à jour : 2026-10-28 (v10.1). À lire au début de chaque conversation.
 - « Constellation des idées » : carte des thèmes reliant les livres de la bibliothèque.
 - Cartes-citations : un passage en belle image partageable.
 
-## Choisi / en cours
-(rien pour l'instant)
+## Choisi (2026-10-28) / en cours
+PRIORITÉ N° 1 : **balado à deux voix** (deux animateurs discutent du livre ; téléphone, auto, télé) — y mettre le plus d'efforts.
+Fondations : étagère qui ne dessine que le visible · boutons plus faciles à toucher et lisibles · polices intégrées · sauvegarde / restauration de la bibliothèque · démarrage plus court · corrections de sécurité.
+Beauté : belles couvertures pour les PDF sans couverture · option ambiance par livre · ouverture de livre animée · thème clair papier crème · page de lecture soignée · premier lancement qui émerveille · plaisir de finir un livre.
+Atouts IA : Professeur réglable (enfant de 10 ans / étudiant / expert) · résumé en 3 longueurs · résumé à écouter en 5 min · vidéos en épisodes de 3 min · bande-annonce verticale de 30 s · lire un livre anglais en français.
+Maquettes avant tout changement visuel : 3 directions (A bois épuré, B papier crème style Apple, C nuit / ambiance du livre) — en attente du choix.
+Note : les petites icônes sous les livres sont voulues (préférence du propriétaire) ; on les rend plus faciles à toucher plutôt que de les retirer.
 
 ## Idées rejetées
 (rien pour l'instant)
