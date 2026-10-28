@@ -86,6 +86,14 @@ public class LivreService extends MediaBrowserService {
     private boolean duo;
     private final List<Integer> speakers = new ArrayList<>();
     private android.speech.tts.Voice duoA, duoB;
+    // Voix de studio (Gemini) : le balado est joué par des scènes de son déjà fabriquées (Voix), sinon par les voix du téléphone
+    private final ScenePlayer clip = new ScenePlayer();
+    private Voix.Script script;
+    private List<Voix.Scene> scenes = new ArrayList<>();
+    private Voix.Clip clipData; private int clipScene = -1;
+    private String vMode = "";            // « studio » · « prep » (la voix se fabrique) · « phone » (voix du téléphone) · "" (hors balado)
+    private long voiceWaitSince;
+    private int skipScene = -1;          // scène trop longue à fabriquer : lue avec les voix du téléphone
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
     private String pendingQ; // question entendue, en attente du choix « flash » ou « pro »
@@ -163,7 +171,7 @@ public class LivreService extends MediaBrowserService {
     public void onDestroy() {
         save();
         instance = null;
-        if (tts != null) { tts.stop(); tts.shutdown(); }
+        clip.stop(); if (tts != null) { tts.stop(); tts.shutdown(); }
         if (ears != null) { try { ears.destroy(); } catch (Exception ignored) { } }
         session.release();
         super.onDestroy();
@@ -183,7 +191,7 @@ public class LivreService extends MediaBrowserService {
         } else if ("seek".equals(cmd)) { // aller à une phrase précise (balado : phrase précédente / suivante)
             try {
                 int to = Integer.parseInt(intent.getStringExtra("text"));
-                if (bookId != null && !units.isEmpty()) { idx = clamp(to); token++; if (tts != null) tts.stop(); waitingMore = false; save(); if (playing) speak(); else updateState(); }
+                if (bookId != null && !units.isEmpty()) { idx = clamp(to); token++; halt(); waitingMore = false; save(); if (playing) speak(); else updateState(); }
             } catch (Exception ignored) { }
         } else if ("pause".equals(cmd)) {
             if (playing) pause();
@@ -191,16 +199,16 @@ public class LivreService extends MediaBrowserService {
             stopAll();
         } else if ("think".equals(cmd)) {
             // une question arrive : on se tait tout de suite, puis on annonce qu'on réfléchit
-            if (playing) { playing = false; token++; if (tts != null) tts.stop(); save(); updateState(); }
+            if (playing) { playing = false; token++; halt(); save(); updateState(); }
             String t = intent.getStringExtra("text");
             if (t != null && !t.isEmpty()) say(t, "wait");
         } else if ("voice".equals(cmd)) {
             profVoice = chosenVoice();
             String t = intent.getStringExtra("text");
-            if (t != null && !t.isEmpty()) { if (playing) { playing = false; token++; tts.stop(); updateState(); } say(t, "wait"); }
+            if (t != null && !t.isEmpty()) { if (playing) { playing = false; token++; halt(); updateState(); } say(t, "wait"); }
         } else if ("answer".equals(cmd) && id != null) {
             String text = intent.getStringExtra("text");
-            if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
+            if (playing) { playing = false; token++; halt(); }
             setInter(text);
             if (("prof:" + id).equals(bookId)) play(); else start("prof:" + id);
         }
@@ -221,7 +229,7 @@ public class LivreService extends MediaBrowserService {
     private void stopAll() {
         asking = false; waitingMore = false; inter.clear(); interIdx = 0;
         if (ears != null) try { ears.cancel(); } catch (Exception ignored) { }
-        if (playing) pause(); else { token++; if (tts != null) tts.stop(); save(); }
+        if (playing) pause(); else { token++; halt(); save(); }
         try { stopFg(true); } catch (Exception ignored) { }
         session.setPlaybackState(new PlaybackState.Builder()
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH)
@@ -447,6 +455,7 @@ public class LivreService extends MediaBrowserService {
     private void start(String id) {
         if (remote) { MainActivity.autoCmd("pause", "0"); remote = false; remotePlaying = false; remoteId = null; } // l'auto prend le relais
         save();
+        clip.stop();
         boolean isDuo = id.startsWith("balado:");
         boolean isProf = id.startsWith("prof:") || isDuo; // le balado se joue comme un cours : rythme parlé, suite attendue si elle se prépare
         String realId = id.substring(id.indexOf(':') + 1);
@@ -463,6 +472,7 @@ public class LivreService extends MediaBrowserService {
             prof = isProf;
             duo = isDuo;
             if (duo) { try { android.speech.tts.Voice[] v = ProfStyle.pickDuo(this, tts.getVoices()); duoA = v[0]; duoB = v[1]; } catch (Exception e) { duoA = duoB = null; } }
+            clipScene = -1; clipData = null; voiceWaitSince = 0; skipScene = -1; vMode = "";
             profDone = !isProf || data.optBoolean("done", true);
             waitingMore = false;
             if (units.isEmpty()) { error("Ce livre ne contient pas de texte lisible."); return; }
@@ -470,7 +480,9 @@ public class LivreService extends MediaBrowserService {
             startChars = new long[units.size() + 1];
             for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
             totalChars = startChars[units.size()];
-            bookId = id; title = (isDuo ? "🎙 " : isProf ? "🎓 " : "") + meta.optString("title"); author = isDuo ? "Balado à deux voix" : isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
+            bookId = id;
+            if (isDuo) loadScript(txt); else { script = null; scenes = new ArrayList<>(); }
+            title = (isDuo ? "🎙 " : isProf ? "🎓 " : "") + meta.optString("title"); author = isDuo ? "Balado à deux voix" : isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
             rate = (float) catalog().optDouble("rate", 1.0);
             idx = startIndex(meta);
             art = null;
@@ -514,12 +526,17 @@ public class LivreService extends MediaBrowserService {
         session.setActive(true);
         goForeground();
         updateState();
+        if (duo && clip.paused()) { clip.resume(); return; }
         speak();
     }
+
+    /** Tout se tait (voix du téléphone et voix de studio) */
+    private void halt() { if (tts != null) tts.stop(); clip.stop(); }
 
     private void pause() {
         playing = false; token++;
         if (tts != null) tts.stop();
+        clip.pause(); // la voix de studio reprendra là où elle s'est arrêtée
         save();
         updateState();
         notifyNow();
@@ -529,8 +546,10 @@ public class LivreService extends MediaBrowserService {
     static void pauseFromApp() { LivreService s = instance; if (s != null) s.main.post(() -> { if (s.playing) s.pause(); }); }
 
     private void speak() {
-        if (!playing || !ttsReady || units.isEmpty()) return;
+        if (!playing || units.isEmpty()) return;
         int t = ++token;
+        if (duo && interIdx >= inter.size() && studioSpeak(t)) return;
+        if (!ttsReady) return;
         try {
             android.speech.tts.Voice v = duo && interIdx >= inter.size() ? (speaker() == 1 ? duoB : duoA) : prof && profVoice != null ? profVoice : defaultVoice;
             if (v == null) v = defaultVoice;
@@ -550,7 +569,75 @@ public class LivreService extends MediaBrowserService {
         updateState();
     }
 
+    /** Pourquoi le balado parle avec les voix du téléphone (affiché en clair sous le lecteur) */
+    private String phoneWhy() {
+        if (IaGratuite.key(this).isEmpty()) return "Ajoute ta clé Gemini gratuite pour les voix de studio.";
+        String p = Voix.problem();
+        return p.isEmpty() ? "Voix du téléphone." : p;
+    }
+
     private int speaker() { return idx < speakers.size() ? speakers.get(idx) : 0; }
+
+    // ---------------------------------------------------------------- balado : voix de studio
+    private int sceneOf(int i) { for (int k = 0; k < scenes.size(); k++) if (i >= scenes.get(k).first && i <= scenes.get(k).last) return k; return -1; }
+
+    /** Lit le texte du balado (phrases, animateurs, scènes) et lance la fabrication des voix de studio qui manquent. */
+    private void loadScript(String txt) {
+        try { script = Voix.script(txt); scenes = Voix.scenes(script); }
+        catch (Exception e) { script = null; scenes = new ArrayList<>(); }
+        if (duo && bookId != null) Voix.kick(this, bookId.substring(7));
+    }
+
+    /**
+     * Dit la phrase courante avec la voix de studio si sa scène est fabriquée. Faux : le téléphone parle (pas de clé Gemini,
+     * voix de studio indisponible). Une scène en cours de fabrication : on attend quelques secondes, la suite est prête avant la fin de la précédente.
+     */
+    private boolean studioSpeak(int t) {
+        vMode = "phone";
+        if (script == null || IaGratuite.key(this).isEmpty()) return false;
+        int k = sceneOf(idx);
+        String id = bookId.substring(7);
+        if (k >= 0 && Voix.has(getFilesDir(), id, k, scenes.get(k))) {
+            Voix.Scene sc = scenes.get(k);
+            if (clipScene != k || clipData == null) { clipData = Voix.load(getFilesDir(), id, k, sc); clipScene = k; }
+            if (clipData == null) return false;
+            voiceWaitSince = 0; vMode = "studio"; waitingMore = false;
+            Voix.focus(k);
+            Voix.kick(this, id); // la scène suivante se fabrique pendant que celle-ci joue
+            final Voix.Clip cd = clipData;
+            clip.start(cd.pcm, cd.rate, cd.starts, idx - sc.first, ProfStyle.speed(this), new ScenePlayer.Listener() {
+                @Override public void line(int i) {
+                    int g = sc.first + i;
+                    if (g != idx) { idx = g; if (++sinceSave >= 8) save(); updateState(); }
+                }
+                @Override public void end() {
+                    idx = sc.last;
+                    if (idx + 1 >= units.size()) {
+                        if (!profDone) { waitingMore = true; updateState(); return; } // la suite s'écrit sur le téléphone : elle partira toute seule
+                        idx = units.size() - 1; pause(); error("Fin du balado."); return;
+                    }
+                    idx++;
+                    main.postDelayed(gap(++token), 60);
+                }
+            });
+            if (!clip.live()) return false;
+            updateState();
+            return true;
+        }
+        Voix.focus(Math.max(0, k)); Voix.kick(this, id);
+        if (Voix.blocked() || (k >= 0 && k == skipScene)) return false;  // refus de Gemini, ou trop d'attente : voix du téléphone (si la scène devient prête en route, la voix de studio reprend)
+        boolean waitText = k < 0 && !profDone;                            // la suite n'est pas encore écrite : on l'attend
+        if (voiceWaitSince == 0) voiceWaitSince = System.currentTimeMillis();
+        if (!waitText && System.currentTimeMillis() - voiceWaitSince > 150_000L) { voiceWaitSince = 0; skipScene = k; return false; } // trop long : le téléphone prend le relais pour cette scène
+        vMode = "prep";
+        updateState();
+        main.postDelayed(gap(++token), 800);
+        return true;
+    }
+
+    /** Une scène de voix vient d'être fabriquée (ou la voix de studio vient d'être refusée) */
+    static void voixPrete(String id, int scene) { LivreService s = instance; if (s != null) s.main.post(s::updateState); }
+
 
     /** État du balado pour l'écran du téléphone : qui parle, quelle phrase, où on en est */
     static String duoState() {
@@ -558,7 +645,8 @@ public class LivreService extends MediaBrowserService {
         if (s == null || s.bookId == null || !s.duo) return "";
         try {
             return new JSONObject().put("id", s.bookId.substring(7)).put("i", s.idx).put("n", s.units.size()).put("playing", s.playing)
-                .put("sp", s.speaker()).put("t", s.idx < s.units.size() ? s.units.get(s.idx) : "").put("waiting", s.waitingMore).put("done", s.profDone).toString();
+                .put("sp", s.speaker()).put("t", s.idx < s.units.size() ? s.units.get(s.idx) : "").put("waiting", s.waitingMore).put("done", s.profDone)
+                .put("voice", s.vMode).put("why", s.vMode.equals("phone") ? s.phoneWhy() : "").toString();
         } catch (Exception e) { return ""; }
     }
 
@@ -600,7 +688,7 @@ public class LivreService extends MediaBrowserService {
     // ---------------------------------------------------------------- questions au Professeur, depuis l'auto
     private void askQuestion() {
         if (!prof || duo || bookId == null || asking) return;
-        if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
+        if (playing) { playing = false; token++; halt(); }
         inter.clear(); interIdx = 0;
         asking = true;
         updateState();
@@ -730,7 +818,8 @@ public class LivreService extends MediaBrowserService {
             for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
             totalChars = startChars[units.size()];
             profDone = data.optBoolean("done", true);
-            if (restarted) idx = 0;
+            if (duo) loadScript(txt);
+            if (restarted) { idx = 0; clipScene = -1; clipData = null; clip.stop(); }
             idx = clamp(idx);
             updateMeta();
             if (waitingMore && playing && idx + 1 < units.size()) {
@@ -755,7 +844,7 @@ public class LivreService extends MediaBrowserService {
         int lo = 0, hi = units.size() - 1;
         while (lo < hi) { int mid = (lo + hi + 1) / 2; if (startChars[mid] <= target) lo = mid; else hi = mid - 1; }
         idx = lo;
-        if (playing) { token++; tts.stop(); speak(); } else { save(); updateState(); }
+        if (playing) { token++; halt(); speak(); } else { save(); updateState(); }
     }
 
     private void onFocus(int change) {

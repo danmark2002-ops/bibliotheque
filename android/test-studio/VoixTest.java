@@ -1,0 +1,109 @@
+package ca.bibliotheque.app;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.List;
+import java.util.Random;
+
+/** Essai du découpage du balado en scènes (Voix.script / Voix.scenes) avec un vrai org.json. */
+public class VoixTest {
+    static int fails = 0;
+    static void ok(boolean c, String m) { System.out.println((c ? "OK   " : "ECHEC ") + m); if (!c) fails++; }
+
+    static String json(int n, boolean done, Random r, boolean lastEnds) {
+        JSONArray u = new JSONArray(); int sp = 0;
+        for (int i = 0; i < n; i++) {
+            if (i > 0 && r.nextInt(3) > 0) sp = 1 - sp;
+            String t = "x".repeat(20 + r.nextInt(140));
+            u.put(new JSONArray().put(t).put(0).put(i == n - 1 && lastEnds || (i % 29 == 28) ? 2 : 0).put(sp).put(i % 4 == 0 ? "<laugh> " + t : t).put(i % 3 == 0 ? "amusé" : ""));
+        }
+        return new JSONObject().put("u", u).put("done", done).toString();
+    }
+
+    public static void main(String[] a) throws Exception {
+        Random r = new Random(3);
+        for (int round = 0; round < 50; round++) {
+            int n = 20 + r.nextInt(200);
+            boolean done = r.nextBoolean(), ends = r.nextBoolean();
+            Voix.Script s = Voix.script(json(n, done, r, ends));
+            List<Voix.Scene> sc = Voix.scenes(s);
+            boolean contiguous = true, sizes = true; int next = 0;
+            for (Voix.Scene x : sc) {
+                if (x.first != next || x.last < x.first) contiguous = false;
+                next = x.last + 1;
+                int chars = 0; for (int i = x.first; i <= x.last; i++) chars += s.voice.get(i).length();
+                if (chars > 1900 + 200) sizes = false; // une phrase peut dépasser un peu la limite
+            }
+            boolean tail = (done || ends) ? next == n : next <= n;
+            if (!contiguous || !sizes || !tail) { ok(false, "tour " + round + " : contiguous=" + contiguous + " sizes=" + sizes + " tail=" + tail + " n=" + n + " next=" + next + " done=" + done); }
+        }
+        ok(fails == 0, "50 balados au hasard : scènes contiguës, ≤ ~2 000 lettres, la fin couverte quand le balado est terminé");
+
+        Voix.Script s1 = Voix.script(json(60, true, new Random(1), true)), s2 = Voix.script(json(60, true, new Random(1), true)), s3 = Voix.script(json(60, true, new Random(2), true));
+        ok(Voix.scenes(s1).get(0).hash.equals(Voix.scenes(s2).get(0).hash), "même texte → même empreinte (le son gardé reste valable)");
+        ok(!Voix.scenes(s1).get(0).hash.equals(Voix.scenes(s3).get(0).hash), "autre texte → autre empreinte (le son est refait)");
+        Voix.Script open = Voix.script(json(25, false, new Random(5), false));
+        ok(Voix.scenes(open).isEmpty() || Voix.scenes(open).get(Voix.scenes(open).size() - 1).last < open.n() - 1, "suite pas encore écrite : la dernière scène ouverte n'est pas fabriquée");
+        ok(s1.voice.get(0).contains("<laugh>") && !s1.text.get(0).contains("<") && s1.style.get(0).equals("amusé"), "la phrase affichée est propre, la phrase jouée garde les balises et le ton");
+        Voix.Script old = Voix.script("{\"u\":[[\"Bonjour.\",0,2,0]],\"done\":true}");
+        ok(old.voice.get(0).equals("Bonjour.") && old.style.get(0).isEmpty(), "ancien balado (sans balises) encore lu");
+
+        // ---------- de bout en bout : faux Gemini + fichiers réels
+        java.io.File files = java.nio.file.Files.createTempDirectory("voix").toFile();
+        java.io.File auto = new java.io.File(files, "auto/balado"); auto.mkdirs();
+        Random rr = new Random(11);
+        String js = json(70, true, rr, true);
+        java.nio.file.Files.write(new java.io.File(auto, "b1.json").toPath(), js.getBytes("UTF-8"));
+        Voix.Script sc0 = Voix.script(js); List<Voix.Scene> scs = Voix.scenes(sc0);
+        final int[] calls = {0};
+        final String[] mode = {"ok"};
+        com.sun.net.httpserver.HttpServer srv = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        srv.createContext("/", ex -> {
+            String body = new String(ex.getRequestBody().readAllBytes(), "UTF-8");
+            calls[0]++;
+            int code = 200; String out;
+            if (mode[0].equals("day")) { code = 429; out = "{\"error\":{\"message\":\"limit: 0\"}}"; }
+            else {
+                // durée ~ nombre de lettres du corps / 12 secondes, avec silences entre les tours
+                int secs = Math.max(3, Math.min(60, body.length() / 40));
+                short[] pcm = new short[24000 * secs];
+                for (int i = 0; i < pcm.length; i++) pcm[i] = (short) (((i / 12000) % 5 == 4) ? 0 : 6000 * Math.sin(i * 0.07) + (i % 7));
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                for (short v : pcm) { bo.write(v & 0xFF); bo.write((v >> 8) & 0xFF); }
+                out = "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/L16;codec=pcm;rate=24000\",\"data\":\"" + java.util.Base64.getEncoder().encodeToString(bo.toByteArray()) + "\"}}]}}]}";
+                if (body.contains("speech_metadata") && false) code = 404;
+            }
+            byte[] ob = out.getBytes("UTF-8"); ex.sendResponseHeaders(code, ob.length); ex.getResponseBody().write(ob); ex.close();
+        });
+        srv.start();
+        Studio.base = "http://127.0.0.1:" + srv.getAddress().getPort();
+        Studio.combo = 1; // l'interface actuelle n'existe pas dans ce faux serveur : il répond à tout, au format de l'ancienne
+        Voix.focus(1);
+        Voix.work(files, "K", "b1");
+        int made = 0; for (int k = 0; k < scs.size(); k++) if (Voix.has(files, "b1", k, scs.get(k))) made++;
+        ok(made == scs.size() && calls[0] >= scs.size(), "toutes les scènes fabriquées : " + made + "/" + scs.size() + " avec " + calls[0] + " appels");
+        Voix.Clip cl = Voix.load(files, "b1", 0, scs.get(0));
+        int nl = scs.get(0).last - scs.get(0).first + 1;
+        boolean inc = cl != null && cl.starts.length == nl + 1 && cl.starts[0] == 0 && cl.starts[nl] == cl.pcm.length;
+        for (int i = 1; cl != null && i < cl.starts.length; i++) if (cl.starts[i] < cl.starts[i - 1]) inc = false;
+        ok(inc, "scène 0 relue du disque : " + (cl == null ? "?" : cl.pcm.length + " échantillons, " + nl + " phrases, débuts croissants"));
+        int before = calls[0];
+        Voix.work(files, "K", "b1");
+        ok(calls[0] == before, "relancé : rien n'est refabriqué (son déjà gardé)");
+        // le texte change (« Refaire une émission ») : l'ancien son n'est plus utilisé
+        String js2 = json(70, true, new Random(99), true);
+        java.nio.file.Files.write(new java.io.File(auto, "b1.json").toPath(), js2.getBytes("UTF-8"));
+        List<Voix.Scene> scs2 = Voix.scenes(Voix.script(js2));
+        ok(!Voix.has(files, "b1", 0, scs2.get(0)) && Voix.load(files, "b1", 0, scs2.get(0)) == null, "texte refait : l'ancien son est ignoré");
+        mode[0] = "day"; before = calls[0];
+        Voix.work(files, "K", "b1");
+        ok(Voix.blocked() && calls[0] - before == 1 && Voix.problem().contains("quota"), "quota du jour : un seul appel puis voix du téléphone (« " + Voix.problem() + " »)");
+        Voix.work(files, "K", "b1");
+        ok(calls[0] - before == 1, "tant que c'est bloqué, aucun nouvel appel");
+        Voix.purge(files, "b1");
+        ok(!new java.io.File(files, "voix/b1").exists(), "suppression du balado : son effacé");
+        srv.stop(0);
+        System.out.println(fails == 0 ? "TOUT PASSE" : fails + " ÉCHEC(S)");
+        System.exit(fails == 0 ? 0 : 1);
+    }
+}

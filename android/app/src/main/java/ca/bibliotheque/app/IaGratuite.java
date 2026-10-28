@@ -75,9 +75,9 @@ final class IaGratuite {
                     break;
                 } catch (ProRefused e) {
                     if (e.code == 404) { pro++; t--; continue; }                                         // nom retiré : le suivant
-                    String w = e.code == 429 ? why429(e.body) : "";
+                    String w = e.code == 429 ? Quota.why(e.body) : "";
                     if (w.equals("big")) { tell("Livre trop long pour Gemini Pro gratuit : Gemini Flash s'en charge…"); break; } // pas de pause de 6 h : un texte plus court passera
-                    if (w.equals("minute") && t < waits && retryMs(e.body) <= 15_000L) { long ms = urgent ? 8_000L : retryMs(e.body); tell("Gemini Pro est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute, courte
+                    if (w.equals("minute") && t < waits && Quota.retryMs(e.body) <= 15_000L) { long ms = urgent ? 8_000L : Quota.retryMs(e.body); tell("Gemini Pro est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute, courte
                     if (w.equals("minute")) { tell("Gemini Pro est occupé : Gemini Flash s'en charge cette fois…"); break; } // sans pause de 6 h
                     if (e.code >= 500 && t < waits) { Thread.sleep(5_000L); continue; }                   // surchargé
                     if (e.code >= 500) { tell("Gemini Pro est surchargé : Gemini Flash s'en charge cette fois…"); break; }
@@ -115,19 +115,6 @@ final class IaGratuite {
 
     /** Pro a refusé (code HTTP) : on passe à Flash sans insister */
     static final class ProRefused extends Exception { final int code; final String body; ProRefused(int c, String b) { super("pro " + c); code = c; body = b == null ? "" : b; } }
-
-    /** Pourquoi Google dit « trop de demandes » : « day » (quota du jour épuisé, ou Pro absent du palier gratuit : limit 0),
-     *  « big » (le texte dépasse à lui seul ce que Pro accepte par minute : attendre ne sert à rien), sinon « minute ». */
-    static String why429(String b) {
-        if (b.matches("(?s).*limit\\D{0,6}0\\b(?![.\\d]).*") || b.contains("PerDay")) return "day";
-        if (b.contains("input_token") || b.contains("InputTokens")) return "big";
-        return "minute";
-    }
-    /** Délai proposé par Google (« retryDelay »: « 37s »), sinon 40 s */
-    static long retryMs(String b) {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("retryDelay\\W+(\\d+)").matcher(b);
-        return m.find() ? (Long.parseLong(m.group(1)) + 1) * 1000L : 10_000L;
-    }
 
     private static String once(String key, String system, String prompt, boolean urgent, boolean json, String force) throws Exception {
         JSONObject body = new JSONObject();

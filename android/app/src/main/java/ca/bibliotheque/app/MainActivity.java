@@ -1407,7 +1407,7 @@ public class MainActivity extends Activity {
             boolean ok = tmp.renameTo(x);
             if (ok && "catalog.json".equals(name)) LivreService.catalogChanged();
             if (ok && name.startsWith("prof/")) LivreService.profChanged("prof:" + name.substring(5).replace(".json", ""));
-            if (ok && name.startsWith("balado/")) LivreService.profChanged("balado:" + name.substring(7).replace(".json", ""));
+            if (ok && name.startsWith("balado/")) { String bid = name.substring(7).replace(".json", ""); LivreService.profChanged("balado:" + bid); Voix.kick(MainActivity.this, bid); }
             return ok;
         }
 
@@ -1425,7 +1425,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public boolean remove(String name) { File x = f(name); return x != null && x.delete(); }
+        public boolean remove(String name) {
+            File x = f(name);
+            if (x != null && name.startsWith("balado/") && name.endsWith(".json")) Voix.purge(getFilesDir(), name.substring(7, name.length() - 5)); // le son du balado s'en va avec lui
+            return x != null && x.delete();
+        }
 
         // ----- Le Professeur bizarroïde : joué par le même lecteur que l'auto -----
         private void prof(String cmd, String id, String text) {

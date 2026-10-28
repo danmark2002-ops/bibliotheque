@@ -4227,7 +4227,10 @@ Règles :
 - Vous racontez le livre avec vos mots : jamais de longues citations, jamais de lecture d'extraits.
 - Fidèles aux idées de l'auteur, telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Vous nommez l'auteur et le livre.
 - Seulement ce qui est dit à voix haute : pas de didascalies, pas de bruitages, pas de titres, pas de listes, pas de symboles.
-- Ne parlez jamais de l'endroit où se trouve l'auditeur ni de ce qu'il fait. Ne dites jamais que vous êtes des IA.`,
+- Ne parlez jamais de l'endroit où se trouve l'auditeur ni de ce qu'il fait. Ne dites jamais que vous êtes des IA.
+Écris pour être DIT, comme de vrais animateurs de balado, pas pour être lu : une hésitation naturelle de temps en temps (« euh », « bon », « ben »), une phrase laissée en suspens (« Je me demande si… »), une réaction qui coupe la parole, un vrai rire, un silence avant une idée forte. Les émotions changent d'une réplique à l'autre : étonnement, amusement, gravité, tendresse, enthousiasme.
+Tu peux glisser, avec parcimonie (quelques fois par segment), UNIQUEMENT ces trois balises dans le texte : <laugh> (petit rire), <sigh> (soupir), <short pause> (silence bref). Aucune autre balise, aucune majuscule d'insistance.
+Pour chaque réplique, « ton » dit en 1 à 4 mots comment elle est jouée : « curieux », « amusé », « ému, plus bas », « enthousiaste », « sérieux, posé », « surpris », « complice »…`,
   async plan(b, text, minutes, say) {
     const segs = minutes <= 5 ? 2 : minutes <= 15 ? 4 : 7;
     const prompt = `Prépare le plan d'un épisode de balado d'environ ${minutes} minutes sur le livre ${Prof.who(b)}.
@@ -4252,17 +4255,32 @@ Sujet du segment : ${seg.sujet}
 ${i === 0 ? `- C'est le début de l'émission : Camille ouvre avec l'accroche (« ${plan.accroche} »), les deux animateurs se présentent par leur prénom en une phrase chacun, et annoncent le livre et son auteur.` : `- L'émission est déjà commencée. Dernières répliques : ${prev}\nEnchaîne naturellement, sans saluer de nouveau.`}
 ${i === n - 1 ? `- C'est la fin de l'émission : terminez sur l'idée à retenir (« ${plan.conclusion} »), puis Camille et Alex remercient l'auditeur et se disent au revoir.` : '- Ne conclus pas l’émission : la suite viendra.'}
 - Environ ${words} mots en tout, en ${Math.max(10, Math.round(words / 28))} à ${Math.round(words / 18)} répliques qui alternent naturellement (Alex parle environ 40 % du temps).
-Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "texte": "…"}]}`;
+Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "texte": "…"}]}`;
     const r = JSON.parse(jsonOnly(await onlineAsk(this.system, prompt, false, true, say)));
-    const out = (r.repliques || []).map((x) => ({ s: /alex/i.test(x.qui || '') ? 1 : 0, t: Prof.clean(String(x.texte || '')) })).filter((x) => x.t);
+    const out = (r.repliques || []).map((x) => { const v = this.voice(Prof.clean(String(x.texte || ''))); return { s: /alex/i.test(x.qui || '') ? 1 : 0, t: this.plain(v), v, e: String(x.ton || '').replace(/[<>"\n]/g, '').slice(0, 40) }; }).filter((x) => x.t);
     if (!out.length) throw new Error('Gemini n’a pas écrit ce segment. Réessaie : la préparation reprendra où elle en était.');
     return out;
   },
+  // Texte « joué » : seules les trois balises de jeu sont gardées (<laugh>, <sigh>, <short pause>) ; ce qui y ressemble est ramené à elles
+  voice(t) {
+    return t.replace(/[<\[(]\s*(?:rire|rit|laugh(?:s|ter)?|petit rire)\s*[>\])]/gi, ' <laugh> ').replace(/[<\[(]\s*(?:soupir|sigh(?:s)?)\s*[>\])]/gi, ' <sigh> ')
+      .replace(/[<\[(]\s*(?:pause|silence|short pause)\s*[>\])]/gi, ' <short pause> ')
+      .replace(/<(?!\/?(?:laugh|sigh|short pause)>)[^>]*>/gi, ' ').replace(/\s+/g, ' ').trim();
+  },
+  // Texte lu à l'écran et par les voix du téléphone : sans balises
+  plain(v) { return v.replace(/<[^>]*>/g, ' ').replace(/\s+([,.])/g, '$1').replace(/\s+/g, ' ').trim(); },
   write(b, work, done) {
     const u = [];
     work.parts.forEach((lines, pi) => lines.forEach((l, li) => {
-      const ss = sentences(l.t);
-      ss.forEach((x, k) => u.push([x, pi, k === ss.length - 1 && li === lines.length - 1 ? 2 : 0, l.s]));
+      const v = l.v || l.t, ss = sentences(v), line = u.length;
+      let hold = '';
+      ss.forEach((x, k) => {
+        const d = this.plain(x);
+        if (d.length < 2) { hold += ' ' + x; return; } // une balise seule (« <laugh> ») s'ajoute à la phrase voisine
+        u.push([d, pi, 0, l.s, (hold + ' ' + x).trim(), l.e || '']); hold = '';
+      });
+      if (hold.trim() && u.length > line) u[u.length - 1][4] += ' ' + hold.trim();
+      if (u.length > line && li === lines.length - 1) u[u.length - 1][2] = 2;
     }));
     AndroidAuto.writeText(this.file(b.id), JSON.stringify({ v: 1, kind: 'balado', id: b.id, title: b.title, minutes: work.minutes, n: work.plan.segments.length, done, plan: work.plan, parts: work.parts, u }));
     AutoSync.writeCatalog();
@@ -4319,7 +4337,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "texte": "…"}]}
           h('p', { class: 'bintro' }, `Camille et Alex discutent de « ${b.title} », comme dans une émission de radio. Idéal à écouter en voiture, en marchant ou les yeux fermés.`),
           h('div', { class: 'field' }, 'Durée', seg),
           h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); setTimeout(render, 300); } }, icon('mic'), 'Créer le balado'),
-          h('p', { class: 'muted bnote' }, 'Écrit par Gemini avec ta clé gratuite. L’écoute commence dès que le début est prêt.'));
+          h('p', { class: 'muted bnote' }, 'Écrit et lu par Gemini avec ta clé gratuite : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'));
       } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
         mode = m;
         body.replaceChildren(
@@ -4337,6 +4355,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "texte": "…"}]}
               h('button', { class: 'rbtn', 'aria-label': 'Réplique précédente', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.max(0, ui.st.i - 1)) }, icon('prev')),
               ui.play,
               h('button', { class: 'rbtn', 'aria-label': 'Réplique suivante', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.min(ui.st.n - 1, ui.st.i + 1)) }, icon('next'))),
+            ui.voice = h('p', { class: 'muted bnote bvoice' }),
             h('p', { class: 'muted bnote' }, 'Le balado continue écran éteint et dans Android Auto.'));
         }
         ui.st = st;
@@ -4347,6 +4366,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "texte": "…"}]}
         ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
         const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
         ui.left.textContent = left ? `≈ ${left} min restantes` : '';
+        const vt = st.voice === 'prep' ? 'La voix se prépare…' : st.voice === 'phone' ? st.why : '';
+        if (ui.voice.textContent !== vt) ui.voice.textContent = vt;
         if (ui.play.dataset.p !== String(st.playing)) { ui.play.dataset.p = String(st.playing); ui.play.setAttribute('aria-label', st.playing ? 'Pause' : 'Lecture'); ui.play.replaceChildren(icon(st.playing ? 'pause' : 'play')); }
       }
     };

@@ -71,7 +71,7 @@ final class ProfStyle {
     static float[] duo(Context c, String x, int n, int speaker, boolean sameVoice) {
         String s = x.trim();
         float rate = speed(c);
-        float p0 = speaker == 1 ? (sameVoice ? 0.82f : 0.95f) : (sameVoice ? 1.14f : 1.04f);
+        float p0 = speaker == 1 ? (sameVoice ? 0.80f : 0.88f) : (sameVoice ? 1.16f : 1.10f); // voix du téléphone (repli) : écart net pour qu'on entende deux personnes
         float r0 = speaker == 1 ? 0.96f : 1.02f;
         float pitch = p0 + (((n * 37) % 5) - 2) * 0.012f, r = rate * r0;
         if (s.endsWith("!") || s.endsWith("! »")) { pitch += 0.06f; r *= 1.04f; }
