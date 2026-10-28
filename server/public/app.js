@@ -113,7 +113,7 @@ const post = (p, body, method = 'POST') => api(p, { method, body: JSON.stringify
 const isNative = () => !!window.AndroidApp;
 
 if (!store.get('etagere15', false)) { store.set('view', 'shelf'); store.set('etagere15', true); } // retour à l'étagère après la mise à jour
-const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf') };
+const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf'), ck: store.get('ck', 'livres') };
 document.documentElement.dataset.decor = store.get('decor', 'noyer');
 
 // ================= Démarrage =================
@@ -644,6 +644,7 @@ function renderLibrary(opts = {}) {
     S.nav.k === 'trash' && books.length ? h('button', { class: 'btn danger', onclick: async () => { if (!confirm(`Supprimer définitivement les ${books.length} livres de la poubelle ?`)) return; for (const b of books) await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Poubelle vidée'); } }, 'Vider') : null,
   ) : null;
   const navBack = ['author', 'col', 'fmt'].includes(S.nav.k);
+  const kinds = local && owner && S.ck && S.ck !== 'livres';
   const room = h('div', { class: 'room' }, h('div', { class: 'wrap' },
     h('header', { class: 'top' },
       h('div', { class: 'brand' },
@@ -656,10 +657,12 @@ function renderLibrary(opts = {}) {
           S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)),
       actions),
     local && owner ? libTabs() : null,
-    current ? heroEl(current) : null,
-    toolbar,
-    body,
-    owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
+    local && owner ? kindTabs() : null,
+    kinds ? creationsEl(S.ck) : null,
+    !kinds && current ? heroEl(current) : null,
+    kinds ? null : toolbar,
+    kinds ? null : body,
+    !kinds && owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
   ));
   // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
   if (document.activeElement && document.activeElement.classList.contains('search')) opts.keepSearch = true; // toute mise à jour pendant la frappe épargne le champ
@@ -1501,6 +1504,41 @@ async function importReceived(r) {
 // Onglets des bibliothèques, sous le titre : on passe de l'une à l'autre d'un geste
 // La bibliothèque principale vidée de son dossier et de ses livres n'a plus d'onglet (s'il en reste d'autres)
 const visibleLibs = () => libs();
+// Ce que l'on fabrique à partir des livres : balados, résumés, vidéos (un onglet chacun, à côté des livres)
+const CK = [['livres', 'Livres'], ['balados', 'Balados'], ['resumes', 'Résumés'], ['videos', 'Vidéos']];
+function kindTabs() {
+  return h('div', { class: 'kindtabs', role: 'tablist' }, CK.map(([k, l]) => h('button', { class: 'kindtab' + ((S.ck || 'livres') === k ? ' sel' : ''), role: 'tab', 'aria-selected': (S.ck || 'livres') === k ? 'true' : 'false',
+    onclick: () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); } }, l)));
+}
+function creationsEl(kind) {
+  const live = S.books.filter((b) => !b.trashed && b.status === 'ready');
+  const items = [];
+  for (const b of live) {
+    if (kind === 'balados') {
+      if (!Balado.on()) continue;
+      const i = Balado.info(b.id); if (!i && !Balado.busy[b.id]) continue;
+      const busy = !!Balado.busy[b.id], p = Balado.progress(b.id, i);
+      items.push({ b, sub: `Camille et Alex · ${i ? i.minutes : '…'} min`, note: busy ? 'En préparation…' : p && p.active ? 'Les voix se préparent…' : i && !i.done ? 'Préparation interrompue' : 'Prêt', act: busy || (p && p.active) ? 'Suivre' : i && !i.done ? 'Reprendre' : 'Écouter', ic: 'mic', open: () => Balado.open(b) });
+    } else if (kind === 'resumes') {
+      const t = b.summary?.text; if (!t) continue;
+      const mn = Math.max(1, Math.round(t.split(/\s+/).length / 150));
+      items.push({ b, sub: `Résumé · ${mn} min à lire ou à écouter`, note: b.summary.model === 'auto' ? 'Résumé automatique' : 'Résumé IA', act: 'Ouvrir', ic: 'spark', open: () => openSummary(b) });
+    } else if (kind === 'videos') {
+      if (!window.AndroidVideo || !Video.exists(b.id)) continue;
+      items.push({ b, sub: 'Condensé vidéo', note: 'Prêt', act: 'Regarder', ic: 'film', open: () => Video.open(b) });
+    }
+  }
+  const NAME = { balados: 'balado', resumes: 'résumé', videos: 'vidéo' };
+  const HOW = { balados: 'Appui long sur un livre (ou ⋮), puis « Balado ».', resumes: 'Appui long sur un livre (ou ⋮), puis « Résumé IA ».', videos: 'Appui long sur un livre (ou ⋮), puis « Vidéo ».' };
+  clearTimeout(creationsEl.t); // pendant qu'un balado se fabrique, la liste se met à jour toute seule
+  if (kind === 'balados' && items.some((x) => x.act === 'Suivre')) creationsEl.t = setTimeout(() => { if (S.ck === 'balados' && !$('.scrim') && !$('.reader')) renderLibrary({ now: true }); }, 2500);
+  if (!items.length) return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, HOW[kind]));
+  return h('div', { class: 'mklist' }, h('p', { class: 'muted mkcount' }, `${items.length} ${NAME[kind]}${items.length > 1 ? 's, faits' : ', fait'} à partir de tes livres`),
+    items.map((x) => h('button', { class: 'mkrow', onclick: x.open },
+      h('span', { class: 'mkthumb' }, coverEl(x.b)),
+      h('span', { class: 'mkinfo' }, h('b', {}, x.b.title), h('small', {}, x.sub), h('em', {}, x.note)),
+      h('span', { class: 'mkgo' }, icon(x.ic), x.act))));
+}
 function libTabs() {
   const l = visibleLibs(); const m = folderMap();
   if (!l.length || (l.length < 2 && !m[l[0].id])) return null;
@@ -2043,14 +2081,17 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
   },
   busy: {},
   step: {},
+  err: {},
+  pill: {},
   async prepare(b, minutes, onProgress) {
-    if (this.busy[b.id]) return toast('Le balado est déjà en préparation');
-    this.busy[b.id] = true;
-    const box = h('div', { class: 'up' }, h('b', {}, 'Balado : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
-    $('#uploads')?.append(box);
-    const st = this.step[b.id] = { t: 'Lecture du livre…', f: 0 };
-    const say = (t) => { st.t = t; $('span', box).textContent = t; onProgress?.(t); };
-    const bar = (f) => { st.f = f; const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    if (this.busy[b.id]) { toast('Le balado est déjà en préparation : il continue.'); return this.watch(b); }
+    const other = Object.keys(this.busy)[0] || Object.keys(this.pill).find((k) => k !== b.id && !this.err[k] && this.progress(k, this.info(k))?.active); // un seul balado à la fois : ils se partagent la même clé gratuite Gemini
+    if (other) { const ob = S.books.find((x) => x.id === other); toast(`Un balado est déjà en préparation${ob ? ' (« ' + ob.title + ' »)' : ''}. Attends qu'il soit prêt.`); return ob ? this.open(ob) : null; }
+    this.busy[b.id] = true; delete this.err[b.id];
+    const st = this.step[b.id] = { t: 'Lecture du livre…' };
+    const say = (t) => { st.t = t; onProgress?.(t); };
+    this.watch(b);
+    toast('Création lancée. Tu peux lire autre chose pendant ce temps.');
     try {
       const old = this.load(b.id);
       let work = old && !old.done && old.minutes === minutes && old.plan ? { minutes, plan: old.plan, parts: old.parts || [] } : null;
@@ -2061,17 +2102,49 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
       }
       const n = work.plan.segments.length;
       for (let i = work.parts.length; i < n; i++) {
-        say(i ? `Camille et Alex parlent · la suite se prépare (${i + 1} sur ${n})` : 'Camille et Alex préparent le début… l’écoute commencera toute seule'); bar(i / n);
+        say(i ? `Camille et Alex écrivent la suite (${i + 1} sur ${n})` : 'Camille et Alex écrivent le début de l’émission…');
         const last = work.parts[i - 1] || [];
         const prev = last.slice(-3).map((l) => `${this.HOSTS[l.s]} : « ${l.t} »`).join(' ');
         work.parts.push(await this.segment(b, work.plan, i, minutes, prev, say));
         this.write(b, work, i === n - 1);
         if (i === 0) { stopAllAudio(); AndroidAuto.baladoPlay(b.id); }
       }
-      bar(1); say('Balado prêt ✓'); setTimeout(() => box.remove(), 2500);
-    } catch (e) {
-      say(e.message); box.append(h('div', { class: 'prof-row', style: { marginTop: '8px' } }, h('button', { class: 'btn', onclick: () => { box.remove(); this.prepare(b, minutes, onProgress); } }, icon('refresh'), 'Réessayer'), h('button', { class: 'btn', onclick: () => box.remove() }, 'Fermer')));
-    } finally { delete this.busy[b.id]; delete this.step[b.id]; }
+    } catch (e) { this.err[b.id] = e.message || 'Le balado n’a pas pu être préparé.'; }
+    finally { delete this.busy[b.id]; delete this.step[b.id]; }
+  },
+  // Pastille de suivi : reste en bas de l'écran, partout dans l'app, du premier mot écrit jusqu'à la dernière voix prête.
+  // Un toucher la ramène à l'écran du balado.
+  watch(b) {
+    if (this.pill[b.id]) return;
+    const msg = h('span', { class: 'muted' }, ''), fill = h('i', { class: 'indet' }), act = h('div', { class: 'prof-row', style: { marginTop: '8px', display: 'none' } });
+    const box = h('div', { class: 'up bpill', role: 'button', onclick: () => this.open(b) }, h('b', {}, 'Balado : ' + b.title), msg, h('div', { class: 'bar' }, fill), act);
+    $('#uploads')?.append(box);
+    let idle = 0, ended = false;
+    const done = (text, ms) => { ended = true; clearInterval(t); msg.textContent = text; fill.classList.remove('indet'); fill.style.width = '100%'; setTimeout(() => { box.remove(); delete this.pill[b.id]; }, ms); };
+    const tick = () => {
+      if (ended) return;
+      const e = this.err[b.id];
+      if (e) {
+        ended = true; clearInterval(t); msg.textContent = e; fill.classList.remove('indet'); fill.style.width = '0';
+        act.style.display = '';
+        act.replaceChildren(
+          h('button', { class: 'btn', onclick: (ev) => { ev.stopPropagation(); box.remove(); delete this.pill[b.id]; this.prepare(b, (this.load(b.id)?.minutes) || store.get('baladoMin', 15)); } }, icon('refresh'), 'Réessayer'),
+          h('button', { class: 'btn', onclick: (ev) => { ev.stopPropagation(); box.remove(); delete this.pill[b.id]; } }, 'Fermer'));
+        return;
+      }
+      const p = this.progress(b.id, this.info(b.id));
+      if (p && p.active) {
+        idle = 0;
+        msg.textContent = p.lines.join(' · ') + (p.f > 0 ? ` · ${Math.round(p.f * 100)} %` : '');
+        if (p.f > 0.01) { fill.classList.remove('indet'); fill.style.width = Math.round(p.f * 100) + '%'; } else fill.classList.add('indet');
+        return;
+      }
+      if (++idle < 3) return; // on attend un instant : entre deux étapes, rien n'est « en cours » une fraction de seconde
+      const v = p?.v;
+      done(v && v.why ? 'Balado prêt · ' + v.why : 'Balado prêt ✓ Touche pour l’écouter', 6000);
+    };
+    const t = setInterval(tick, 1000);
+    this.pill[b.id] = box; tick();
   },
   // Avancement affiché dans l'écran du balado : texte écrit par Gemini, puis voix fabriquées d'avance (une scène = ~1 min 20)
   progress(id, info) {
@@ -2083,7 +2156,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     if (writing) lines.push(st?.t || 'Préparation…'); else if (info && !info.done) lines.push('Le texte est en attente de la suite…'); else lines.push('Texte du balado prêt ✓');
     if (v && v.total) lines.push(v.why ? v.why : `Voix de studio : ${v.made} scène${v.made > 1 ? 's' : ''} sur ${v.total} prête${v.made > 1 ? 's' : ''}${v.made >= v.total ? ' ✓' : ''}`);
     const tf = info?.done ? 1 : Math.min(1, made / n), vf = v && v.total ? v.made / v.total : 0;
-    return { lines, f: v && v.total && info?.done ? 0.35 + 0.65 * vf : 0.35 * tf };
+    const active = writing || !!(v && v.total && v.made < v.total && !v.why);
+    return { lines, v, active, f: v && v.total && info?.done ? 0.35 + 0.65 * vf : 0.35 * tf };
   },
   open(b) {
     if (!this.on()) return toast('Le balado a besoin de la version Android.');
@@ -2105,7 +2179,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     };
     let mode = '', ui = null; // l'écran n'est reconstruit que quand il change de nature : les boutons restent sous le doigt
     const render = () => {
-      const info = this.info(b.id);
+      const info = this.info(b.id) || (this.busy[b.id] ? { done: false, minutes, made: 0, n: 0 } : null);
       let st = null; try { st = JSON.parse(AndroidAuto.baladoState() || 'null'); } catch {}
       const mine = !!(st && st.id === b.id && info && info.made);
       const m = !info || (!info.made && !this.busy[b.id]) ? 'new' : mine ? 'play' : 'ready:' + (info.made ? 1 : 0) + (info.done ? 1 : 0) + (this.busy[b.id] ? 1 : 0) + minutes;
@@ -2115,15 +2189,16 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
         body.replaceChildren(
           h('p', { class: 'bintro' }, `Camille et Alex discutent de « ${b.title} », comme dans une émission de radio. Idéal à écouter en voiture, en marchant ou les yeux fermés.`),
           h('div', { class: 'field' }, 'Durée', seg),
-          h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); setTimeout(render, 300); } }, icon('mic'), 'Créer le balado'),
+          h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); render(); } }, icon('mic'), 'Créer le balado'),
           h('p', { class: 'muted bnote' }, 'Écrit et lu par Gemini avec ta clé gratuite : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'));
       } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
         mode = m;
         body.replaceChildren(
           h('div', { class: 'bhosts' }, avatar(0), avatar(1)),
-          h('p', { class: 'bintro', style: { textAlign: 'center' } }, this.busy[b.id] && !info.made ? 'Camille et Alex préparent le début de l’émission…' : `Émission de ${info.minutes} min${info.done ? '' : ' · la suite se prépare'}.`),
+          h('p', { class: 'bintro', style: { textAlign: 'center' } }, this.busy[b.id] && !info.made ? 'Camille et Alex préparent le début de l’émission…' : `Émission de ${info.minutes} min${info.done ? '' : this.busy[b.id] ? ' · la suite s’écrit, tu peux fermer cette fenêtre ou lire autre chose.' : ' · préparation interrompue.'}`),
           pr,
           h('button', { class: 'btn primary big', disabled: info.made ? null : true, onclick: () => { stopAllAudio(); AndroidAuto.baladoPlay(b.id); setTimeout(render, 400); } }, icon('play'), 'Écouter'),
+          !this.busy[b.id] && !info.done ? h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, info.minutes || minutes, () => render()); render(); } }, icon('refresh'), 'Reprendre la préparation') : null,
           !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null);
       } else if (m === 'play') {
         if (mode !== 'play') { // le lecteur : construit une fois, puis seulement mis à jour
