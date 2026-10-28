@@ -72,6 +72,9 @@ public class IaTest {
         pz.clear(); behave.put("gemini-pro-latest", "big"); said.clear();
         r = IaGratuite.tryPro("K", "", "x", false, false, p);
         ok(r == null && pz.isEmpty() && said.stream().anyMatch(s -> s.contains("trop long")), "F : texte trop long → Flash, sans écarter Pro (« " + (said.isEmpty() ? "" : said.get(0)) + " »)");
+        ok(IaGratuite.offline(new java.net.UnknownHostException("generativelanguage.googleapis.com")), "réseau coupé reconnu (nom introuvable)");
+        ok(IaGratuite.offline(new Exception("Gemini", new java.io.IOException("Unable to resolve host \"generativelanguage.googleapis.com\": No address associated with hostname"))), "réseau coupé reconnu (dans la cause)");
+        ok(!IaGratuite.offline(new Exception("surchargé (503)")) && !IaGratuite.offline(new Exception("quota gratuit momentanément atteint")), "un refus de Gemini n'est pas pris pour une panne de réseau");
         srv.stop(0);
         System.out.println(fails == 0 ? "TOUT PASSE" : fails + " ÉCHEC(S)");
         System.exit(fails == 0 ? 0 : 1);

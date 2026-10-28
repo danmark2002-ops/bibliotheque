@@ -76,13 +76,25 @@ final class IaGratuite {
         // 2) Flash
         Exception err = null;
         int tries = urgent ? 5 : 8;
+        long offlineSince = 0;
         for (int t = 0; t < tries; t++) {
             try {
                 String r = once(k, system, prompt, urgent, json, null);
                 if (r != null && !r.trim().isEmpty()) { lastModel = MODELS[model]; return r.trim(); }
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
-            catch (Exception e) { err = e; }
+            catch (Exception e) {
+                err = e;
+                if (offline(e)) { // pas de réseau (Wi-Fi qui saute, tunnel…) : ce n'est pas un échec de Gemini, on attend le retour de la connexion
+                    if (offlineSince == 0) offlineSince = System.currentTimeMillis();
+                    if (System.currentTimeMillis() - offlineSince < OFFLINE_MAX) {
+                        tell("Pas de connexion Internet sur le téléphone : j'attends qu'elle revienne, puis je continue toute seule…");
+                        Thread.sleep(OFFLINE_STEP); t--; continue;
+                    }
+                    throw new Exception("Pas de connexion Internet sur le téléphone depuis plus de " + (OFFLINE_MAX / 60000) + " minutes. Vérifie le Wi-Fi ou les données mobiles (et que l'économiseur de données n'est pas actif pour l'application), puis touche « Réessayer » : la préparation reprendra où elle en était.");
+                }
+                offlineSince = 0;
+            }
             Thread.sleep(Math.min(30000L, (urgent ? 2000L : 4000L) * (t + 1)));
         }
         String m = err == null ? "?" : String.valueOf(err.getMessage());
@@ -90,6 +102,18 @@ final class IaGratuite {
         throw new Exception("Gemini ne répond pas (" + m + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
     }
 
+
+    static long OFFLINE_MAX = 15 * 60_000L, OFFLINE_STEP = 8_000L; // (réduits dans les essais sur ordinateur)
+
+    /** Le réseau est coupé (nom de Gemini introuvable, réseau injoignable) : à distinguer d'un refus de Gemini */
+    static boolean offline(Throwable e) {
+        for (Throwable x = e; x != null; x = x.getCause()) {
+            if (x instanceof java.net.UnknownHostException || x instanceof java.net.NoRouteToHostException) return true;
+            String m = String.valueOf(x.getMessage());
+            if (m.contains("Unable to resolve host") || m.contains("No address associated") || m.contains("Network is unreachable")) return true;
+        }
+        return false;
+    }
 
     /** Mémoire des modèles Pro écartés (et jusqu'à quand) */
     interface Pauses { long until(String model); void set(String model, long until); }
