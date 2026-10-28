@@ -18,16 +18,17 @@ import java.nio.charset.StandardCharsets;
  * Le palier gratuit accepte environ 10 demandes par minute : les demandes sont espacées ici.
  */
 final class IaGratuite {
+    static String base = "https://generativelanguage.googleapis.com"; // changé seulement par les essais sur ordinateur
     private static final Object LOCK = new Object();
     private static long last;
-    private static final long GAP = 6500;
+    static long GAP = 6500; // (0 dans les essais sur ordinateur)
     // le premier modèle disponible est utilisé (les noms changent avec le temps)
     private static final String[] MODELS = {"gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.0-flash"};
     private static int model = 0;
     // Gemini Pro d'abord (meilleur), tant que la clé y a droit ; s'il refuse ou que son quota est épuisé, Flash prend le relais
     private static final String[] PRO = {"gemini-pro-latest", "gemini-2.5-pro"};
-    private static int pro = 0;
-    private static long proPausedUntil = 0;
+    /** Dernier refus de Pro, en clair (pour comprendre quand Pro ne répond pas) */
+    static volatile String lastProNote = "";
     /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
     static volatile String lastModel = "";
     /** Messages d'attente pour la personne (« Pro est occupé, nouvel essai dans 40 s… »), propres à chaque demande */
@@ -62,31 +63,15 @@ final class IaGratuite {
     static String ask(Context c, String system, String prompt, boolean urgent, boolean json, boolean wantPro) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
-        // 1) Gemini Pro d'abord. Sa limite par minute est basse : sur « trop de demandes », on patiente et on réessaie.
-        //    S'il refuse encore (quota du jour épuisé, ou Pro non permis pour la clé) : Flash pendant 6 heures (mémorisé).
-        android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
-        proPausedUntil = Math.max(proPausedUntil, sp.getLong("proPause", 0));
-        if (wantPro && System.currentTimeMillis() > proPausedUntil && pro < PRO.length) {
-            int waits = 1; // une seule courte attente, puis Flash : personne n'aime attendre
-            for (int t = 0; t <= waits && pro < PRO.length; t++) {
-                try {
-                    String r = once(k, system, prompt, urgent, json, PRO[pro]);
-                    if (r != null && !r.trim().isEmpty()) { lastModel = PRO[pro]; return r.trim(); }
-                    break;
-                } catch (ProRefused e) {
-                    if (e.code == 404) { pro++; t--; continue; }                                         // nom retiré : le suivant
-                    String w = e.code == 429 ? Quota.why(e.body) : "";
-                    if (w.equals("big")) { tell("Livre trop long pour Gemini Pro gratuit : Gemini Flash s'en charge…"); break; } // pas de pause de 6 h : un texte plus court passera
-                    if (w.equals("minute") && t < waits && Quota.retryMs(e.body) <= 15_000L) { long ms = urgent ? 8_000L : Quota.retryMs(e.body); tell("Gemini Pro est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); tell("Gemini Pro : nouvel essai…"); continue; } // limite par minute, courte
-                    if (w.equals("minute")) { tell("Gemini Pro est occupé : Gemini Flash s'en charge cette fois…"); break; } // sans pause de 6 h
-                    if (e.code >= 500 && t < waits) { Thread.sleep(5_000L); continue; }                   // surchargé
-                    if (e.code >= 500) { tell("Gemini Pro est surchargé : Gemini Flash s'en charge cette fois…"); break; }
-                    tell("Gemini Pro est à court pour aujourd'hui : Gemini Flash prend le relais…");
-                    proPausedUntil = System.currentTimeMillis() + 6 * 3600_000L;                          // épuisé : Flash 6 h
-                    sp.edit().putLong("proPause", proPausedUntil).apply();
-                    break;
-                } catch (Exception e) { break; }
-            }
+        // 1) Gemini Pro d'abord, modèle par modèle : un nom que la clé gratuite n'a pas (quota « 0 », accès refusé) est écarté
+        //    24 h SANS empêcher les suivants d'essayer (gemini-pro-latest peut viser un Pro payant alors que gemini-2.5-pro reste gratuit).
+        if (wantPro) {
+            final android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
+            String r = tryPro(k, system, prompt, urgent, json, new Pauses() {
+                public long until(String m) { return sp.getLong("proPause_" + m, 0); }
+                public void set(String m, long t) { sp.edit().putLong("proPause_" + m, t).apply(); }
+            });
+            if (r != null) return r;
         }
         // 2) Flash
         Exception err = null;
@@ -105,12 +90,56 @@ final class IaGratuite {
         throw new Exception("Gemini ne répond pas (" + m + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
     }
 
+
+    /** Mémoire des modèles Pro écartés (et jusqu'à quand) */
+    interface Pauses { long until(String model); void set(String model, long until); }
+
+    /** Essaie les modèles Pro un par un. Le texte, ou null si aucun ne répond (Flash prendra alors le relais). */
+    static String tryPro(String k, String system, String prompt, boolean urgent, boolean json, Pauses pz) throws Exception {
+        for (String pm : PRO) {
+            if (System.currentTimeMillis() < pz.until(pm)) continue;
+            for (int t = 0; t <= 1; t++) { // une seule courte attente, puis on passe au suivant : personne n'aime attendre
+                try {
+                    String r = once(k, system, prompt, urgent, json, pm);
+                    if (r != null && !r.trim().isEmpty()) { lastModel = pm; return r.trim(); }
+                    break;
+                } catch (ProRefused e) {
+                    String why = gmsg(e.body);
+                    String w = e.code == 429 ? Quota.why(e.body) : "";
+                    if (w.equals("big")) { tell("Livre trop long pour " + pm + " (quota gratuit par minute) : Gemini Flash s'en charge…"); return null; } // pas de pause : un texte plus court passera
+                    if (w.equals("minute")) {
+                        long ms = Quota.retryMs(e.body);
+                        if (t < 1 && ms <= 15_000L) { ms = urgent ? 8_000L : ms; tell(pm + " est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); continue; }
+                        tell(pm + " est occupé (limite par minute) : on passe au suivant…"); break;
+                    }
+                    if (e.code >= 500) { if (t < 1) { Thread.sleep(5_000L); continue; } tell(pm + " est surchargé : on passe au suivant…"); break; }
+                    // refus net : ce modèle n'est pas offert à cette clé (ou son quota du jour est épuisé)
+                    long span = e.code == 404 ? 7 * 24 * 3600_000L : 6 * 3600_000L;
+                    pz.set(pm, System.currentTimeMillis() + span);
+                    lastProNote = pm + " refusé (" + e.code + (why.isEmpty() ? "" : " : " + why) + ")";
+                    tell(pm + (e.code == 404 ? " n'existe plus" : w.equals("day") ? " : quota gratuit épuisé ou non offert avec ta clé" : " est refusé (" + e.code + ")") + " — essai du suivant…");
+                    break;
+                } catch (Fatal f) { throw f;
+                } catch (Exception e) { break; }
+            }
+        }
+        return null;
+    }
+
     private static void pace() throws InterruptedException {
         synchronized (LOCK) {
             long wait = last + GAP - System.currentTimeMillis();
             if (wait > 0) Thread.sleep(wait);
             last = System.currentTimeMillis();
         }
+    }
+
+    /** Le message d'erreur de Google, court (« Quota exceeded… ») */
+    static String gmsg(String b) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(b == null ? "" : b);
+        if (!m.find()) return "";
+        String x = m.group(1).replace("\\n", " ").replace("\\\"", "\"").trim();
+        return x.length() > 140 ? x.substring(0, 140) + "…" : x;
     }
 
     /** Pro a refusé (code HTTP) : on passe à Flash sans insister */
@@ -126,7 +155,7 @@ final class IaGratuite {
         body.put("generationConfig", gc);
         while (true) {
             if (!urgent) pace();
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + (force != null ? force : MODELS[model]) + ":generateContent";
+            String url = base + "/v1beta/models/" + (force != null ? force : MODELS[model]) + ":generateContent";
             String[] res = http(url, key, body.toString());
             int code = Integer.parseInt(res[0]);
             // certains formats de clés passent mieux dans l'adresse que dans l'en-tête : second essai
@@ -167,7 +196,7 @@ final class IaGratuite {
             .put("generationConfig", new JSONObject().put("temperature", 0.2).put("responseMimeType", "application/json"));
         for (int t = 0; t < 3; t++) {
             pace();
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[model] + ":generateContent";
+            String url = base + "/v1beta/models/" + MODELS[model] + ":generateContent";
             String[] res = http(url, k, body.toString());
             int code = Integer.parseInt(res[0]);
             if (code == 401 || code == 403 || code == 400) { String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(k, "UTF-8"), "", body.toString()); if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; } }

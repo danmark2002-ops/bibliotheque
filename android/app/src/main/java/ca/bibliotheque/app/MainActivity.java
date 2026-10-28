@@ -1454,6 +1454,10 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String baladoState() { return LivreService.duoState(); }
 
+        /** {made, total, working, why} : les voix de studio déjà fabriquées pour ce balado */
+        @JavascriptInterface
+        public String baladoVoice(String id) { return Voix.progress(getFilesDir(), id); }
+
         @JavascriptInterface
         public void profPause() { prof("pause", null, null); }
 
@@ -1588,7 +1592,7 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 JSONObject res = new JSONObject();
                 IaGratuite.STATUS.set(msg -> { try { js("__aiProgress", new JSONObject().put("id", id).put("msg", msg).toString()); } catch (Exception ignored) { } });
-                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent, json)); res.put("model", IaGratuite.lastModel); }
+                try { res.put("id", id); res.put("text", IaGratuite.ask(MainActivity.this, system, prompt, urgent, json)); res.put("model", IaGratuite.lastModel); res.put("note", IaGratuite.lastModel.contains("pro") ? "" : IaGratuite.lastProNote); }
                 catch (Throwable e) { try { res.put("error", String.valueOf(e.getMessage())); } catch (Exception ignored) { } }
                 IaGratuite.STATUS.remove();
                 js("__aiResult", res.toString());

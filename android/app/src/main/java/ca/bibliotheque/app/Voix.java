@@ -123,6 +123,16 @@ final class Voix {
         tmp.renameTo(meta); // la fiche vient en dernier : un son sans fiche n'est pas utilisé
     }
 
+    /** Où en est la fabrication des voix, pour l'écran : {made, total, working, why} */
+    static String progress(File files, String id) {
+        try {
+            Script s = script(new String(Compat.readAll(new File(new File(files, "auto"), "balado/" + id + ".json")), "UTF-8"));
+            List<Scene> sc = scenes(s); int made = 0;
+            for (int k = 0; k < sc.size(); k++) if (has(files, id, k, sc.get(k))) made++;
+            return new JSONObject().put("made", made).put("total", sc.size()).put("working", working(id)).put("why", problem()).toString();
+        } catch (Exception e) { return ""; }
+    }
+
     /** Efface tout le son d'un balado (quand on le refait ou le supprime) */
     static void purge(File files, String id) {
         File d = folder(files, id);

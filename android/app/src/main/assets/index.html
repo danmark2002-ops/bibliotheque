@@ -1083,6 +1083,11 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .balado .bplay { width: 68px; height: 68px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--brass); color: var(--brass-ink); }
 .balado .bplay svg { width: 28px; height: 28px; }
 
+.balado .bprog { margin: 14px 0 4px; padding: 12px 14px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.balado .bplines { font-size: 13px; line-height: 1.4; color: var(--ink-2); display: flex; flex-direction: column; gap: 2px; }
+.balado .bprog .bbar { height: 4px; }
+.balado .bprog .bbar i { transition: width .6s ease; }
+
 </style>
 </head>
 <body>
@@ -4180,7 +4185,7 @@ Question : ${v}`;
         const r = Prof.clean(await onlineAsk(Prof.persona + Prof.toneNote(), prompt, !pro, false, say));
         this.history.push({ q: v, a: r });
         out.textContent = r;
-        if (pro && !/pro/.test(window.__lastModel || '')) out.prepend(h('p', { class: 'muted', style: { margin: '0 0 6px' } }, 'Gemini Pro est à court pour l\'instant : réponse de Gemini Flash.'));
+        if (pro && !/pro/.test(window.__lastModel || '')) out.prepend(h('p', { class: 'muted', style: { margin: '0 0 6px' } }, 'Gemini Pro n\'a pas répondu : réponse de Gemini Flash.' + (window.__lastNote ? ' (' + window.__lastNote + ')' : '')));
         this.speak(r);
       } catch (e) { out.textContent = e.message; }
     };
@@ -4281,13 +4286,15 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     AutoSync.writeCatalog();
   },
   busy: {},
+  step: {},
   async prepare(b, minutes, onProgress) {
     if (this.busy[b.id]) return toast('Le balado est déjà en préparation');
     this.busy[b.id] = true;
     const box = h('div', { class: 'up' }, h('b', {}, 'Balado : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
     $('#uploads')?.append(box);
-    const say = (t) => { $('span', box).textContent = t; onProgress?.(t); };
-    const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    const st = this.step[b.id] = { t: 'Lecture du livre…', f: 0 };
+    const say = (t) => { st.t = t; $('span', box).textContent = t; onProgress?.(t); };
+    const bar = (f) => { st.f = f; const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
     try {
       const old = this.load(b.id);
       let work = old && !old.done && old.minutes === minutes && old.plan ? { minutes, plan: old.plan, parts: old.parts || [] } : null;
@@ -4308,7 +4315,19 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
       bar(1); say('Balado prêt ✓'); setTimeout(() => box.remove(), 2500);
     } catch (e) {
       say(e.message); box.append(h('div', { class: 'prof-row', style: { marginTop: '8px' } }, h('button', { class: 'btn', onclick: () => { box.remove(); this.prepare(b, minutes, onProgress); } }, icon('refresh'), 'Réessayer'), h('button', { class: 'btn', onclick: () => box.remove() }, 'Fermer')));
-    } finally { delete this.busy[b.id]; }
+    } finally { delete this.busy[b.id]; delete this.step[b.id]; }
+  },
+  // Avancement affiché dans l'écran du balado : texte écrit par Gemini, puis voix fabriquées d'avance (une scène = ~1 min 20)
+  progress(id, info) {
+    let v = null; try { v = JSON.parse(AndroidAuto.baladoVoice?.(id) || 'null'); } catch {}
+    const writing = !!this.busy[id], st = this.step[id], n = info?.n || 1, made = info?.made || 0;
+    const voiceDone = !!v && v.total > 0 && v.made >= v.total && info?.done;
+    if (!writing && (!v || voiceDone || (!v.working && !v.why && !v.total))) return null;
+    const lines = [];
+    if (writing) lines.push(st?.t || 'Préparation…'); else if (info && !info.done) lines.push('Le texte est en attente de la suite…'); else lines.push('Texte du balado prêt ✓');
+    if (v && v.total) lines.push(v.why ? v.why : `Voix de studio : ${v.made} scène${v.made > 1 ? 's' : ''} sur ${v.total} prête${v.made > 1 ? 's' : ''}${v.made >= v.total ? ' ✓' : ''}`);
+    const tf = info?.done ? 1 : Math.min(1, made / n), vf = v && v.total ? v.made / v.total : 0;
+    return { lines, f: v && v.total && info?.done ? 0.35 + 0.65 * vf : 0.35 * tf };
   },
   open(b) {
     if (!this.on()) return toast('Le balado a besoin de la version Android.');
@@ -4319,6 +4338,15 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     const close = sheet('Balado à deux voix', body);
     const scrim = $$('.scrim').pop();
     const avatar = (k) => h('div', { class: 'bhost', 'data-k': k }, h('span', { class: 'bav' }, this.HOSTS[k][0]), h('b', {}, this.HOSTS[k]), h('small', {}, ''));
+    const pr = h('div', { class: 'bprog' }, h('div', { class: 'bplines' }), h('div', { class: 'bbar' }, h('i')));
+    const paintProg = () => {
+      const p = this.progress(b.id, this.info(b.id));
+      pr.style.display = p ? '' : 'none';
+      if (!p) return;
+      const box = $('.bplines', pr); const txt = p.lines.join('\n');
+      if (box.dataset.t !== txt) { box.dataset.t = txt; box.replaceChildren(...p.lines.map((x) => h('div', {}, x))); }
+      $('i', pr).style.width = Math.round(p.f * 100) + '%';
+    };
     let mode = '', ui = null; // l'écran n'est reconstruit que quand il change de nature : les boutons restent sous le doigt
     const render = () => {
       const info = this.info(b.id);
@@ -4338,6 +4366,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
         body.replaceChildren(
           h('div', { class: 'bhosts' }, avatar(0), avatar(1)),
           h('p', { class: 'bintro', style: { textAlign: 'center' } }, this.busy[b.id] && !info.made ? 'Camille et Alex préparent le début de l’émission…' : `Émission de ${info.minutes} min${info.done ? '' : ' · la suite se prépare'}.`),
+          pr,
           h('button', { class: 'btn primary big', disabled: info.made ? null : true, onclick: () => { stopAllAudio(); AndroidAuto.baladoPlay(b.id); setTimeout(render, 400); } }, icon('play'), 'Écouter'),
           !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null);
       } else if (m === 'play') {
@@ -4345,7 +4374,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
           mode = 'play';
           ui = { hosts: h('div', { class: 'bhosts' }, avatar(0), avatar(1)), line: h('p', { class: 'bline' }), bar: h('i'), who: h('span'), left: h('span'),
             play: h('button', { class: 'bplay', onclick: () => { ui.st?.playing ? AndroidAuto.profPause() : AndroidAuto.baladoPlay(b.id); setTimeout(render, 250); } }) };
-          body.replaceChildren(ui.hosts, ui.line, h('div', { class: 'bbar' }, ui.bar), h('div', { class: 'bmeta' }, ui.who, ui.left),
+          body.replaceChildren(ui.hosts, ui.line, h('div', { class: 'bbar' }, ui.bar), h('div', { class: 'bmeta' }, ui.who, ui.left), pr,
             h('div', { class: 'bctl' },
               h('button', { class: 'rbtn', 'aria-label': 'Réplique précédente', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.max(0, ui.st.i - 1)) }, icon('prev')),
               ui.play,
@@ -4366,8 +4395,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
         if (ui.play.dataset.p !== String(st.playing)) { ui.play.dataset.p = String(st.playing); ui.play.setAttribute('aria-label', st.playing ? 'Pause' : 'Lecture'); ui.play.replaceChildren(icon(st.playing ? 'pause' : 'play')); }
       }
     };
-    render();
-    timer = setInterval(() => { if (!scrim.isConnected) { clearInterval(timer); return; } render(); }, 600);
+    render(); paintProg();
+    timer = setInterval(() => { if (!scrim.isConnected) { clearInterval(timer); return; } render(); paintProg(); }, 600);
   },
 };
 // Réponse JSON de Gemini : on enlève un éventuel encadré ```json
@@ -4538,7 +4567,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' + (s.why ? ' (Pro n\'a pas répondu : ' + s.why + ')' : '') : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -5073,7 +5102,7 @@ ${text}
         try {
           summary = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${book}\n</livre>`, false, false, say));
           // le résumé sert aussi dans la Bibliothèque
-          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini', truncated: t.truncated } }, 'PATCH'); } catch {} }
+          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini', why: /pro/.test(window.__lastModel || '') ? '' : (window.__lastNote || ''), truncated: t.truncated } }, 'PATCH'); } catch {} }
         } catch { summary = ''; }
       }
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
@@ -5263,7 +5292,7 @@ function onlineAsk(system, prompt, urgent, json, say) {
   if (say) (window.__aiSays ||= {})[id] = say;
   const wait = (window.__aiWait ||= {});
   window.__aiResult = (j) => { const r = JSON.parse(j); const f = wait[r.id]; if (!f) return; delete wait[r.id]; f(r); };
-  return new Promise((res, rej) => { wait[id] = (r) => { if (window.__aiSays) delete window.__aiSays[id]; if (r.model) window.__lastModel = r.model; return r.error ? rej(new Error(r.error)) : res((r.text || '').trim()); }; (json && AndroidAI.generateJson ? AndroidAI.generateJson : urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
+  return new Promise((res, rej) => { wait[id] = (r) => { if (window.__aiSays) delete window.__aiSays[id]; if (r.model) { window.__lastModel = r.model; window.__lastNote = r.note || ''; } return r.error ? rej(new Error(r.error)) : res((r.text || '').trim()); }; (json && AndroidAI.generateJson ? AndroidAI.generateJson : urgent && AndroidAI.generateUrgent ? AndroidAI.generateUrgent : AndroidAI.generateOnline).call(AndroidAI, id, system || '', prompt); });
 }
 async function nanoAskRetry(prompt, say) {
   for (let t = 0; ; t++) {
@@ -5338,7 +5367,7 @@ async function computeSummary(b, say) {
       if (st === 'available') { text = await nanoSummary(b, t.text, say); model = 'gemini-nano'; }
     }
     if (!text) { say('Résumé automatique…'); await new Promise((r) => setTimeout(r, 30)); text = autoSummary(t.text, b.title); }
-    const summary = { text, date: Date.now(), model, truncated: t.truncated };
+    const summary = { text, date: Date.now(), model, why: model === 'gemini' ? (window.__lastNote || '') : '', truncated: t.truncated };
     await post('/api/books/' + b.id, { summary }, 'PATCH');
     return summary;
 }
