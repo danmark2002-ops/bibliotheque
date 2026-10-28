@@ -2020,7 +2020,7 @@ Question : ${v}`;
 // premier segment. Le lecteur natif joue les deux voix (téléphone, écran verrouillé, Android Auto) : balado/<id>.json.
 const Balado = {
   HOSTS: ['Camille', 'Alex'],
-  LENGTHS: [[5, '5 min'], [15, '15 min'], [30, '30 min']],
+  LENGTHS: [[3, '3 min'], [6, '6 min'], [10, '10 min'], [15, '15 min']],
   on: () => Prof.on() && !!AndroidAuto.baladoPlay,
   file: (id) => `balado/${id}.json`,
   load(id) { try { const t = AndroidAuto.readText(this.file(id)); return t ? JSON.parse(t) : null; } catch { return null; } },
@@ -2040,7 +2040,7 @@ Comme une vraie conversation enregistrée : beaucoup de répliques courtes (souv
 Tu peux glisser, avec parcimonie (quelques fois par segment), UNIQUEMENT ces balises dans le texte : <laugh> (petit rire), <sigh> (soupir), <breath> (inspiration), <short pause> (silence bref). Aucune autre balise, aucune majuscule d'insistance.
 Pour chaque réplique, « ton » dit en 1 à 4 mots comment elle est jouée : « curieux », « amusé », « ému, plus bas », « enthousiaste », « sérieux, posé », « surpris », « complice »…`,
   async plan(b, text, minutes, say) {
-    const segs = minutes <= 5 ? 2 : minutes <= 15 ? 4 : 7;
+    const segs = minutes <= 3 ? 2 : minutes <= 6 ? 3 : minutes <= 10 ? 4 : 5;
     const prompt = `Prépare le plan d'un épisode de balado d'environ ${minutes} minutes sur le livre ${Prof.who(b)}.
 Réponds en JSON : {"accroche": "une phrase d'ouverture qui donne envie d'écouter", "segments": [{"sujet": "…", "points": ["…"]}], "conclusion": "l'idée à retenir"}.
 - Exactement ${segs} segments, dans un ordre qui raconte le livre du début à la fin.
@@ -2205,7 +2205,7 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
     if (!this.on()) return toast('Le balado a besoin de la version Android.');
     if (!Premium.need('balado')) return;
     if (!Prof.hasKey()) return KeyGuide.start(() => this.open(b));
-    let minutes = store.get('baladoMin', 15), timer = 0;
+    let minutes = this.LENGTHS.some(([n]) => n === store.get('baladoMin', 15)) ? store.get('baladoMin', 15) : 15, timer = 0;
     const body = h('div', { class: 'balado' });
     const close = sheet('Balado à deux voix', body);
     const scrim = $$('.scrim').pop();
