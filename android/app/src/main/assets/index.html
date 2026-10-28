@@ -4390,7 +4390,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
         ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
         const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
         ui.left.textContent = left ? `≈ ${left} min restantes` : '';
-        const vt = st.voice === 'prep' ? 'La voix se prépare…' : st.voice === 'phone' ? st.why : '';
+        const vt = st.voice === 'prep' ? 'La voix se prépare…' : st.voice === 'phone' ? st.why : st.voice === 'studio' ? 'Voix de studio Gemini ✓' : '';
         if (ui.voice.textContent !== vt) ui.voice.textContent = vt;
         if (ui.play.dataset.p !== String(st.playing)) { ui.play.dataset.p = String(st.playing); ui.play.setAttribute('aria-label', st.playing ? 'Pause' : 'Lecture'); ui.play.replaceChildren(icon(st.playing ? 'pause' : 'play')); }
       }

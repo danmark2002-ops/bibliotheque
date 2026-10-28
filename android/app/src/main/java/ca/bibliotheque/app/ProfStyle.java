@@ -49,12 +49,24 @@ final class ProfStyle {
         return pool.get(idx % pool.size());
     }
 
+    /** Écart de hauteur (Hz) à partir duquel deux voix sont vraiment deux personnes (homme / femme) */
+    static final double GAP_HZ = 35;
+
     /**
-     * Les deux animateurs du balado : deux voix françaises DIFFÉRENTES (même région de préférence, installées sur le téléphone).
-     * Une seule voix disponible : la même pour les deux, et c'est la hauteur qui les distingue (voir duo()).
+     * Les deux animateurs du balado quand Gemini ne les joue pas : {Camille, Alex}.
+     * Android ne dit pas si une voix est d'homme ou de femme : on a MESURÉ la hauteur réelle de chaque voix française installée
+     * (f0, en Hz) ; Camille prend la plus aiguë, Alex la plus grave, si l'écart est net.
+     * Sinon : deux voix différentes de la même région, ou la même voix, et c'est la hauteur qui les distingue (voir duo()).
      */
-    static android.speech.tts.Voice[] pickDuo(Context c, java.util.Set<android.speech.tts.Voice> all) {
+    static android.speech.tts.Voice[] pickDuo(Context c, java.util.Set<android.speech.tts.Voice> all, java.util.Map<String, Double> f0) {
         java.util.List<android.speech.tts.Voice> fr = frenchVoices(all), pool = new java.util.ArrayList<>();
+        java.util.List<android.speech.tts.Voice> measured = new java.util.ArrayList<>();
+        for (android.speech.tts.Voice v : fr) { Double h = f0.get(base(v.getName())); if (h != null && h > 0 && !v.isNetworkConnectionRequired()) measured.add(v); }
+        if (measured.size() >= 2) {
+            measured.sort((x, y) -> Double.compare(f0.get(base(x.getName())), f0.get(base(y.getName()))));
+            android.speech.tts.Voice low = measured.get(0), high = measured.get(measured.size() - 1);
+            if (f0.get(base(high.getName())) - f0.get(base(low.getName())) >= GAP_HZ) return new android.speech.tts.Voice[]{high, low};
+        }
         for (String cc : new String[]{"CA", "FR"}) {
             java.util.List<android.speech.tts.Voice> same = new java.util.ArrayList<>();
             for (android.speech.tts.Voice v : fr) if (cc.equals(v.getLocale().getCountry()) && !v.isNetworkConnectionRequired()) same.add(v);
@@ -63,15 +75,21 @@ final class ProfStyle {
         if (pool.size() < 2) { pool = new java.util.ArrayList<>(); for (android.speech.tts.Voice v : fr) if (!v.isNetworkConnectionRequired()) pool.add(v); }
         if (pool.size() < 2) pool = fr;
         if (pool.isEmpty()) return new android.speech.tts.Voice[]{null, null};
-        // 1re et 3e voix quand c'est possible : chez Google, les voix voisines se ressemblent souvent
         return new android.speech.tts.Voice[]{pool.get(0), pool.get(pool.size() >= 3 ? 2 : pool.size() - 1)};
     }
 
+    /** Les deux voix mesurées sont-elles vraiment un homme et une femme ? */
+    static boolean realPair(java.util.Map<String, Double> f0, android.speech.tts.Voice a, android.speech.tts.Voice b) {
+        if (a == null || b == null) return false;
+        Double x = f0.get(base(a.getName())), y = f0.get(base(b.getName()));
+        return x != null && y != null && x > 0 && y > 0 && x - y >= GAP_HZ;
+    }
+
     /** {hauteur, débit} d'une réplique du balado : Camille (0) vive et claire, Alex (1) plus grave et posé */
-    static float[] duo(Context c, String x, int n, int speaker, boolean sameVoice) {
+    static float[] duo(Context c, String x, int n, int speaker, boolean sameVoice, boolean realPair) {
         String s = x.trim();
         float rate = speed(c);
-        float p0 = speaker == 1 ? (sameVoice ? 0.80f : 0.88f) : (sameVoice ? 1.16f : 1.10f); // voix du téléphone (repli) : écart net pour qu'on entende deux personnes
+        float p0 = realPair ? 1f : speaker == 1 ? (sameVoice ? 0.80f : 0.88f) : (sameVoice ? 1.16f : 1.10f); // voix du téléphone (repli) : voix vraiment différentes → naturelles ; sinon écart de hauteur net
         float r0 = speaker == 1 ? 0.96f : 1.02f;
         float pitch = p0 + (((n * 37) % 5) - 2) * 0.012f, r = rate * r0;
         if (s.endsWith("!") || s.endsWith("! »")) { pitch += 0.06f; r *= 1.04f; }

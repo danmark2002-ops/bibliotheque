@@ -116,6 +116,11 @@ final class Studio {
         int rate = 24000;
         java.util.regex.Matcher r = java.util.regex.Pattern.compile("rate=(\\d{4,6})").matcher(body);
         if (r.find()) rate = Integer.parseInt(r.group(1));
+        return decode(raw, rate);
+    }
+
+    /** Du son brut (PCM 16 bits) ou un fichier WAV : les échantillons et la fréquence. */
+    static Audio decode(byte[] raw, int rate) throws Fail {
         int off = 0, len = raw.length, ch = 1;
         if (raw.length > 44 && raw[0] == 'R' && raw[1] == 'I' && raw[2] == 'F' && raw[3] == 'F') { // WAV : l'en-tête dit tout
             int p = 12; off = -1;
@@ -134,6 +139,36 @@ final class Studio {
         for (int i = 0; i < frames; i++) pcm[i] = (short) ((raw[off + i * 2 * ch] & 0xFF) | (raw[off + i * 2 * ch + 1] << 8));
         if (frames < rate / 4) throw new Fail("empty", "son trop court", 0);
         return new Audio(pcm, rate);
+    }
+
+    /** Hauteur de voix (médiane, en Hz) d'un enregistrement de parole : environ 100-140 pour une voix d'homme, 180-250 pour une voix de femme. 0 si introuvable. */
+    static double pitch(short[] p, int rate) {
+        int fr = rate / 25, hop = rate / 50;                 // tranches de 40 ms, tous les 20 ms
+        int lo = rate / 400, hi = rate / 70;                 // de 70 à 400 Hz
+        double peak = 0;
+        for (short v : p) peak = Math.max(peak, Math.abs(v));
+        List<Double> f = new ArrayList<>();
+        for (int s = 0; s + fr + hi < p.length; s += hop) {
+            double e0 = 0, mean = 0;
+            for (int i = 0; i < fr; i++) mean += p[s + i];
+            mean /= fr;
+            for (int i = 0; i < fr; i++) { double d = p[s + i] - mean; e0 += d * d; }
+            if (Math.sqrt(e0 / fr) < 0.08 * peak) continue; // silence ou souffle
+            double[] c = new double[hi + 1]; double best = 0;
+            for (int lag = lo; lag <= hi; lag++) {
+                double a = 0, eb = 0;
+                for (int i = 0; i < fr; i++) { double x = p[s + i] - mean, y = p[s + i + lag] - mean; a += x * y; eb += y * y; }
+                c[lag] = a / Math.sqrt(e0 * eb + 1e-9);
+                if (c[lag] > best) best = c[lag];
+            }
+            if (best < 0.55) continue;                         // non voisé
+            int pick = -1;                                     // le plus petit décalage presque aussi fort que le meilleur : évite l'erreur d'octave
+            for (int lag = lo + 1; lag < hi; lag++) if (c[lag] >= 0.9 * best && c[lag] >= c[lag - 1] && c[lag] >= c[lag + 1]) { pick = lag; break; }
+            if (pick > 0) f.add(rate / (double) pick);
+        }
+        if (f.size() < 5) return 0;
+        java.util.Collections.sort(f);
+        return f.get(f.size() / 2);
     }
 
     private static int le16(byte[] b, int p) { return (b[p] & 0xFF) | ((b[p + 1] & 0xFF) << 8); }

@@ -90,6 +90,23 @@ public class StudioTest {
         ok(au.pcm.length == test.length && au.pcm[2000] == test[2000], "PCM brut (generateContent, « \\/ » échappé) lu");
         try { Studio.parse("{\"steps\":[]}"); ok(false, "réponse sans son refusée"); } catch (Studio.Fail f) { ok(f.kind.equals("empty"), "réponse sans son refusée"); }
 
+
+        // ---------- hauteur de voix (pour reconnaître une voix d'homme d'une voix de femme)
+        for (double hz : new double[]{105, 125, 150, 190, 220, 250}) {
+            int R2 = 22050; short[] v = new short[R2 * 3]; double ph = 0; Random pr = new Random((long) hz);
+            for (int i = 0; i < v.length; i++) {
+                double t = i / (double) R2, f = hz * (1 + 0.06 * Math.sin(t * 5) + 0.02 * pr.nextGaussian() * 0.1);
+                ph += 2 * Math.PI * f / R2;
+                double env = (t % 0.9) < 0.7 ? 1 : 0; // phrases séparées par des silences
+                double sig = 0; for (int k = 1; k <= 12; k++) sig += Math.sin(k * ph) / k;  // harmoniques
+                v[i] = (short) (env * 5000 * sig + pr.nextGaussian() * 60);
+            }
+            double got = Studio.pitch(v, R2);
+            ok(Math.abs(got - hz) / hz < 0.06, String.format("hauteur mesurée : %.0f Hz pour une voix à %.0f Hz", got, hz));
+        }
+        short[] noise = new short[24000 * 2]; Random nr = new Random(1); for (int i = 0; i < noise.length; i++) noise[i] = (short) (nr.nextGaussian() * 3000);
+        ok(Studio.pitch(noise, 24000) == 0, "bruit sans voix : pas de hauteur inventée");
+
         // ---------- 3. faux serveur Gemini
         final String[] mode = {"new"};
         final List<String> seen = new ArrayList<>(), bodies = new ArrayList<>();

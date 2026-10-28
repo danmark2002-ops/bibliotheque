@@ -86,6 +86,10 @@ public class LivreService extends MediaBrowserService {
     private boolean duo;
     private final List<Integer> speakers = new ArrayList<>();
     private android.speech.tts.Voice duoA, duoB;
+    private boolean duoReal;                                   // les deux voix du téléphone sont vraiment un homme et une femme (hauteur mesurée)
+    private final java.util.Map<String, Double> f0 = new java.util.HashMap<>(); // hauteur mesurée de chaque voix française (Hz)
+    private final java.util.ArrayDeque<android.speech.tts.Voice> probeList = new java.util.ArrayDeque<>();
+    private boolean probing; private int probeToken; private String probeId = "";
     // Voix de studio (Gemini) : le balado est joué par des scènes de son déjà fabriquées (Voix), sinon par les voix du téléphone
     private final ScenePlayer clip = new ScenePlayer();
     private Voix.Script script;
@@ -141,8 +145,8 @@ public class LivreService extends MediaBrowserService {
             try { defaultVoice = tts.getVoice(); profVoice = chosenVoice(); } catch (Exception ignored) { }
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
-                @Override public void onDone(String id) { main.post(() -> spoken(id)); }
-                @Override public void onError(String id) { main.post(() -> spoken(id)); }
+                @Override public void onDone(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } main.post(() -> spoken(id)); }
+                @Override public void onError(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } main.post(() -> spoken(id)); }
             });
             ttsReady = true;
             if (playing) main.post(this::speak);
@@ -471,7 +475,7 @@ public class LivreService extends MediaBrowserService {
             for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); speakers.add(x.optInt(3, 0)); }
             prof = isProf;
             duo = isDuo;
-            if (duo) { try { android.speech.tts.Voice[] v = ProfStyle.pickDuo(this, tts.getVoices()); duoA = v[0]; duoB = v[1]; } catch (Exception e) { duoA = duoB = null; } }
+            if (duo) duoPick();
             clipScene = -1; clipData = null; voiceWaitSince = 0; skipScene = -1; vMode = "";
             profDone = !isProf || data.optBoolean("done", true);
             waitingMore = false;
@@ -550,6 +554,7 @@ public class LivreService extends MediaBrowserService {
         int t = ++token;
         if (duo && interIdx >= inter.size() && studioSpeak(t)) return;
         if (!ttsReady) return;
+        if (duo && interIdx >= inter.size() && probeNeeded()) { vMode = "prep"; probeStart(); updateState(); main.postDelayed(gap(++token), 700); return; } // on repère d'abord qui est l'homme et qui est la femme
         try {
             android.speech.tts.Voice v = duo && interIdx >= inter.size() ? (speaker() == 1 ? duoB : duoA) : prof && profVoice != null ? profVoice : defaultVoice;
             if (v == null) v = defaultVoice;
@@ -563,7 +568,7 @@ public class LivreService extends MediaBrowserService {
             return;
         }
         String x = units.get(idx);
-        if (duo) { float[] ps = ProfStyle.duo(this, x, idx, speaker(), duoA != null && duoA.equals(duoB)); tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]); }
+        if (duo) { float[] ps = ProfStyle.duo(this, x, idx, speaker(), duoA != null && duoA.equals(duoB), duoReal); tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]); }
         else if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
         tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
         updateState();
@@ -573,10 +578,65 @@ public class LivreService extends MediaBrowserService {
     private String phoneWhy() {
         if (IaGratuite.key(this).isEmpty()) return "Ajoute ta clé Gemini gratuite pour les voix de studio.";
         String p = Voix.problem();
-        return p.isEmpty() ? "Voix du téléphone." : p;
+        String m = p.isEmpty() ? "Voix du téléphone." : p;
+        return duoReal ? m + " Une voix grave, une voix aiguë." : m;
     }
 
     private int speaker() { return idx < speakers.size() ? speakers.get(idx) : 0; }
+
+
+    // ---------------------------------------------------------------- voix du téléphone : homme ou femme ?
+    /** Choisit Camille et Alex parmi les voix françaises installées, d'après la hauteur mesurée (voir ProfStyle.pickDuo) */
+    private void duoPick() {
+        try {
+            if (f0.isEmpty()) { JSONObject o = new JSONObject(getSharedPreferences("ia", MODE_PRIVATE).getString("voiceF0", "{}")); for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) { String k = it.next(); f0.put(k, o.optDouble(k, 0)); } }
+            android.speech.tts.Voice[] v = ProfStyle.pickDuo(this, tts.getVoices(), f0);
+            duoA = v[0]; duoB = v[1]; duoReal = ProfStyle.realPair(f0, duoA, duoB);
+        } catch (Exception e) { duoA = duoB = null; duoReal = false; }
+    }
+
+    private boolean probeNeeded() {
+        if (probing) return true;
+        try {
+            if (f0.isEmpty()) duoPick();
+            for (android.speech.tts.Voice v : ProfStyle.frenchVoices(tts.getVoices())) if (!v.isNetworkConnectionRequired() && !f0.containsKey(ProfStyle.base(v.getName()))) return true;
+        } catch (Exception ignored) { }
+        return false;
+    }
+
+    /** Fait dire une phrase à chaque voix française installée, dans un fichier, et mesure la hauteur (une fois : le résultat est gardé) */
+    private void probeStart() {
+        if (probing) return;
+        probeList.clear();
+        try { for (android.speech.tts.Voice v : ProfStyle.frenchVoices(tts.getVoices())) if (!v.isNetworkConnectionRequired() && !f0.containsKey(ProfStyle.base(v.getName())) && probeList.size() < 10) probeList.add(v); } catch (Exception ignored) { }
+        if (probeList.isEmpty()) return;
+        probing = true;
+        probeNext();
+    }
+
+    private void probeNext() {
+        android.speech.tts.Voice v = probeList.poll();
+        if (v == null) { probing = false; duoPick(); updateState(); return; }
+        probeId = "probe:" + ProfStyle.base(v.getName());
+        final int pt = ++probeToken; final String id = probeId;
+        try {
+            tts.setVoice(v); tts.setPitch(1f); tts.setSpeechRate(1f);
+            int r = tts.synthesizeToFile("Bonjour, je m'appelle Camille, et aujourd'hui nous allons parler ensemble d'un livre passionnant.", new Bundle(), new File(getCacheDir(), "probe.wav"), id);
+            if (r != TextToSpeech.SUCCESS) { f0.put(ProfStyle.base(v.getName()), 0.0); probeNext(); return; }
+        } catch (Exception e) { f0.put(ProfStyle.base(v.getName()), 0.0); probeNext(); return; }
+        main.postDelayed(() -> { if (probing && pt == probeToken) probeDone(id); }, 9000); // le moteur ne répond pas : on passe à la voix suivante
+    }
+
+    private void probeDone(String id) {
+        if (!probing || !id.equals(probeId)) return;
+        probeToken++;
+        double hz = 0;
+        try { Studio.Audio a = Studio.decode(Compat.readAll(new File(getCacheDir(), "probe.wav")), 22050); hz = Studio.pitch(a.pcm, a.rate); } catch (Exception ignored) { }
+        f0.put(id.substring(6), hz);
+        try { JSONObject o = new JSONObject(); for (java.util.Map.Entry<String, Double> e : f0.entrySet()) o.put(e.getKey(), e.getValue()); getSharedPreferences("ia", MODE_PRIVATE).edit().putString("voiceF0", o.toString()).apply(); } catch (Exception ignored) { }
+        new File(getCacheDir(), "probe.wav").delete();
+        probeNext();
+    }
 
     // ---------------------------------------------------------------- balado : voix de studio
     private int sceneOf(int i) { for (int k = 0; k < scenes.size(); k++) if (i >= scenes.get(k).first && i <= scenes.get(k).last) return k; return -1; }
