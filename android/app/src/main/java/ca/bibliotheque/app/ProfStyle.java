@@ -49,6 +49,38 @@ final class ProfStyle {
         return pool.get(idx % pool.size());
     }
 
+    /**
+     * Les deux animateurs du balado : deux voix françaises DIFFÉRENTES (même région de préférence, installées sur le téléphone).
+     * Une seule voix disponible : la même pour les deux, et c'est la hauteur qui les distingue (voir duo()).
+     */
+    static android.speech.tts.Voice[] pickDuo(Context c, java.util.Set<android.speech.tts.Voice> all) {
+        java.util.List<android.speech.tts.Voice> fr = frenchVoices(all), pool = new java.util.ArrayList<>();
+        for (String cc : new String[]{"CA", "FR"}) {
+            java.util.List<android.speech.tts.Voice> same = new java.util.ArrayList<>();
+            for (android.speech.tts.Voice v : fr) if (cc.equals(v.getLocale().getCountry()) && !v.isNetworkConnectionRequired()) same.add(v);
+            if (same.size() >= 2) { pool = same; break; }
+        }
+        if (pool.size() < 2) { pool = new java.util.ArrayList<>(); for (android.speech.tts.Voice v : fr) if (!v.isNetworkConnectionRequired()) pool.add(v); }
+        if (pool.size() < 2) pool = fr;
+        if (pool.isEmpty()) return new android.speech.tts.Voice[]{null, null};
+        // 1re et 3e voix quand c'est possible : chez Google, les voix voisines se ressemblent souvent
+        return new android.speech.tts.Voice[]{pool.get(0), pool.get(pool.size() >= 3 ? 2 : pool.size() - 1)};
+    }
+
+    /** {hauteur, débit} d'une réplique du balado : Camille (0) vive et claire, Alex (1) plus grave et posé */
+    static float[] duo(Context c, String x, int n, int speaker, boolean sameVoice) {
+        String s = x.trim();
+        float rate = speed(c);
+        float p0 = speaker == 1 ? (sameVoice ? 0.82f : 0.95f) : (sameVoice ? 1.14f : 1.04f);
+        float r0 = speaker == 1 ? 0.96f : 1.02f;
+        float pitch = p0 + (((n * 37) % 5) - 2) * 0.012f, r = rate * r0;
+        if (s.endsWith("!") || s.endsWith("! »")) { pitch += 0.06f; r *= 1.04f; }
+        else if (s.endsWith("?") || s.endsWith("? »")) { pitch += 0.04f; r *= 0.97f; }
+        else if (s.endsWith("…")) { pitch -= 0.04f; r *= 0.9f; }
+        if (s.length() < 20) r *= 1.04f;
+        return new float[]{Math.max(0.7f, Math.min(1.4f, pitch)), Math.max(0.5f, Math.min(2.4f, r))};
+    }
+
     /** {hauteur, débit} pour la phrase n° n */
     static float[] shape(Context c, String x, int n, float baseRate) {
         String s = x.trim(), t = tone(c);

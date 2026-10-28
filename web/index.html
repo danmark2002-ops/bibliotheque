@@ -1069,6 +1069,25 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .recv-row { display: grid; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
 .recv-row small { opacity: .8; }
 
+/* Balado à deux voix */
+.balado { display: flex; flex-direction: column; gap: 14px; }
+.balado .bintro { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.balado .bnote { margin: 0; font-size: 13px; text-align: center; }
+.balado .btn.big { justify-content: center; height: 52px; font-size: 16px; }
+.balado .linkish { align-self: center; background: none; border-color: transparent; color: var(--ink-2); }
+.bhosts { display: flex; justify-content: center; gap: 40px; padding: 6px 0 2px; }
+.bhost { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 76px; }
+.bhost .bav { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font: 600 28px var(--font-display); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); transition: box-shadow .25s, background .25s, color .25s; }
+.bhost[data-k="0"] .bav { background: color-mix(in srgb, var(--brass) 22%, var(--panel-2)); }
+.bhost.on .bav { background: var(--brass); color: var(--brass-ink); box-shadow: 0 0 0 4px var(--panel), 0 0 0 7px var(--brass); }
+.bhost b { font-size: 14px; } .bhost small { font-size: 12px; color: var(--brass); min-height: 15px; }
+.balado .bline { margin: 0; min-height: 4.5em; font: 17px/1.5 var(--font-read); color: var(--ink); text-align: center; }
+.balado .bbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; } .balado .bbar i { display: block; height: 100%; background: var(--brass); border-radius: 2px; }
+.balado .bmeta { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); margin-top: -6px; }
+.balado .bctl { display: flex; align-items: center; justify-content: center; gap: 28px; }
+.balado .bplay { width: 68px; height: 68px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--brass); color: var(--brass-ink); }
+.balado .bplay svg { width: 28px; height: 28px; }
+
 </style>
 </head>
 <body>
@@ -2984,6 +3003,7 @@ function webLib() {
 // la conversion photo → texte (un livre offert pour essayer) et le partage de bibliothèques.
 // Copies installées hors de Google Play (APK, version web) : tout est débloqué.
 const PREMIUM_FEATS = [
+  ['balado', 'mic', 'Balado à deux voix', 'Deux animateurs discutent de ton livre, à écouter partout'],
   ['prof', 'prof', 'Le Professeur bizarroïde', 'Pose tes questions sur le livre, il t’explique en vidéo'],
   ['summary', 'spark', 'Résumés IA', 'Le résumé de chaque livre en un toucher'],
   ['tones', 'voice', 'Tons de voix expressifs', 'Conteur, Enjoué, Passionné'],
@@ -3826,6 +3846,7 @@ function editBook(b) {
       : h('button', { class: 'bact', onclick: () => { close(); Ocr.run(b, window.__reader?.b?.id === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null,
     b.kind !== 'audio' ? h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null,
     Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null,
+    Balado.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Balado.info(b.id)?.made ? ' on' : ''), onclick: () => { close(); Balado.open(b); } }, icon('mic'), h('span', {}, 'Balado')) : null,
     Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
   const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {},
     actRow,
@@ -3928,10 +3949,11 @@ const AutoSync = {
     const done = store.get('autoDone', {});
     const L = libs(); const name = (id) => (L.find((l) => l.id === id) || L[0]).name;
     const prof = new Set(JSON.parse(AndroidAuto.list('prof') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
+    const balado = new Set(JSON.parse(AndroidAuto.list('balado') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
     const books = S.books.filter((b) => !b.trashed && b.status === 'ready' && b.kind !== 'audio').map((b) => ({
       id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
       cover: done[b.id]?.c ? `covers/${b.id}.${b.coverUrl ? 'jpg' : 'png'}` : '',
-      last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1, prof: prof.has(b.id) }));
+      last: b.progress?.last || 0, page: b.progress?.page || 1, pos: b.progress?.pos ?? -1, prof: prof.has(b.id), balado: balado.has(b.id) }));
     const body = JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1) });
     if (body === this.lastCat) return; this.lastCat = body; // rien de changé : on n'écrit pas
     AndroidAuto.writeText('catalog.json', body.slice(0, -1) + ',"updated":' + Date.now() + '}');
@@ -4187,6 +4209,153 @@ Question : ${v}`;
     new MutationObserver((_, o) => { if (!scrim.isConnected) { this.stopVoice(); o.disconnect(); } }).observe(document.body, { childList: true });
   },
 };
+
+// ---------- Balado à deux voix : Camille (qui a lu le livre à fond) et Alex (qui découvre et pose les questions) ----------
+// Gemini écrit d'abord le plan de l'émission à partir du livre, puis chaque segment de dialogue ; l'écoute commence dès le
+// premier segment. Le lecteur natif joue les deux voix (téléphone, écran verrouillé, Android Auto) : balado/<id>.json.
+const Balado = {
+  HOSTS: ['Camille', 'Alex'],
+  LENGTHS: [[5, '5 min'], [15, '15 min'], [30, '30 min']],
+  on: () => Prof.on() && !!AndroidAuto.baladoPlay,
+  file: (id) => `balado/${id}.json`,
+  load(id) { try { const t = AndroidAuto.readText(this.file(id)); return t ? JSON.parse(t) : null; } catch { return null; } },
+  info(id) { const j = this.load(id); return j ? { done: !!j.done, minutes: j.minutes, made: (j.parts || []).length, n: j.n || 0 } : null; },
+  system: `Tu écris le texte d'un balado (podcast) en français, à deux voix : Camille et Alex.
+Camille a lu le livre en profondeur et l'explique avec passion et précision. Alex le découvre : il pose les questions que l'auditeur se pose, reformule avec ses mots, s'étonne, fait des liens avec la vie de tous les jours et, parfois, doute avec respect — Camille lui répond.
+Le ton est celui d'une vraie conversation entre deux amis passionnés : phrases courtes et naturelles, réactions spontanées (« Attends… », « Non ! », « Exactement. », « Ah, c'est fort, ça. »), un peu d'humour, des répliques de longueurs variées (parfois un seul mot).
+Règles :
+- Vous racontez le livre avec vos mots : jamais de longues citations, jamais de lecture d'extraits.
+- Fidèles aux idées de l'auteur, telles qu'il les formule, sans les juger ni les ramener à un autre cadre. Vous nommez l'auteur et le livre.
+- Seulement ce qui est dit à voix haute : pas de didascalies, pas de bruitages, pas de titres, pas de listes, pas de symboles.
+- Ne parlez jamais de l'endroit où se trouve l'auditeur ni de ce qu'il fait. Ne dites jamais que vous êtes des IA.`,
+  async plan(b, text, minutes, say) {
+    const segs = minutes <= 5 ? 2 : minutes <= 15 ? 4 : 7;
+    const prompt = `Prépare le plan d'un épisode de balado d'environ ${minutes} minutes sur le livre ${Prof.who(b)}.
+Réponds en JSON : {"accroche": "une phrase d'ouverture qui donne envie d'écouter", "segments": [{"sujet": "…", "points": ["…"]}], "conclusion": "l'idée à retenir"}.
+- Exactement ${segs} segments, dans un ordre qui raconte le livre du début à la fin.
+- Pour chaque segment, 4 à 6 points PRÉCIS tirés du livre : idées, exemples, faits, chiffres, anecdotes, termes de l'auteur. Pas de généralités.
+
+<livre>
+${condense(text, 300000)}
+</livre>`;
+    say('Camille et Alex lisent le livre et préparent l’émission…');
+    const r = JSON.parse(jsonOnly(await onlineAsk(this.system, prompt, false, true, say)));
+    if (!Array.isArray(r.segments) || !r.segments.length) throw new Error('Le plan de l’émission est vide. Réessaie.');
+    return { accroche: String(r.accroche || ''), conclusion: String(r.conclusion || ''), segments: r.segments.slice(0, segs).map((x) => ({ sujet: String(x.sujet || ''), points: (x.points || []).map(String).slice(0, 8) })) };
+  },
+  async segment(b, plan, i, minutes, prev, say) {
+    const n = plan.segments.length, seg = plan.segments[i];
+    const words = Math.round(minutes * 150 / n); // environ 150 mots par minute à voix haute
+    const prompt = `Écris le segment ${i + 1} sur ${n} du balado sur le livre ${Prof.who(b)}.
+Sujet du segment : ${seg.sujet}
+À couvrir, avec précision : ${seg.points.map((x) => '\n- ' + x).join('')}
+${i === 0 ? `- C'est le début de l'émission : Camille ouvre avec l'accroche (« ${plan.accroche} »), les deux animateurs se présentent par leur prénom en une phrase chacun, et annoncent le livre et son auteur.` : `- L'émission est déjà commencée. Dernières répliques : ${prev}\nEnchaîne naturellement, sans saluer de nouveau.`}
+${i === n - 1 ? `- C'est la fin de l'émission : terminez sur l'idée à retenir (« ${plan.conclusion} »), puis Camille et Alex remercient l'auditeur et se disent au revoir.` : '- Ne conclus pas l’émission : la suite viendra.'}
+- Environ ${words} mots en tout, en ${Math.max(10, Math.round(words / 28))} à ${Math.round(words / 18)} répliques qui alternent naturellement (Alex parle environ 40 % du temps).
+Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "texte": "…"}]}`;
+    const r = JSON.parse(jsonOnly(await onlineAsk(this.system, prompt, false, true, say)));
+    const out = (r.repliques || []).map((x) => ({ s: /alex/i.test(x.qui || '') ? 1 : 0, t: Prof.clean(String(x.texte || '')) })).filter((x) => x.t);
+    if (!out.length) throw new Error('Gemini n’a pas écrit ce segment. Réessaie : la préparation reprendra où elle en était.');
+    return out;
+  },
+  write(b, work, done) {
+    const u = [];
+    work.parts.forEach((lines, pi) => lines.forEach((l, li) => {
+      const ss = sentences(l.t);
+      ss.forEach((x, k) => u.push([x, pi, k === ss.length - 1 && li === lines.length - 1 ? 2 : 0, l.s]));
+    }));
+    AndroidAuto.writeText(this.file(b.id), JSON.stringify({ v: 1, kind: 'balado', id: b.id, title: b.title, minutes: work.minutes, n: work.plan.segments.length, done, plan: work.plan, parts: work.parts, u }));
+    AutoSync.writeCatalog();
+  },
+  busy: {},
+  async prepare(b, minutes, onProgress) {
+    if (this.busy[b.id]) return toast('Le balado est déjà en préparation');
+    this.busy[b.id] = true;
+    const box = h('div', { class: 'up' }, h('b', {}, 'Balado : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
+    $('#uploads')?.append(box);
+    const say = (t) => { $('span', box).textContent = t; onProgress?.(t); };
+    const bar = (f) => { const i = $('i', box); i.classList.remove('indet'); i.style.width = Math.round(f * 100) + '%'; };
+    try {
+      const old = this.load(b.id);
+      let work = old && !old.done && old.minutes === minutes && old.plan ? { minutes, plan: old.plan, parts: old.parts || [] } : null;
+      if (!work) {
+        const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
+        if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
+        work = { minutes, plan: await this.plan(b, t.text, minutes, say), parts: [] };
+      }
+      const n = work.plan.segments.length;
+      for (let i = work.parts.length; i < n; i++) {
+        say(i ? `Camille et Alex parlent · la suite se prépare (${i + 1} sur ${n})` : 'Camille et Alex préparent le début… l’écoute commencera toute seule'); bar(i / n);
+        const last = work.parts[i - 1] || [];
+        const prev = last.slice(-3).map((l) => `${this.HOSTS[l.s]} : « ${l.t} »`).join(' ');
+        work.parts.push(await this.segment(b, work.plan, i, minutes, prev, say));
+        this.write(b, work, i === n - 1);
+        if (i === 0) { stopAllAudio(); AndroidAuto.baladoPlay(b.id); }
+      }
+      bar(1); say('Balado prêt ✓'); setTimeout(() => box.remove(), 2500);
+    } catch (e) {
+      say(e.message); box.append(h('div', { class: 'prof-row', style: { marginTop: '8px' } }, h('button', { class: 'btn', onclick: () => { box.remove(); this.prepare(b, minutes, onProgress); } }, icon('refresh'), 'Réessayer'), h('button', { class: 'btn', onclick: () => box.remove() }, 'Fermer')));
+    } finally { delete this.busy[b.id]; }
+  },
+  open(b) {
+    if (!this.on()) return toast('Le balado a besoin de la version Android.');
+    if (!Premium.need('balado')) return;
+    if (!Prof.hasKey()) return KeyGuide.start(() => this.open(b));
+    let minutes = store.get('baladoMin', 15), timer = 0;
+    const body = h('div', { class: 'balado' });
+    const close = sheet('Balado à deux voix', body);
+    const scrim = $$('.scrim').pop();
+    const avatar = (k) => h('div', { class: 'bhost', 'data-k': k }, h('span', { class: 'bav' }, this.HOSTS[k][0]), h('b', {}, this.HOSTS[k]), h('small', {}, ''));
+    let mode = '', ui = null; // l'écran n'est reconstruit que quand il change de nature : les boutons restent sous le doigt
+    const render = () => {
+      const info = this.info(b.id);
+      let st = null; try { st = JSON.parse(AndroidAuto.baladoState() || 'null'); } catch {}
+      const mine = !!(st && st.id === b.id && info && info.made);
+      const m = !info || (!info.made && !this.busy[b.id]) ? 'new' : mine ? 'play' : 'ready:' + (info.made ? 1 : 0) + (info.done ? 1 : 0) + (this.busy[b.id] ? 1 : 0) + minutes;
+      if (m === 'new' && mode !== 'new:' + minutes) { // pas encore créé
+        mode = 'new:' + minutes;
+        const seg = h('div', { class: 'seg' }, this.LENGTHS.map(([n, l]) => h('button', { class: n === minutes ? 'sel' : '', onclick: () => { minutes = n; store.set('baladoMin', n); render(); } }, l)));
+        body.replaceChildren(
+          h('p', { class: 'bintro' }, `Camille et Alex discutent de « ${b.title} », comme dans une émission de radio. Idéal à écouter en voiture, en marchant ou les yeux fermés.`),
+          h('div', { class: 'field' }, 'Durée', seg),
+          h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); setTimeout(render, 300); } }, icon('mic'), 'Créer le balado'),
+          h('p', { class: 'muted bnote' }, 'Écrit par Gemini avec ta clé gratuite. L’écoute commence dès que le début est prêt.'));
+      } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
+        mode = m;
+        body.replaceChildren(
+          h('div', { class: 'bhosts' }, avatar(0), avatar(1)),
+          h('p', { class: 'bintro', style: { textAlign: 'center' } }, this.busy[b.id] && !info.made ? 'Camille et Alex préparent le début de l’émission…' : `Émission de ${info.minutes} min${info.done ? '' : ' · la suite se prépare'}.`),
+          h('button', { class: 'btn primary big', disabled: info.made ? null : true, onclick: () => { stopAllAudio(); AndroidAuto.baladoPlay(b.id); setTimeout(render, 400); } }, icon('play'), 'Écouter'),
+          !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null);
+      } else if (m === 'play') {
+        if (mode !== 'play') { // le lecteur : construit une fois, puis seulement mis à jour
+          mode = 'play';
+          ui = { hosts: h('div', { class: 'bhosts' }, avatar(0), avatar(1)), line: h('p', { class: 'bline' }), bar: h('i'), who: h('span'), left: h('span'),
+            play: h('button', { class: 'bplay', onclick: () => { ui.st?.playing ? AndroidAuto.profPause() : AndroidAuto.baladoPlay(b.id); setTimeout(render, 250); } }) };
+          body.replaceChildren(ui.hosts, ui.line, h('div', { class: 'bbar' }, ui.bar), h('div', { class: 'bmeta' }, ui.who, ui.left),
+            h('div', { class: 'bctl' },
+              h('button', { class: 'rbtn', 'aria-label': 'Réplique précédente', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.max(0, ui.st.i - 1)) }, icon('prev')),
+              ui.play,
+              h('button', { class: 'rbtn', 'aria-label': 'Réplique suivante', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.min(ui.st.n - 1, ui.st.i + 1)) }, icon('next'))),
+            h('p', { class: 'muted bnote' }, 'Le balado continue écran éteint et dans Android Auto.'));
+        }
+        ui.st = st;
+        $$('.bhost', ui.hosts).forEach((x) => { const on = +x.dataset.k === st.sp && st.playing; x.classList.toggle('on', on); $('small', x).textContent = on ? 'parle' : ''; });
+        const line = st.waiting ? 'Un petit instant… la suite se prépare.' : st.t;
+        if (ui.line.textContent !== line) ui.line.textContent = line;
+        ui.bar.style.width = (st.n ? Math.round((st.i / st.n) * 100) : 0) + '%';
+        ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
+        const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
+        ui.left.textContent = left ? `≈ ${left} min restantes` : '';
+        if (ui.play.dataset.p !== String(st.playing)) { ui.play.dataset.p = String(st.playing); ui.play.setAttribute('aria-label', st.playing ? 'Pause' : 'Lecture'); ui.play.replaceChildren(icon(st.playing ? 'pause' : 'play')); }
+      }
+    };
+    render();
+    timer = setInterval(() => { if (!scrim.isConnected) { clearInterval(timer); return; } render(); }, 600);
+  },
+};
+// Réponse JSON de Gemini : on enlève un éventuel encadré ```json
+function jsonOnly(t) { const s = String(t || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, ''); const a = s.indexOf('{'), z = s.lastIndexOf('}'); return a >= 0 && z > a ? s.slice(a, z + 1) : s; }
 
 function synthChoices(books) {
   if (books.length < 2) return toast('Choisis au moins 2 livres');

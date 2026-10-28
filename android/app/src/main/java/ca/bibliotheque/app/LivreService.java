@@ -82,6 +82,10 @@ public class LivreService extends MediaBrowserService {
     private final List<String> inter = new ArrayList<>();   // réponse à une question, dite avant de reprendre le cours
     private int interIdx;
     private android.speech.tts.Voice defaultVoice, profVoice;
+    // Balado à deux voix (balado/<id>.json) : chaque phrase porte le numéro de l'animateur (0 = Camille, 1 = Alex)
+    private boolean duo;
+    private final List<Integer> speakers = new ArrayList<>();
+    private android.speech.tts.Voice duoA, duoB;
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
     private String pendingQ; // question entendue, en attente du choix « flash » ou « pro »
@@ -173,6 +177,14 @@ public class LivreService extends MediaBrowserService {
         if ("prof".equals(cmd) && id != null) {
             if (("prof:" + id).equals(bookId)) { inter.clear(); if (!playing) play(); }
             else start("prof:" + id);
+        } else if ("balado".equals(cmd) && id != null) {
+            if (("balado:" + id).equals(bookId)) { if (!playing) play(); }
+            else start("balado:" + id);
+        } else if ("seek".equals(cmd)) { // aller à une phrase précise (balado : phrase précédente / suivante)
+            try {
+                int to = Integer.parseInt(intent.getStringExtra("text"));
+                if (bookId != null && !units.isEmpty()) { idx = clamp(to); token++; if (tts != null) tts.stop(); waitingMore = false; save(); if (playing) speak(); else updateState(); }
+            } catch (Exception ignored) { }
         } else if ("pause".equals(cmd)) {
             if (playing) pause();
         } else if ("stop".equals(cmd)) {
@@ -272,11 +284,13 @@ public class LivreService extends MediaBrowserService {
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optLong("last") > 0) list.add(b); }
             java.util.Collections.sort(list, (a, b) -> Long.compare(b.optLong("last"), a.optLong("last")));
             JSONObject prog = autoProgress();
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("balado") && prog.has("balado:" + b.optString("id"))) out.add(baladoItem(b)); }
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && prog.has("prof:" + b.optString("id"))) out.add(profItem(b)); }
             for (int i = 0; i < Math.min(30, list.size()); i++) out.add(book(list.get(i)));
             if (out.isEmpty()) out.add(info("Aucune lecture en cours. Choisis un livre dans une bibliothèque."));
         } else if (parentId.startsWith("lib:")) {
             String lib = parentId.substring(4);
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("balado") && lib.equals(b.optString("lib"))) out.add(baladoItem(b)); }
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && lib.equals(b.optString("lib"))) out.add(profItem(b)); }
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && lib.equals(b.optString("lib"))) out.add(book(b)); }
             if (out.isEmpty()) out.add(info("Cette bibliothèque est vide."));
@@ -310,6 +324,14 @@ public class LivreService extends MediaBrowserService {
     private MediaItem profItem(JSONObject b) {
         String id = b.optString("id");
         MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:prof:" + id).setTitle("🎓 " + b.optString("title")).setSubtitle("Le Professeur bizarroïde");
+        String cover = b.optString("cover", "");
+        if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
+        return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
+    }
+
+    private MediaItem baladoItem(JSONObject b) {
+        String id = b.optString("id");
+        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:balado:" + id).setTitle("🎙 " + b.optString("title")).setSubtitle("Balado à deux voix");
         String cover = b.optString("cover", "");
         if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
         return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
@@ -425,19 +447,22 @@ public class LivreService extends MediaBrowserService {
     private void start(String id) {
         if (remote) { MainActivity.autoCmd("pause", "0"); remote = false; remotePlaying = false; remoteId = null; } // l'auto prend le relais
         save();
-        boolean isProf = id.startsWith("prof:");
-        String realId = isProf ? id.substring(5) : id;
+        boolean isDuo = id.startsWith("balado:");
+        boolean isProf = id.startsWith("prof:") || isDuo; // le balado se joue comme un cours : rythme parlé, suite attendue si elle se prépare
+        String realId = id.substring(id.indexOf(':') + 1);
         JSONObject meta = null;
         JSONArray books = catalog().optJSONArray("books");
         if (books != null) for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && realId.equals(b.optString("id"))) meta = b; }
-        String txt = read(new File(dir(), (isProf ? "prof/" : "books/") + realId + ".json"));
-        if (meta == null || txt == null) { inter.clear(); error(isProf ? "Le cours du Professeur n'est pas encore prêt. Prépare-le sur ton téléphone." : "Ce livre n'est pas encore prêt. Ouvre la Bibliothèque sur ton téléphone quelques instants."); return; }
+        String txt = read(new File(dir(), (isDuo ? "balado/" : isProf ? "prof/" : "books/") + realId + ".json"));
+        if (meta == null || txt == null) { inter.clear(); error(isDuo ? "Le balado n'est pas encore prêt. Crée-le sur ton téléphone." : isProf ? "Le cours du Professeur n'est pas encore prêt. Prépare-le sur ton téléphone." : "Ce livre n'est pas encore prêt. Ouvre la Bibliothèque sur ton téléphone quelques instants."); return; }
         try {
             JSONObject data = new JSONObject(txt);
             JSONArray u = data.getJSONArray("u");
-            units.clear(); marks.clear(); pauses.clear();
-            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); }
+            units.clear(); marks.clear(); pauses.clear(); speakers.clear();
+            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); speakers.add(x.optInt(3, 0)); }
             prof = isProf;
+            duo = isDuo;
+            if (duo) { try { android.speech.tts.Voice[] v = ProfStyle.pickDuo(this, tts.getVoices()); duoA = v[0]; duoB = v[1]; } catch (Exception e) { duoA = duoB = null; } }
             profDone = !isProf || data.optBoolean("done", true);
             waitingMore = false;
             if (units.isEmpty()) { error("Ce livre ne contient pas de texte lisible."); return; }
@@ -445,7 +470,7 @@ public class LivreService extends MediaBrowserService {
             startChars = new long[units.size() + 1];
             for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
             totalChars = startChars[units.size()];
-            bookId = id; title = (isProf ? "🎓 " : "") + meta.optString("title"); author = isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
+            bookId = id; title = (isDuo ? "🎙 " : isProf ? "🎓 " : "") + meta.optString("title"); author = isDuo ? "Balado à deux voix" : isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
             rate = (float) catalog().optDouble("rate", 1.0);
             idx = startIndex(meta);
             art = null;
@@ -507,7 +532,8 @@ public class LivreService extends MediaBrowserService {
         if (!playing || !ttsReady || units.isEmpty()) return;
         int t = ++token;
         try {
-            android.speech.tts.Voice v = prof && profVoice != null ? profVoice : defaultVoice;
+            android.speech.tts.Voice v = duo && interIdx >= inter.size() ? (speaker() == 1 ? duoB : duoA) : prof && profVoice != null ? profVoice : defaultVoice;
+            if (v == null) v = defaultVoice;
             if (v != null && !v.equals(tts.getVoice())) tts.setVoice(v);
         } catch (Exception ignored) { }
         if (interIdx < inter.size()) {
@@ -518,9 +544,22 @@ public class LivreService extends MediaBrowserService {
             return;
         }
         String x = units.get(idx);
-        if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
+        if (duo) { float[] ps = ProfStyle.duo(this, x, idx, speaker(), duoA != null && duoA.equals(duoB)); tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]); }
+        else if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
         tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
         updateState();
+    }
+
+    private int speaker() { return idx < speakers.size() ? speakers.get(idx) : 0; }
+
+    /** État du balado pour l'écran du téléphone : qui parle, quelle phrase, où on en est */
+    static String duoState() {
+        LivreService s = instance;
+        if (s == null || s.bookId == null || !s.duo) return "";
+        try {
+            return new JSONObject().put("id", s.bookId.substring(7)).put("i", s.idx).put("n", s.units.size()).put("playing", s.playing)
+                .put("sp", s.speaker()).put("t", s.idx < s.units.size() ? s.units.get(s.idx) : "").put("waiting", s.waitingMore).put("done", s.profDone).toString();
+        } catch (Exception e) { return ""; }
     }
 
     /** Une voix moins monotone : l'intonation et le débit suivent le sens de chaque phrase. */
@@ -546,19 +585,21 @@ public class LivreService extends MediaBrowserService {
                 if (!waitingMore) { waitingMore = true; say("Un petit instant… je prépare la suite !", "wait"); }
                 return;
             }
-            idx = units.size() - 1; pause(); error(prof ? "Fin du cours." : "Fin du livre."); return;
+            idx = units.size() - 1; pause(); error(duo ? "Fin du balado." : prof ? "Fin du cours." : "Fin du livre."); return;
         }
         int pauseKind = prof && idx < pauses.size() ? pauses.get(idx) : 0;
         idx++;
         if (++sinceSave >= 8) save();
         if (!prof) { speak(); return; }
         // le Professeur respire : petite pause entre les phrases, plus longue entre les paragraphes et les parties
+        // balado : la réplique de l'autre animateur arrive après un court silence, comme une vraie conversation
+        if (duo) { main.postDelayed(gap(++token), pauseKind == 2 ? 900 : speaker() != speakers.get(Math.max(0, idx - 1)) ? 320 : 150); return; }
         main.postDelayed(gap(++token), (long) ((pauseKind == 2 ? 1100 : pauseKind == 1 ? 500 : 140) * ProfStyle.pause(this)));
     }
 
     // ---------------------------------------------------------------- questions au Professeur, depuis l'auto
     private void askQuestion() {
-        if (!prof || bookId == null || asking) return;
+        if (!prof || duo || bookId == null || asking) return;
         if (playing) { playing = false; token++; if (tts != null) tts.stop(); }
         inter.clear(); interIdx = 0;
         asking = true;
@@ -668,23 +709,23 @@ public class LivreService extends MediaBrowserService {
         }).start();
     }
 
-    /** Le téléphone vient d'écrire une nouvelle partie du cours : on l'ajoute, et on enchaîne si on l'attendait. */
-    static void profChanged(String id) {
+    /** Le téléphone vient d'écrire une nouvelle partie du cours ou du balado : on l'ajoute, et on enchaîne si on l'attendait. */
+    static void profChanged(String key) {
         LivreService s = instance; if (s == null) return;
-        s.main.post(() -> s.reloadProf(id));
+        s.main.post(() -> s.reloadProf(key));
     }
 
-    private void reloadProf(String id) {
-        if (bookId == null || !bookId.equals("prof:" + id)) return;
-        String txt = read(new File(dir(), "prof/" + id + ".json"));
+    private void reloadProf(String key) { // key : « prof:<id> » ou « balado:<id> »
+        if (bookId == null || !bookId.equals(key)) return;
+        String txt = read(new File(dir(), key.replace(':', '/') + ".json"));
         if (txt == null) return;
         try {
             JSONObject data = new JSONObject(txt);
             JSONArray u = data.getJSONArray("u");
             if (u.length() == 0) return;
             boolean restarted = u.length() < units.size();
-            units.clear(); marks.clear(); pauses.clear();
-            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); }
+            units.clear(); marks.clear(); pauses.clear(); speakers.clear();
+            for (int i = 0; i < u.length(); i++) { JSONArray x = u.getJSONArray(i); units.add(x.getString(0)); marks.add(x.getInt(1)); pauses.add(x.optInt(2, 0)); speakers.add(x.optInt(3, 0)); }
             startChars = new long[units.size() + 1];
             for (int i = 0; i < units.size(); i++) startChars[i + 1] = startChars[i] + units.get(i).length();
             totalChars = startChars[units.size()];
@@ -765,7 +806,7 @@ public class LivreService extends MediaBrowserService {
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_SEEK_TO
                 | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH | PlaybackState.ACTION_FAST_FORWARD | PlaybackState.ACTION_REWIND)
             .setState(bookId == null ? PlaybackState.STATE_NONE : playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, posMs(), playing ? rate : 0f);
-        if (bookId != null && prof) b.addCustomAction(new PlaybackState.CustomAction.Builder("ask", "Poser une question", R.drawable.ic_question).build());
+        if (bookId != null && prof && !duo) b.addCustomAction(new PlaybackState.CustomAction.Builder("ask", "Poser une question", R.drawable.ic_question).build());
         if (bookId != null) {
             b.addCustomAction(new PlaybackState.CustomAction.Builder("m180", "Reculer de 3 minutes", R.drawable.ic_moins3).build());
             b.addCustomAction(new PlaybackState.CustomAction.Builder("p180", "Avancer de 3 minutes", R.drawable.ic_plus3).build());

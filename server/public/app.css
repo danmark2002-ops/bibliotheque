@@ -1052,3 +1052,22 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .recv-list { display: grid; gap: 8px; margin-top: 10px; }
 .recv-row { display: grid; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--line); }
 .recv-row small { opacity: .8; }
+
+/* Balado à deux voix */
+.balado { display: flex; flex-direction: column; gap: 14px; }
+.balado .bintro { margin: 0; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.balado .bnote { margin: 0; font-size: 13px; text-align: center; }
+.balado .btn.big { justify-content: center; height: 52px; font-size: 16px; }
+.balado .linkish { align-self: center; background: none; border-color: transparent; color: var(--ink-2); }
+.bhosts { display: flex; justify-content: center; gap: 40px; padding: 6px 0 2px; }
+.bhost { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 76px; }
+.bhost .bav { width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; font: 600 28px var(--font-display); background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); transition: box-shadow .25s, background .25s, color .25s; }
+.bhost[data-k="0"] .bav { background: color-mix(in srgb, var(--brass) 22%, var(--panel-2)); }
+.bhost.on .bav { background: var(--brass); color: var(--brass-ink); box-shadow: 0 0 0 4px var(--panel), 0 0 0 7px var(--brass); }
+.bhost b { font-size: 14px; } .bhost small { font-size: 12px; color: var(--brass); min-height: 15px; }
+.balado .bline { margin: 0; min-height: 4.5em; font: 17px/1.5 var(--font-read); color: var(--ink); text-align: center; }
+.balado .bbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; } .balado .bbar i { display: block; height: 100%; background: var(--brass); border-radius: 2px; }
+.balado .bmeta { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-3); margin-top: -6px; }
+.balado .bctl { display: flex; align-items: center; justify-content: center; gap: 28px; }
+.balado .bplay { width: 68px; height: 68px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--brass); color: var(--brass-ink); }
+.balado .bplay svg { width: 28px; height: 28px; }

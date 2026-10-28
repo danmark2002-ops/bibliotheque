@@ -1406,7 +1406,8 @@ public class MainActivity extends Activity {
             catch (Exception e) { return false; }
             boolean ok = tmp.renameTo(x);
             if (ok && "catalog.json".equals(name)) LivreService.catalogChanged();
-            if (ok && name.startsWith("prof/")) LivreService.profChanged(name.substring(5).replace(".json", ""));
+            if (ok && name.startsWith("prof/")) LivreService.profChanged("prof:" + name.substring(5).replace(".json", ""));
+            if (ok && name.startsWith("balado/")) LivreService.profChanged("balado:" + name.substring(7).replace(".json", ""));
             return ok;
         }
 
@@ -1436,6 +1437,18 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void profPlay(String id) { prof("prof", id, null); }
+
+        // ----- Balado à deux voix : même lecteur (téléphone, auto, écran verrouillé) -----
+        @JavascriptInterface
+        public void baladoPlay(String id) { prof("balado", id, null); }
+
+        /** Aller à la phrase n° i du balado en cours */
+        @JavascriptInterface
+        public void baladoSeek(int i) { prof("seek", null, String.valueOf(i)); }
+
+        /** {id, i, n, playing, sp, t, waiting, done} ou "" si aucun balado ne joue */
+        @JavascriptInterface
+        public String baladoState() { return LivreService.duoState(); }
 
         @JavascriptInterface
         public void profPause() { prof("pause", null, null); }

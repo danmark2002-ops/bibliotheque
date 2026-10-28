@@ -3,6 +3,9 @@
 Mise à jour : 2026-10-28 (v10.1). À lire au début de chaque conversation.
 
 ## Fait (récent)
+- v10.2 (2026-10-28) : page 2,9 → 0,5 Mo (moteur PDF à part), polices intégrées (plus d'appel à Google), étagère ~18 éléments/livre au lieu de 44, rayons visibles garnis d'abord ; mesuré (300 livres, CPU ×4) étagère ~0,6 s au lieu de ~2,2 s, défilement 45 au lieu de 32 images/s ; cibles tactiles 44 px, petites icônes 22×40 et contraste ≥ 3:1.
+- v10.3 (2026-10-28) : balado à deux voix (Camille et Alex) — plan puis segments écrits par Gemini, deux voix différentes, lecteur natif (écran éteint, Android Auto), 5/15/30 min. À valider par le propriétaire avant la suite.
+- Leçon : le masque CSS sur 1 500 icônes ralentissait le défilement (mesuré) → images déjà colorées ; content-visibility reste exclu (sautait sur Android, v6.8).
 - v9.1 envoi chiffré de livres · v9.2–9.8 télé (télécommande, loupe, icônes sous les livres) · v10.0 Gemini Pro : raison du refus lue, attente ≤ 15 s · v10.1 clés chiffrées (Keystore), couvertures protégées.
 - targetSdk 36, retour prédictif et plein écran déjà en place (vérifié dans le code).
 
@@ -28,7 +31,7 @@ PRIORITÉ N° 1 : **balado à deux voix** (deux animateurs discutent du livre ; 
 Fondations : étagère qui ne dessine que le visible · boutons plus faciles à toucher et lisibles · polices intégrées · sauvegarde / restauration de la bibliothèque · démarrage plus court · corrections de sécurité.
 Beauté : belles couvertures pour les PDF sans couverture · option ambiance par livre · ouverture de livre animée · thème clair papier crème · page de lecture soignée · premier lancement qui émerveille · plaisir de finir un livre.
 Atouts IA : Professeur réglable (enfant de 10 ans / étudiant / expert) · résumé en 3 longueurs · résumé à écouter en 5 min · vidéos en épisodes de 3 min · bande-annonce verticale de 30 s · lire un livre anglais en français.
-Maquettes avant tout changement visuel : 3 directions (A bois épuré, B papier crème style Apple, C nuit / ambiance du livre) — en attente du choix.
+Maquettes vues le 2026-10-28 : le propriétaire préfère garder le design actuel. Règle : interface épurée, intuitive, jamais intimidante (pas d'avalanche de boutons).
 Note : les petites icônes sous les livres sont voulues (préférence du propriétaire) ; on les rend plus faciles à toucher plutôt que de les retirer.
 
 ## Idées rejetées
