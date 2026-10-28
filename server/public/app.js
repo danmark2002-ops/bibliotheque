@@ -2050,7 +2050,7 @@ Réponds en JSON : {"accroche": "une phrase d'ouverture qui donne envie d'écout
 ${condense(text, 300000)}
 </livre>`;
     say('Camille et Alex lisent le livre et préparent l’émission…');
-    const r = JSON.parse(jsonOnly(await onlineAsk(this.system, prompt, false, true, say)));
+    const r = await askJson(this.system, prompt, say, (x) => Array.isArray(x.segments) && x.segments.length);
     if (!Array.isArray(r.segments) || !r.segments.length) throw new Error('Le plan de l’émission est vide. Réessaie.');
     return { accroche: String(r.accroche || ''), conclusion: String(r.conclusion || ''), segments: r.segments.slice(0, segs).map((x) => ({ sujet: String(x.sujet || ''), points: (x.points || []).map(String).slice(0, 8) })) };
   },
@@ -2063,8 +2063,8 @@ Sujet du segment : ${seg.sujet}
 ${i === 0 ? `- C'est le début de l'émission : Camille ouvre avec l'accroche (« ${plan.accroche} »), les deux animateurs se présentent par leur prénom en une phrase chacun, et annoncent le livre et son auteur.` : `- L'émission est déjà commencée. Dernières répliques : ${prev}\nEnchaîne naturellement, sans saluer de nouveau.`}
 ${i === n - 1 ? `- C'est la fin de l'émission : terminez sur l'idée à retenir (« ${plan.conclusion} »), puis Camille et Alex remercient l'auditeur et se disent au revoir.` : '- Ne conclus pas l’émission : la suite viendra.'}
 - Environ ${words} mots en tout, en ${Math.max(10, Math.round(words / 28))} à ${Math.round(words / 18)} répliques qui alternent naturellement (Alex parle environ 40 % du temps).
-Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "texte": "…"}]}`;
-    const r = JSON.parse(jsonOnly(await onlineAsk(this.system, prompt, false, true, say)));
+Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "texte": "…"}]}`;
+    const r = await askJson(this.system, prompt, say, (x) => Array.isArray(x.repliques) && x.repliques.length);
     const out = (r.repliques || []).map((x) => { const v = this.voice(Prof.clean(String(x.texte || ''))); return { s: /alex/i.test(x.qui || '') ? 1 : 0, t: this.plain(v), v, e: String(x.ton || '').replace(/[<>"\n]/g, '').slice(0, 40) }; }).filter((x) => x.t);
     if (!out.length) throw new Error('Gemini n’a pas écrit ce segment. Réessaie : la préparation reprendra où elle en était.');
     return out;
@@ -2098,7 +2098,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
   step: {},
   err: {},
   pill: {},
-  async prepare(b, minutes, onProgress) {
+  auto: {},
+  async prepare(b, minutes, onProgress, quiet) {
     if (this.busy[b.id]) { toast('Le balado est déjà en préparation : il continue.'); return this.watch(b); }
     const other = Object.keys(this.busy)[0] || Object.keys(this.pill).find((k) => k !== b.id && !this.err[k] && this.progress(k, this.info(k))?.active); // un seul balado à la fois : ils se partagent la même clé gratuite Gemini
     if (other) { const ob = S.books.find((x) => x.id === other); toast(`Un balado est déjà en préparation${ob ? ' (« ' + ob.title + ' »)' : ''}. Attends qu'il soit prêt.`); return ob ? this.open(ob) : null; }
@@ -2106,7 +2107,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     const st = this.step[b.id] = { t: 'Lecture du livre…' };
     const say = (t) => { st.t = t; onProgress?.(t); };
     this.watch(b);
-    toast('Création lancée. Tu peux lire autre chose pendant ce temps.');
+    if (!quiet) toast('Création lancée. Tu peux lire autre chose pendant ce temps.');
     try {
       const old = this.load(b.id);
       let work = old && !old.done && old.minutes === minutes && old.plan ? { minutes, plan: old.plan, parts: old.parts || [] } : null;
@@ -2262,6 +2263,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
             testRow());
         }
         ui.st = st;
+        // la suite n'est plus en préparation (app fermée pendant l'écriture…) : on la relance toute seule, une fois par minute au plus
+        if (st.waiting && !info.done && !this.busy[b.id] && !this.err[b.id] && Date.now() - (this.auto[b.id] || 0) > 60000) { this.auto[b.id] = Date.now(); this.prepare(b, info.minutes || minutes, () => {}, true); }
         $$('.bhost', ui.hosts).forEach((x) => { const on = +x.dataset.k === st.sp && st.playing; x.classList.toggle('on', on); $('small', x).textContent = on ? 'parle' : ''; });
         const line = st.waiting ? 'Un petit instant… la suite se prépare.' : st.t;
         if (ui.line.textContent !== line) ui.line.textContent = line;
@@ -2290,6 +2293,39 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
   },
 };
 // Réponse JSON de Gemini : on enlève un éventuel encadré ```json
+// Lecture tolérante du JSON écrit par Gemini : texte autour, deux objets à la suite (« Unexpected non-whitespace character
+// after JSON »), virgules en trop. Plusieurs objets « repliques » sont fusionnés dans l'ordre.
+function parseLoose(t) {
+  const s = String(t || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  const isLine = (x) => x && typeof x === 'object' && !Array.isArray(x) && ('texte' in x || 'qui' in x);
+  const wrap = (x) => Array.isArray(x) && x.some(isLine) ? { repliques: x.filter(isLine) } : x; // répliques sans enveloppe
+  try { return wrap(JSON.parse(s)); } catch {}
+  try { const a = JSON.parse('[' + s.replace(/,\s*$/, '') + ']'); if (a.some(isLine)) return wrap(a); } catch {} // { … }, { … } à la suite
+  const objs = []; let depth = 0, start = -1, str = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (str) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') str = false; continue; }
+    if (c === '"') str = true;
+    else if (c === '{') { if (depth++ === 0) start = i; }
+    else if (c === '}' && depth > 0 && --depth === 0) objs.push(s.slice(start, i + 1));
+  }
+  const ok = [];
+  for (const o of objs) { for (const x of [o, o.replace(/,\s*([}\]])/g, '$1')]) { try { ok.push(JSON.parse(x)); break; } catch {} } }
+  if (!ok.length) { const j = jsonOnly(s); try { return JSON.parse(j.replace(/,\s*([}\]])/g, '$1')); } catch (e) { throw new Error('Réponse de Gemini illisible (' + e.message + ')'); } }
+  if (ok.length > 1 && ok.every((x) => Array.isArray(x.repliques))) return { repliques: ok.flatMap((x) => x.repliques) };
+  if (ok.some(isLine)) return { repliques: ok.flatMap((x) => isLine(x) ? [x] : Array.isArray(x.repliques) ? x.repliques : []) };
+  return ok.find((x) => x && typeof x === 'object' && Object.keys(x).length) || ok[0];
+}
+// Demande du JSON à Gemini ; une réponse illisible ou vide est redemandée (2 fois au plus) avant d'abandonner
+async function askJson(system, prompt, say, good) {
+  let last;
+  for (let t = 0; t < 3; t++) {
+    try { const r = parseLoose(await onlineAsk(system, prompt, false, true, say)); if (!good || good(r)) return r; last = new Error('Réponse de Gemini incomplète.'); }
+    catch (e) { if (!/illisible|JSON|incompl/i.test(e.message)) throw e; last = e; }
+    say?.('Gemini a mal formé sa réponse : nouvel essai…');
+  }
+  throw new Error(last.message + ' Réessaie : la préparation reprendra où elle en était.');
+}
 function jsonOnly(t) { const s = String(t || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, ''); const a = s.indexOf('{'), z = s.lastIndexOf('}'); return a >= 0 && z > a ? s.slice(a, z + 1) : s; }
 
 function synthChoices(books) {
