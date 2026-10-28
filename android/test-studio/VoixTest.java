@@ -30,14 +30,15 @@ public class VoixTest {
             boolean contiguous = true, sizes = true; int next = 0;
             for (Voix.Scene x : sc) {
                 if (x.first != next || x.last < x.first) contiguous = false;
-                next = x.last + 1;
                 int chars = 0; for (int i = x.first; i <= x.last; i++) chars += s.voice.get(i).length();
-                if (chars > 1900 + 200) sizes = false; // une phrase peut dépasser un peu la limite
+                int aim = next == 0 ? Voix.FIRST : Voix.big;
+                if (chars > aim * 3 / 2 + 200) sizes = false; // une phrase peut dépasser un peu la limite
+                next = x.last + 1;
             }
             boolean tail = (done || ends) ? next == n : next <= n;
             if (!contiguous || !sizes || !tail) { ok(false, "tour " + round + " : contiguous=" + contiguous + " sizes=" + sizes + " tail=" + tail + " n=" + n + " next=" + next + " done=" + done); }
         }
-        ok(fails == 0, "50 balados au hasard : scènes contiguës, ≤ ~2 000 lettres, la fin couverte quand le balado est terminé");
+        ok(fails == 0, "50 balados au hasard : scènes contiguës, la 1re courte (~1 100 lettres), les autres longues (~4 500), la fin couverte quand le balado est terminé");
 
         Voix.Script s1 = Voix.script(json(60, true, new Random(1), true)), s2 = Voix.script(json(60, true, new Random(1), true)), s3 = Voix.script(json(60, true, new Random(2), true));
         ok(Voix.scenes(s1).get(0).hash.equals(Voix.scenes(s2).get(0).hash), "même texte → même empreinte (le son gardé reste valable)");
@@ -65,7 +66,8 @@ public class VoixTest {
             if (mode[0].equals("day")) { code = 429; out = "{\"error\":{\"message\":\"limit: 0\"}}"; }
             else {
                 // durée ~ nombre de lettres du corps / 12 secondes, avec silences entre les tours
-                int secs = Math.max(3, Math.min(60, body.length() / 40));
+                // ~14 lettres par seconde de parole ; en mode « cut », Gemini s'arrête à 2 minutes
+                int secs = Math.max(3, Math.min(mode[0].equals("cut") ? 120 : 600, body.length() / 15));
                 short[] pcm = new short[24000 * secs];
                 for (int i = 0; i < pcm.length; i++) pcm[i] = (short) (((i / 12000) % 5 == 4) ? 0 : 6000 * Math.sin(i * 0.07) + (i % 7));
                 java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
@@ -82,6 +84,7 @@ public class VoixTest {
         Voix.work(files, "K", "b1");
         int made = 0; for (int k = 0; k < scs.size(); k++) if (Voix.has(files, "b1", k, scs.get(k))) made++;
         ok(made == scs.size() && calls[0] >= scs.size(), "toutes les scènes fabriquées : " + made + "/" + scs.size() + " avec " + calls[0] + " appels");
+        ok(scs.size() <= 4, "70 répliques → " + scs.size() + " demandes à Gemini seulement (scènes longues)");
         Voix.Clip cl = Voix.load(files, "b1", 0, scs.get(0));
         int nl = scs.get(0).last - scs.get(0).first + 1;
         boolean inc = cl != null && cl.starts.length == nl + 1 && cl.starts[0] == 0 && cl.starts[nl] == cl.pcm.length;
@@ -100,6 +103,12 @@ public class VoixTest {
         ok(Voix.blocked() && calls[0] - before == 1 && Voix.problem().contains("quota"), "quota du jour : un seul appel puis voix du téléphone (« " + Voix.problem() + " »)");
         Voix.work(files, "K", "b1");
         ok(calls[0] - before == 1, "tant que c'est bloqué, aucun nouvel appel");
+        // Gemini rend un son coupé (2 min) : les scènes raccourcissent toutes seules, et tout finit fabriqué
+        Voix.unblock(); mode[0] = "cut"; Voix.purge(files, "b1");
+        Voix.work(files, "K", "b1");
+        List<Voix.Scene> scs3 = Voix.scenes(Voix.script(js2)); int made3 = 0;
+        for (int k = 0; k < scs3.size(); k++) if (Voix.has(files, "b1", k, scs3.get(k))) made3++;
+        ok(Voix.big < Voix.BIG && made3 == scs3.size() && new java.io.File(files, "voix/taille").exists(), "son coupé par Gemini : scènes réduites à " + Voix.big + " lettres (retenu), " + made3 + "/" + scs3.size() + " fabriquées");
         Voix.purge(files, "b1");
         ok(!new java.io.File(files, "voix/b1").exists(), "suppression du balado : son effacé");
         srv.stop(0);

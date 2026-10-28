@@ -1093,3 +1093,13 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .mkinfo em { font-style: normal; font-size: 12px; color: var(--brass); }
 .mkgo { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 20px; background: var(--ink); color: var(--room); font-weight: 600; font-size: 14px; }
 .mkgo svg { width: 16px; height: 16px; }
+.mkrow { position: relative; }
+.mkdel { flex: none; width: 40px; height: 40px; margin-left: -6px; border: 0; border-radius: 20px; background: transparent; color: var(--ink-2); display: grid; place-items: center; cursor: pointer; }
+.mkdel svg { width: 18px; height: 18px; }
+.bblock:empty { display: none; }
+.bblock { margin: 6px 0 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--brass); background: var(--panel-2); font-size: 14px; }
+.bblock p { margin: 0 0 10px; }
+.bblock pre, .btest pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 8px 0; color: var(--ink-2); user-select: text; }
+.btestrow { margin-top: 6px; }
+.btest { margin: 8px 0 0; font-size: 14px; }
+.btest.ok { color: var(--brass); }

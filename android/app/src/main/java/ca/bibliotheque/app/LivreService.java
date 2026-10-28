@@ -97,7 +97,8 @@ public class LivreService extends MediaBrowserService {
     private Voix.Clip clipData; private int clipScene = -1;
     private String vMode = "";            // « studio » · « prep » (la voix se fabrique) · « phone » (voix du téléphone) · "" (hors balado)
     private long voiceWaitSince;
-    private int skipScene = -1;          // scène trop longue à fabriquer : lue avec les voix du téléphone
+    private int skipScene = -1;          // scène trop longue à fabriquer : lue avec les voix du téléphone (seulement si la personne les a choisies)
+    private String phoneOkId = "";       // balado pour lequel la personne a choisi d'écouter avec les voix du téléphone
     private android.speech.SpeechRecognizer ears;
     private boolean asking;
     private String pendingQ; // question entendue, en attente du choix « flash » ou « pro »
@@ -574,6 +575,13 @@ public class LivreService extends MediaBrowserService {
         updateState();
     }
 
+    /** Pourquoi la voix de studio manque (balado arrêté) */
+    private String blockWhy() {
+        if (IaGratuite.key(this).isEmpty()) return "Ajoute ta clé Gemini gratuite pour les voix de studio.";
+        String p = Voix.problem();
+        return p.isEmpty() ? "La voix de studio n'est pas prête." : p;
+    }
+
     /** Pourquoi le balado parle avec les voix du téléphone (affiché en clair sous le lecteur) */
     private String phoneWhy() {
         if (IaGratuite.key(this).isEmpty()) return "Ajoute ta clé Gemini gratuite pour les voix de studio.";
@@ -643,6 +651,7 @@ public class LivreService extends MediaBrowserService {
 
     /** Lit le texte du balado (phrases, animateurs, scènes) et lance la fabrication des voix de studio qui manquent. */
     private void loadScript(String txt) {
+        Voix.loadSize(getFilesDir());
         try { script = Voix.script(txt); scenes = Voix.scenes(script); }
         catch (Exception e) { script = null; scenes = new ArrayList<>(); }
         if (duo && bookId != null) Voix.kick(this, bookId.substring(7));
@@ -654,9 +663,11 @@ public class LivreService extends MediaBrowserService {
      */
     private boolean studioSpeak(int t) {
         vMode = "phone";
-        if (script == null || IaGratuite.key(this).isEmpty()) return false;
-        int k = sceneOf(idx);
+        if (script == null) return false;
         String id = bookId.substring(7);
+        boolean phoneOk = id.equals(phoneOkId);
+        if (IaGratuite.key(this).isEmpty()) { if (phoneOk) return false; studioStop(); return true; }
+        int k = sceneOf(idx);
         if (k >= 0 && Voix.has(getFilesDir(), id, k, scenes.get(k))) {
             Voix.Scene sc = scenes.get(k);
             if (clipScene != k || clipData == null) { clipData = Voix.load(getFilesDir(), id, k, sc); clipScene = k; }
@@ -685,10 +696,11 @@ public class LivreService extends MediaBrowserService {
             return true;
         }
         Voix.focus(Math.max(0, k)); Voix.kick(this, id);
-        if (Voix.blocked() || (k >= 0 && k == skipScene)) return false;  // refus de Gemini, ou trop d'attente : voix du téléphone (si la scène devient prête en route, la voix de studio reprend)
+        if (Voix.blocked()) { if (phoneOk) return false; studioStop(); return true; } // Gemini refuse : on s'arrête et on dit pourquoi, jamais de voix robotiques sans le choix de la personne
+        if (phoneOk && k >= 0 && k == skipScene) return false;
         boolean waitText = k < 0 && !profDone;                            // la suite n'est pas encore écrite : on l'attend
         if (voiceWaitSince == 0) voiceWaitSince = System.currentTimeMillis();
-        if (!waitText && System.currentTimeMillis() - voiceWaitSince > 150_000L) { voiceWaitSince = 0; skipScene = k; return false; } // trop long : le téléphone prend le relais pour cette scène
+        if (phoneOk && !waitText && System.currentTimeMillis() - voiceWaitSince > 150_000L) { voiceWaitSince = 0; skipScene = k; return false; } // voix du téléphone choisies : elles prennent le relais d'une scène trop longue à venir
         vMode = "prep";
         updateState();
         main.postDelayed(gap(++token), 800);
@@ -696,7 +708,30 @@ public class LivreService extends MediaBrowserService {
     }
 
     /** Une scène de voix vient d'être fabriquée (ou la voix de studio vient d'être refusée) */
-    static void voixPrete(String id, int scene) { LivreService s = instance; if (s != null) s.main.post(s::updateState); }
+    static void voixPrete(String id, int scene) {
+        LivreService s = instance;
+        if (s != null) s.main.post(() -> { if (s.script != null) s.scenes = Voix.scenes(s.script); s.updateState(); }); // la taille des scènes a pu changer
+    }
+
+    /** Voix de studio indisponible : le balado s'arrête et l'écran dit pourquoi (avec Réessayer / Voix du téléphone) */
+    private void studioStop() {
+        vMode = "blocked";
+        boolean was = playing;
+        if (playing) pause(); else updateState();
+        if (was) error(blockWhy()); // Android Auto et l'écran verrouillé affichent la raison
+    }
+
+    /** « Réessayer » : on redemande à Gemini tout de suite */
+    static void studioRetry() {
+        LivreService s = instance; if (s == null) return;
+        s.main.post(() -> { Voix.unblock(); if (s.bookId != null) Voix.kick(s, s.bookId.substring(7)); s.vMode = "prep"; s.voiceWaitSince = 0; s.play(); });
+    }
+
+    /** « Écouter avec les voix du téléphone » : choix de la personne, pour ce balado */
+    static void studioPhone() {
+        LivreService s = instance; if (s == null) return;
+        s.main.post(() -> { if (s.bookId != null) s.phoneOkId = s.bookId.substring(7); s.play(); });
+    }
 
 
     /** État du balado pour l'écran du téléphone : qui parle, quelle phrase, où on en est */
@@ -706,7 +741,8 @@ public class LivreService extends MediaBrowserService {
         try {
             return new JSONObject().put("id", s.bookId.substring(7)).put("i", s.idx).put("n", s.units.size()).put("playing", s.playing)
                 .put("sp", s.speaker()).put("t", s.idx < s.units.size() ? s.units.get(s.idx) : "").put("waiting", s.waitingMore).put("done", s.profDone)
-                .put("voice", s.vMode).put("why", s.vMode.equals("phone") ? s.phoneWhy() : "").toString();
+                .put("voice", s.vMode).put("why", s.vMode.equals("phone") ? s.phoneWhy() : s.vMode.equals("blocked") ? s.blockWhy() : "")
+                .put("detail", s.vMode.equals("blocked") || s.vMode.equals("phone") ? Voix.detail() : "").toString();
         } catch (Exception e) { return ""; }
     }
 

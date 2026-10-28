@@ -21,7 +21,7 @@ final class Studio {
     static final String[] NAMES = {"Camille", "Alex"};
     static final String[] VOICES = {"Sulafat", "Puck"};
     /** Les noms de modèles changent avec le temps : on essaie dans l'ordre, et on retient celui qui répond. */
-    static final String[] MODELS = {"gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"};
+    static final String[] MODELS = {"gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview"}; // les trois ont un palier gratuit (page des prix de Google)
     static final int APIS = 2; // 0 : « interactions » (actuelle) · 1 : generateContent (ancienne)
     static String base = "https://generativelanguage.googleapis.com";
 
@@ -107,15 +107,43 @@ final class Studio {
 
     // ------------------------------------------------------------------------------------------ réponse
     /** Le son est dans le plus long champ « data » (base64) de la réponse, quelle que soit l'interface. */
-    static Audio parse(String body) throws Fail {
-        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"data\"\\s*:\\s*\"([A-Za-z0-9+/=\\\\]{200,})\"").matcher(body);
-        String best = null;
-        while (m.find()) if (best == null || m.group(1).length() > best.length()) best = m.group(1);
-        if (best == null) throw new Fail("empty", "pas de son dans la réponse", 0);
-        byte[] raw = b64(best.replace("\\/", "/").replace("\\", ""));
+    static Audio parse(String body) throws Fail { return parse(body.getBytes(StandardCharsets.UTF_8)); }
+
+    /**
+     * Même chose, lu directement dans les octets reçus : une réponse de plusieurs minutes de son pèse des dizaines de Mo,
+     * on évite d'en faire des copies (texte, expressions régulières).
+     */
+    static Audio parse(byte[] body) throws Fail {
+        byte[] key = "\"data\"".getBytes(StandardCharsets.US_ASCII);
+        int bestA = -1, bestZ = -1;
+        for (int i = 0; i + key.length < body.length; i++) {
+            boolean hit = true;
+            for (int j = 0; j < key.length && hit; j++) hit = body[i + j] == key[j];
+            if (!hit) continue;
+            int p = i + key.length;
+            while (p < body.length && (body[p] == ' ' || body[p] == '\n' || body[p] == '\r' || body[p] == '\t')) p++;
+            if (p >= body.length || body[p] != ':') continue;
+            p++;
+            while (p < body.length && (body[p] == ' ' || body[p] == '\n' || body[p] == '\r' || body[p] == '\t')) p++;
+            if (p >= body.length || body[p] != '"') continue;
+            int a = ++p;
+            while (p < body.length && body[p] != '"') p++;
+            if (p - a > 200 && p - a > bestZ - bestA) { bestA = a; bestZ = p; }
+            i = p;
+        }
+        if (bestA < 0) throw new Fail("empty", "pas de son dans la réponse", 0);
+        byte[] raw = b64(body, bestA, bestZ);
         int rate = 24000;
-        java.util.regex.Matcher r = java.util.regex.Pattern.compile("rate=(\\d{4,6})").matcher(body);
-        if (r.find()) rate = Integer.parseInt(r.group(1));
+        byte[] rk = "rate=".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i + rk.length + 4 < body.length; i++) {
+            if (i == bestA) { i = bestZ; continue; }
+            boolean hit = true;
+            for (int j = 0; j < rk.length && hit; j++) hit = body[i + j] == rk[j];
+            if (!hit) continue;
+            int v = 0, p = i + rk.length, n = 0;
+            while (p < body.length && body[p] >= '0' && body[p] <= '9' && n < 6) { v = v * 10 + (body[p] - '0'); p++; n++; }
+            if (n >= 4) { rate = v; break; }
+        }
         return decode(raw, rate);
     }
 
@@ -174,14 +202,18 @@ final class Studio {
     private static int le16(byte[] b, int p) { return (b[p] & 0xFF) | ((b[p + 1] & 0xFF) << 8); }
     private static int le32(byte[] b, int p) { return le16(b, p) | (le16(b, p + 2) << 16); }
 
-    static byte[] b64(String s) {
+    static byte[] b64(String s) { return b64(s.getBytes(StandardCharsets.US_ASCII), 0, s.length()); }
+
+    /** base64 standard ou « url » (- et _), échappements \/ ignorés */
+    static byte[] b64(byte[] s, int from, int to) {
         int[] t = new int[128]; java.util.Arrays.fill(t, -1);
         String a = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         for (int i = 0; i < 64; i++) t[a.charAt(i)] = i;
-        ByteArrayOutputStream o = new ByteArrayOutputStream(s.length() * 3 / 4);
+        t['-'] = 62; t['_'] = 63;
+        ByteArrayOutputStream o = new ByteArrayOutputStream(Math.max(16, (to - from) * 3 / 4));
         int acc = 0, bits = 0;
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
+        for (int i = from; i < to; i++) {
+            int c = s[i] & 0xFF;
             if (c == '=' || c >= 128 || t[c] < 0) continue;
             acc = (acc << 6) | t[c]; bits += 6;
             if (bits >= 8) { bits -= 8; o.write((acc >> bits) & 0xFF); }
@@ -190,9 +222,15 @@ final class Studio {
     }
 
     // ------------------------------------------------------------------------------------------ appel
+    /** Ce que Google a répondu à chaque essai de la dernière fabrication (affiché tel quel à la personne en cas de refus) */
+    static volatile String report = "";
+    /** Modèle qui a fabriqué le dernier son */
+    static volatile String lastModel = "";
+
     /** Un son pour ces répliques. Essaie les combinaisons (modèle, interface) à partir de la dernière qui a marché. */
     static Audio render(String key, List<Line> lines) throws Fail {
         Fail last = null;
+        StringBuilder rep = new StringBuilder();
         int total = MODELS.length * APIS;
         for (int k = 0; k < total; k++) {
             int c = (combo + k) % total;
@@ -202,43 +240,60 @@ final class Studio {
             String body = inter ? bodyInteractions(model, lines) : bodyGenerate(lines);
             try {
                 Audio a = once(url, key, body);
-                combo = c;
+                combo = c; lastModel = model; report = "";
                 return a;
             } catch (Fail f) {
                 last = f;
+                if (rep.length() > 0) rep.append('\n');
+                rep.append(model).append(inter ? " (interactions) : " : " (generateContent) : ").append(f.getMessage());
+                report = rep.toString();
                 if (!f.kind.equals("off") && !f.kind.equals("empty")) throw f; // clé, quota, réseau : changer de modèle n'y change rien
             }
         }
         throw last != null ? last : new Fail("off", "aucune voix de studio disponible", 0);
     }
 
-    private static Audio once(String url, String key, String body) throws Fail {
-        String[] res;
-        try {
-            res = http(url, key, body);
-            int code = Integer.parseInt(res[0]);
-            if ((code == 401 || code == 403 || (code == 400 && res[1].contains("API_KEY"))) && !url.contains("?key=")) { // certaines clés passent mieux dans l'adresse
-                String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body);
-                if (Integer.parseInt(r2[0]) < 400) res = r2;
-            }
-        } catch (Exception e) { throw new Fail("net", String.valueOf(e.getMessage()), 0); }
-        int code = Integer.parseInt(res[0]);
-        if (code == 200) return parse(res[1]);
-        String b = res[1];
-        if (code == 429) {
-            String w = Quota.why(b);
-            throw new Fail(w.equals("minute") ? "minute" : "day", "quota " + w, Quota.retryMs(b));
-        }
-        if (code == 401 || code == 403 || (code == 400 && b.contains("API_KEY"))) throw new Fail("key", "clé refusée (" + code + ")", 0);
-        if (code >= 500) throw new Fail("minute", "surchargé (" + code + ")", 8000);
-        throw new Fail("off", "erreur " + code, 0); // 404, 400 : modèle ou format inconnu → combinaison suivante
+    /** Le message d'erreur de Google, en clair et court */
+    static String gmsg(int code, String b) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"message\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.){1,400})").matcher(b);
+        String t = m.find() ? m.group(1).replace("\\n", " ").replace("\\\"", "\"") : b.replaceAll("\\s+", " ");
+        if (t.length() > 220) t = t.substring(0, 220) + "…";
+        return code + " " + t.trim();
     }
 
-    private static String[] http(String url, String key, String json) throws Exception {
+    private static Audio once(String url, String key, String body) throws Fail {
+        Object[] res;
+        try {
+            res = http(url, key, body);
+            int code = (Integer) res[0];
+            if ((code == 401 || code == 403 || (code == 400 && txt(res).contains("API_KEY"))) && !url.contains("?key=")) { // certaines clés passent mieux dans l'adresse
+                Object[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body);
+                if ((Integer) r2[0] < 400) res = r2;
+            }
+        } catch (Exception e) { throw new Fail("net", "réseau : " + e.getMessage(), 0); }
+        int code = (Integer) res[0];
+        if (code == 200) {
+            try { return parse((byte[]) res[1]); }
+            catch (Fail f) { String t = txt(res); throw new Fail(f.kind, "200 " + f.getMessage() + " · " + (t.length() > 160 ? t.substring(0, 160) + "…" : t).replaceAll("\\s+", " "), 0); }
+        }
+        String b = txt(res), g = gmsg(code, b);
+        if (code == 429) {
+            String w = Quota.why(b);
+            throw new Fail(w.equals("minute") ? "minute" : "day", g, Quota.retryMs(b));
+        }
+        if (code == 401 || code == 403 || (code == 400 && b.contains("API_KEY"))) throw new Fail("key", g, 0);
+        if (code >= 500) throw new Fail("minute", g, 8000);
+        throw new Fail("off", g, 0); // 404, 400 : modèle ou format inconnu → combinaison suivante
+    }
+
+    private static String txt(Object[] res) { return new String((byte[]) res[1], StandardCharsets.UTF_8); }
+
+    /** {code, octets reçus} */
+    private static Object[] http(String url, String key, String json) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(15000);
-            c.setReadTimeout(240000);
+            c.setReadTimeout(420000); // un long morceau de son peut prendre quelques minutes à fabriquer
             c.setRequestMethod("POST");
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
@@ -246,9 +301,9 @@ final class Studio {
             try (OutputStream o = c.getOutputStream()) { o.write(json.getBytes(StandardCharsets.UTF_8)); }
             int code = c.getResponseCode();
             InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
-            ByteArrayOutputStream b = new ByteArrayOutputStream();
-            if (in != null) { byte[] buf = new byte[16384]; int n; while ((n = in.read(buf)) > 0) b.write(buf, 0, n); in.close(); }
-            return new String[]{String.valueOf(code), b.toString("UTF-8")};
+            ByteArrayOutputStream b = new ByteArrayOutputStream(code == 200 ? 1 << 20 : 4096);
+            if (in != null) { byte[] buf = new byte[65536]; int n; while ((n = in.read(buf)) > 0) b.write(buf, 0, n); in.close(); }
+            return new Object[]{code, b.toByteArray()};
         } finally { c.disconnect(); }
     }
 

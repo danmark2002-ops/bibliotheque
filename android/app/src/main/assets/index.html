@@ -1104,6 +1104,16 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .mkinfo em { font-style: normal; font-size: 12px; color: var(--brass); }
 .mkgo { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 20px; background: var(--ink); color: var(--room); font-weight: 600; font-size: 14px; }
 .mkgo svg { width: 16px; height: 16px; }
+.mkrow { position: relative; }
+.mkdel { flex: none; width: 40px; height: 40px; margin-left: -6px; border: 0; border-radius: 20px; background: transparent; color: var(--ink-2); display: grid; place-items: center; cursor: pointer; }
+.mkdel svg { width: 18px; height: 18px; }
+.bblock:empty { display: none; }
+.bblock { margin: 6px 0 4px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--brass); background: var(--panel-2); font-size: 14px; }
+.bblock p { margin: 0 0 10px; }
+.bblock pre, .btest pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; margin: 8px 0; color: var(--ink-2); user-select: text; }
+.btestrow { margin-top: 6px; }
+.btest { margin: 8px 0 0; font-size: 14px; }
+.btest.ok { color: var(--brass); }
 
 </style>
 </head>
@@ -3779,14 +3789,14 @@ function creationsEl(kind) {
       if (!Balado.on()) continue;
       const i = Balado.info(b.id); if (!i && !Balado.busy[b.id]) continue;
       const busy = !!Balado.busy[b.id], p = Balado.progress(b.id, i);
-      items.push({ b, sub: `Camille et Alex · ${i ? i.minutes : '…'} min`, note: busy ? 'En préparation…' : p && p.active ? 'Les voix se préparent…' : i && !i.done ? 'Préparation interrompue' : 'Prêt', act: busy || (p && p.active) ? 'Suivre' : i && !i.done ? 'Reprendre' : 'Écouter', ic: 'mic', open: () => Balado.open(b) });
+      items.push({ b, del: () => Balado.remove(b), sub: `Camille et Alex · ${i ? i.minutes : '…'} min`, note: busy ? 'En préparation…' : p && p.active ? 'Les voix se préparent…' : i && !i.done ? 'Préparation interrompue' : 'Prêt', act: busy || (p && p.active) ? 'Suivre' : i && !i.done ? 'Reprendre' : 'Écouter', ic: 'mic', open: () => Balado.open(b) });
     } else if (kind === 'resumes') {
       const t = b.summary?.text; if (!t) continue;
       const mn = Math.max(1, Math.round(t.split(/\s+/).length / 150));
-      items.push({ b, sub: `Résumé · ${mn} min à lire ou à écouter`, note: b.summary.model === 'auto' ? 'Résumé automatique' : 'Résumé IA', act: 'Ouvrir', ic: 'spark', open: () => openSummary(b) });
+      items.push({ b, del: () => deleteSummary(b), sub: `Résumé · ${mn} min à lire ou à écouter`, note: b.summary.model === 'auto' ? 'Résumé automatique' : 'Résumé IA', act: 'Ouvrir', ic: 'spark', open: () => openSummary(b) });
     } else if (kind === 'videos') {
       if (!window.AndroidVideo || !Video.exists(b.id)) continue;
-      items.push({ b, sub: 'Condensé vidéo', note: 'Prêt', act: 'Regarder', ic: 'film', open: () => Video.open(b) });
+      items.push({ b, del: () => { AndroidVideo.remove(b.id); toast('Vidéo supprimée'); renderLibrary({ now: true }); }, sub: 'Condensé vidéo', note: 'Prêt', act: 'Regarder', ic: 'film', open: () => Video.open(b) });
     }
   }
   const NAME = { balados: 'balado', resumes: 'résumé', videos: 'vidéo' };
@@ -3795,10 +3805,21 @@ function creationsEl(kind) {
   if (kind === 'balados' && items.some((x) => x.act === 'Suivre')) creationsEl.t = setTimeout(() => { if (S.ck === 'balados' && !$('.scrim') && !$('.reader')) renderLibrary({ now: true }); }, 2500);
   if (!items.length) return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, HOW[kind]));
   return h('div', { class: 'mklist' }, h('p', { class: 'muted mkcount' }, `${items.length} ${NAME[kind]}${items.length > 1 ? 's, faits' : ', fait'} à partir de tes livres`),
-    items.map((x) => h('button', { class: 'mkrow', onclick: x.open },
+    items.map((x) => h('div', { class: 'mkrow', role: 'button', tabindex: '0', onclick: x.open },
       h('span', { class: 'mkthumb' }, coverEl(x.b)),
       h('span', { class: 'mkinfo' }, h('b', {}, x.b.title), h('small', {}, x.sub), h('em', {}, x.note)),
-      h('span', { class: 'mkgo' }, icon(x.ic), x.act))));
+      h('span', { class: 'mkgo' }, icon(x.ic), x.act),
+      h('button', { class: 'mkdel', 'aria-label': `Supprimer (${NAME[kind]} de « ${x.b.title} »)`, title: 'Supprimer', onclick: (e) => {
+        e.stopPropagation();
+        if (!confirm(`Supprimer ${kind === 'videos' ? 'la vidéo' : 'le ' + NAME[kind]} de « ${x.b.title} » ? Le livre, lui, reste dans ta bibliothèque.`)) return;
+        x.del();
+      } }, icon('trash')))));
+}
+// Efface le résumé d'un livre (le livre reste)
+async function deleteSummary(b) {
+  try { await post('/api/books/' + b.id, { summary: null }, 'PATCH'); b.summary = null; toast('Résumé supprimé'); }
+  catch (e) { toast('Le résumé n’a pas pu être supprimé : ' + (e.message || e)); }
+  renderLibrary({ now: true });
 }
 function libTabs() {
   const l = visibleLibs(); const m = folderMap();
@@ -4284,7 +4305,8 @@ Règles :
 - Seulement ce qui est dit à voix haute : pas de didascalies, pas de bruitages, pas de titres, pas de listes, pas de symboles.
 - Ne parlez jamais de l'endroit où se trouve l'auditeur ni de ce qu'il fait. Ne dites jamais que vous êtes des IA.
 Écris pour être DIT, comme de vrais animateurs de balado, pas pour être lu : une hésitation naturelle de temps en temps (« euh », « bon », « ben »), une phrase laissée en suspens (« Je me demande si… »), une réaction qui coupe la parole, un vrai rire, un silence avant une idée forte. Les émotions changent d'une réplique à l'autre : étonnement, amusement, gravité, tendresse, enthousiasme.
-Tu peux glisser, avec parcimonie (quelques fois par segment), UNIQUEMENT ces trois balises dans le texte : <laugh> (petit rire), <sigh> (soupir), <short pause> (silence bref). Aucune autre balise, aucune majuscule d'insistance.
+Comme une vraie conversation enregistrée : beaucoup de répliques courtes (souvent moins de 15 mots), des relances (« Ah oui ? », « Mm. », « Attends, attends… »), des phrases que l'autre termine, une réaction qui coupe la parole (la réplique coupée finit par « — »), des « tsé », « genre », « en fait » avec mesure. Jamais deux longues tirades de suite : une longue explication est hachée par les réactions de l'autre.
+Tu peux glisser, avec parcimonie (quelques fois par segment), UNIQUEMENT ces balises dans le texte : <laugh> (petit rire), <sigh> (soupir), <breath> (inspiration), <short pause> (silence bref). Aucune autre balise, aucune majuscule d'insistance.
 Pour chaque réplique, « ton » dit en 1 à 4 mots comment elle est jouée : « curieux », « amusé », « ému, plus bas », « enthousiaste », « sérieux, posé », « surpris », « complice »…`,
   async plan(b, text, minutes, say) {
     const segs = minutes <= 5 ? 2 : minutes <= 15 ? 4 : 7;
@@ -4320,7 +4342,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
   voice(t) {
     return t.replace(/[<\[(]\s*(?:rire|rit|laugh(?:s|ter)?|petit rire)\s*[>\])]/gi, ' <laugh> ').replace(/[<\[(]\s*(?:soupir|sigh(?:s)?)\s*[>\])]/gi, ' <sigh> ')
       .replace(/[<\[(]\s*(?:pause|silence|short pause)\s*[>\])]/gi, ' <short pause> ')
-      .replace(/<(?!\/?(?:laugh|sigh|short pause)>)[^>]*>/gi, ' ').replace(/\s+/g, ' ').trim();
+      .replace(/[<\[(]\s*(?:respire|inspire|breath)\s*[>\])]/gi, ' <breath> ')
+      .replace(/<(?!\/?(?:laugh|sigh|breath|short pause)>)[^>]*>/gi, ' ').replace(/\s+/g, ' ').trim();
   },
   // Texte lu à l'écran et par les voix du téléphone : sans balises
   plain(v) { return v.replace(/<[^>]*>/g, ' ').replace(/\s+([,.])/g, '$1').replace(/\s+/g, ' ').trim(); },
@@ -4373,6 +4396,29 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     } catch (e) { this.err[b.id] = e.message || 'Le balado n’a pas pu être préparé.'; }
     finally { delete this.busy[b.id]; delete this.step[b.id]; }
   },
+  // Supprime le balado (texte et voix gardées) ; s'il joue, il s'arrête
+  remove(b) {
+    if (this.busy[b.id]) return toast('Le balado est en train de s’écrire : attends la fin pour le supprimer.');
+    try { const st = JSON.parse(AndroidAuto.baladoState() || 'null'); if (st && st.id === b.id) (AndroidAuto.profStop || AndroidAuto.profPause)(); } catch {}
+    AndroidAuto.remove(this.file(b.id)); // efface aussi les voix de studio du téléphone
+    delete this.err[b.id]; this.pill[b.id]?.remove(); delete this.pill[b.id];
+    AutoSync.writeCatalog();
+    toast('Balado supprimé');
+    renderLibrary({ now: true });
+  },
+  // « Tester la voix de studio » : 2 répliques fabriquées par Gemini avec ta clé, jouées tout de suite ; sinon la réponse exacte de Google
+  test(out) {
+    if (!AndroidAuto.studioTest) return;
+    out.replaceChildren(h('p', { class: 'muted' }, 'Gemini fabrique un extrait de 2 répliques… (jusqu’à une minute)'));
+    window.__studioTest = (j) => {
+      let r = {}; try { r = JSON.parse(j); } catch {}
+      out.replaceChildren(r.ok
+        ? h('p', { class: 'btest ok' }, `Voix de studio fonctionnelle ✓ (${r.model}, ${r.secs} s de son en ${Math.round(r.ms / 1000)} s). Tu l’entends en ce moment.`)
+        : h('div', { class: 'btest' }, h('b', {}, 'Gemini refuse la voix de studio. Réponse exacte de Google :'), h('pre', {}, r.report || r.kind || '?'),
+          h('small', {}, 'Fais une capture de cet écran et envoie-la : elle dit précisément quoi corriger.')));
+    };
+    AndroidAuto.studioTest();
+  },
   // Pastille de suivi : reste en bas de l'écran, partout dans l'app, du premier mot écrit jusqu'à la dernière voix prête.
   // Un toucher la ramène à l'écran du balado.
   watch(b) {
@@ -4415,7 +4461,7 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
     if (!writing && (!v || voiceDone || (!v.working && !v.why && !v.total))) return null;
     const lines = [];
     if (writing) lines.push(st?.t || 'Préparation…'); else if (info && !info.done) lines.push('Le texte est en attente de la suite…'); else lines.push('Texte du balado prêt ✓');
-    if (v && v.total) lines.push(v.why ? v.why : `Voix de studio : ${v.made} scène${v.made > 1 ? 's' : ''} sur ${v.total} prête${v.made > 1 ? 's' : ''}${v.made >= v.total ? ' ✓' : ''}`);
+    if (v && v.total) lines.push(v.why ? v.why + (v.detail ? '\nRéponse de Google : ' + v.detail.split('\n').pop() : '') : `Voix de studio : ${v.made} scène${v.made > 1 ? 's' : ''} sur ${v.total} prête${v.made > 1 ? 's' : ''}${v.made >= v.total ? ' ✓' : ''}`);
     const tf = info?.done ? 1 : Math.min(1, made / n), vf = v && v.total ? v.made / v.total : 0;
     const active = writing || !!(v && v.total && v.made < v.total && !v.why);
     return { lines, v, active, f: v && v.total && info?.done ? 0.35 + 0.65 * vf : 0.35 * tf };
@@ -4438,6 +4484,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
       if (box.dataset.t !== txt) { box.dataset.t = txt; box.replaceChildren(...p.lines.map((x) => h('div', {}, x))); }
       $('i', pr).style.width = Math.round(p.f * 100) + '%';
     };
+    const testOut = h('div');
+    const testRow = () => AndroidAuto.studioTest ? h('div', { class: 'btestrow' }, h('button', { class: 'btn linkish', onclick: () => this.test(testOut) }, icon('spark'), 'Tester la voix de studio'), testOut) : null;
     let mode = '', ui = null; // l'écran n'est reconstruit que quand il change de nature : les boutons restent sous le doigt
     const render = () => {
       const info = this.info(b.id) || (this.busy[b.id] ? { done: false, minutes, made: 0, n: 0 } : null);
@@ -4451,7 +4499,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
           h('p', { class: 'bintro' }, `Camille et Alex discutent de « ${b.title} », comme dans une émission de radio. Idéal à écouter en voiture, en marchant ou les yeux fermés.`),
           h('div', { class: 'field' }, 'Durée', seg),
           h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); render(); } }, icon('mic'), 'Créer le balado'),
-          h('p', { class: 'muted bnote' }, 'Écrit et lu par Gemini avec ta clé gratuite : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'));
+          h('p', { class: 'muted bnote' }, 'Écrit et lu par Gemini avec ta clé gratuite : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'),
+          testRow());
       } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
         mode = m;
         body.replaceChildren(
@@ -4460,6 +4509,8 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
           pr,
           h('button', { class: 'btn primary big', disabled: info.made ? null : true, onclick: () => { stopAllAudio(); AndroidAuto.baladoPlay(b.id); setTimeout(render, 400); } }, icon('play'), 'Écouter'),
           !this.busy[b.id] && !info.done ? h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, info.minutes || minutes, () => render()); render(); } }, icon('refresh'), 'Reprendre la préparation') : null,
+          testRow(),
+          !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm(`Supprimer le balado de « ${b.title} » ?`)) return; close(); this.remove(b); } }, icon('trash'), 'Supprimer le balado') : null,
           !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null);
       } else if (m === 'play') {
         if (mode !== 'play') { // le lecteur : construit une fois, puis seulement mis à jour
@@ -4472,7 +4523,9 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
               ui.play,
               h('button', { class: 'rbtn', 'aria-label': 'Réplique suivante', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.min(ui.st.n - 1, ui.st.i + 1)) }, icon('next'))),
             ui.voice = h('p', { class: 'muted bnote bvoice' }),
-            h('p', { class: 'muted bnote' }, 'Le balado continue écran éteint et dans Android Auto.'));
+            ui.block = h('div', { class: 'bblock' }),
+            h('p', { class: 'muted bnote' }, 'Le balado continue écran éteint et dans Android Auto.'),
+            testRow());
         }
         ui.st = st;
         $$('.bhost', ui.hosts).forEach((x) => { const on = +x.dataset.k === st.sp && st.playing; x.classList.toggle('on', on); $('small', x).textContent = on ? 'parle' : ''; });
@@ -4482,8 +4535,19 @@ Réponds en JSON : {"repliques": [{"qui": "Camille" ou "Alex", "ton": "…", "te
         ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
         const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
         ui.left.textContent = left ? `≈ ${left} min restantes` : '';
-        const vt = st.voice === 'prep' ? 'La voix se prépare…' : st.voice === 'phone' ? st.why : st.voice === 'studio' ? 'Voix de studio Gemini ✓' : '';
+        const vt = st.voice === 'prep' ? 'La voix de studio se prépare… l’écoute partira toute seule.' : st.voice === 'phone' ? st.why + ' (voix du téléphone, à ta demande)' : st.voice === 'studio' ? 'Voix de studio Gemini ✓' : st.voice === 'blocked' ? st.why : '';
         if (ui.voice.textContent !== vt) ui.voice.textContent = vt;
+        const bk = st.voice === 'blocked' ? 'b:' + st.why + st.detail : '';
+        if (ui.block.dataset.k !== bk) {
+          ui.block.dataset.k = bk;
+          ui.block.replaceChildren(...(bk ? [
+            h('p', {}, 'Le balado est en pause : sans la voix de studio, Camille et Alex sonneraient comme des robots.'),
+            st.detail ? h('details', {}, h('summary', {}, 'Réponse exacte de Google'), h('pre', {}, st.detail)) : null,
+            h('div', { class: 'prof-row' },
+              h('button', { class: 'btn primary', onclick: () => { AndroidAuto.baladoRetry(); setTimeout(render, 400); } }, icon('refresh'), 'Réessayer'),
+              h('button', { class: 'btn', onclick: () => { AndroidAuto.baladoPhone(); setTimeout(render, 400); } }, icon('headphones'), 'Voix du téléphone')),
+          ] : []));
+        }
         if (ui.play.dataset.p !== String(st.playing)) { ui.play.dataset.p = String(st.playing); ui.play.setAttribute('aria-label', st.playing ? 'Pause' : 'Lecture'); ui.play.replaceChildren(icon(st.playing ? 'pause' : 'play')); }
       }
     };

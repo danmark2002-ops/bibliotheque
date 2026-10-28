@@ -1458,6 +1458,50 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String baladoVoice(String id) { return Voix.progress(getFilesDir(), id); }
 
+        private final ScenePlayer testPlayer = new ScenePlayer();
+        private void playTest(Studio.Audio a) {
+            LivreService.pauseFromApp();
+            runOnUiThread(() -> testPlayer.start(a.pcm, a.rate, new int[]{0, a.pcm.length}, 0, 1f, new ScenePlayer.Listener() {
+                @Override public void line(int i) { }
+                @Override public void end() { }
+            }));
+        }
+
+        /** Balado arrêté faute de voix de studio : « Réessayer » ou « Voix du téléphone » */
+        @JavascriptInterface
+        public void baladoRetry() { LivreService.studioRetry(); }
+        @JavascriptInterface
+        public void baladoPhone() { LivreService.studioPhone(); }
+
+        /**
+         * « Tester la voix de studio » : 2 répliques fabriquées par Gemini avec la clé de la personne, jouées tout de suite.
+         * Le résultat (ou la réponse exacte de Google) revient à la page : window.__studioTest({ok, ms, model, report, secs})
+         */
+        @JavascriptInterface
+        public void studioTest() {
+            final String key = IaGratuite.key(MainActivity.this);
+            new Thread(() -> {
+                JSONObject r = new JSONObject();
+                long t0 = System.currentTimeMillis();
+                try {
+                    if (key.isEmpty()) throw new Studio.Fail("key", "Aucune clé Gemini enregistrée.", 0);
+                    List<Studio.Line> l = new ArrayList<>();
+                    l.add(new Studio.Line(0, "Alors, Alex… <short pause> tu l'as lu, ce livre-là ?", "complice, curieuse"));
+                    l.add(new Studio.Line(1, "<laugh> Ben oui ! Pis franchement, je m'attendais pas à ça pantoute.", "amusé, enthousiaste"));
+                    Studio.Audio a = Studio.render(key, l);
+                    r.put("ok", true).put("model", Studio.lastModel).put("secs", Math.round(a.pcm.length * 10.0 / a.rate) / 10.0);
+                    Voix.unblock();
+                    playTest(a);
+                } catch (Studio.Fail f) {
+                    try { r.put("ok", false).put("kind", f.kind).put("report", Studio.report.isEmpty() ? f.getMessage() : Studio.report); } catch (Exception ignored) { }
+                } catch (Exception e) {
+                    try { r.put("ok", false).put("kind", "off").put("report", String.valueOf(e)); } catch (Exception ignored) { }
+                }
+                try { r.put("ms", System.currentTimeMillis() - t0); } catch (Exception ignored) { }
+                js("__studioTest", r.toString());
+            }).start();
+        }
+
         @JavascriptInterface
         public void profPause() { prof("pause", null, null); }
 

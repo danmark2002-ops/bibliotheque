@@ -53,14 +53,34 @@ final class Voix {
         return s;
     }
 
-    /** Découpe en scènes de ~1 100 lettres (environ 80 s de son). Une scène ouverte (la suite n'est pas encore écrite) n'est pas fabriquée. */
+    /**
+     * Taille visée d'une scène, en lettres (~14 lettres par seconde de parole) : peu de demandes à Gemini (le palier gratuit
+     * en permet peu) et peu de raccords. La première est courte, pour que l'écoute commence vite. Si Gemini rend un son
+     * coupé avant la fin, la taille est réduite et retenue (fichier voix/taille).
+     */
+    static final int FIRST = 1100, BIG = 4500, SMALLEST = 1500;
+    static volatile int big = BIG;
+
+    static void loadSize(File files) {
+        try { File f = new File(new File(files, "voix"), "taille"); if (f.exists()) big = Math.max(SMALLEST, Math.min(BIG, Integer.parseInt(new String(Compat.readAll(f), "UTF-8").trim()))); }
+        catch (Exception ignored) { }
+    }
+
+    private static void saveSize(File files, int v) {
+        big = Math.max(SMALLEST, Math.min(BIG, v));
+        try { File d = new File(files, "voix"); d.mkdirs(); try (FileOutputStream o = new FileOutputStream(new File(d, "taille"))) { o.write(String.valueOf(big).getBytes("UTF-8")); } }
+        catch (Exception ignored) { }
+    }
+
+    /** Découpe en scènes (voir FIRST / big), sur un changement d'animateur. Une scène ouverte (la suite n'est pas encore écrite) n'est pas fabriquée. */
     static List<Scene> scenes(Script s) {
         List<Scene> out = new ArrayList<>();
         int start = 0, chars = 0, n = s.n();
         for (int i = 0; i < n; i++) {
             chars += s.voice.get(i).length();
+            int aim = out.isEmpty() ? FIRST : big, max = aim + aim / 2;
             boolean last = i == n - 1, turn = !last && !s.who.get(i + 1).equals(s.who.get(i));
-            boolean cut = (chars >= 1100 && turn) || (s.pause.get(i) == 2 && chars >= 700 && turn) || chars >= 1900 || (last && (s.done || s.pause.get(i) == 2));
+            boolean cut = (chars >= aim && turn) || chars >= max || (last && (s.done || s.pause.get(i) == 2));
             if (!cut) continue;
             out.add(new Scene(start, i, hash(s, start, i)));
             start = i + 1; chars = 0;
@@ -129,7 +149,7 @@ final class Voix {
             Script s = script(new String(Compat.readAll(new File(new File(files, "auto"), "balado/" + id + ".json")), "UTF-8"));
             List<Scene> sc = scenes(s); int made = 0;
             for (int k = 0; k < sc.size(); k++) if (has(files, id, k, sc.get(k))) made++;
-            return new JSONObject().put("made", made).put("total", sc.size()).put("working", working(id)).put("why", problem()).toString();
+            return new JSONObject().put("made", made).put("total", sc.size()).put("working", working(id)).put("why", problem()).put("detail", blocked() ? detail : "").toString();
         } catch (Exception e) { return ""; }
     }
 
@@ -150,6 +170,11 @@ final class Voix {
     private static volatile long blockedUntil;
     private static volatile String why = "";           // message pour la personne
     private static volatile String busyId = "";
+    private static volatile String detail = "";        // réponse exacte de Google au dernier refus
+
+    /** La personne demande de réessayer tout de suite */
+    static void unblock() { blockedUntil = 0; why = ""; detail = ""; }
+    static String detail() { return blocked() ? detail : ""; }
 
     /** « studio » : la voix de studio est disponible · sinon la raison (affichée en clair) */
     static String problem() { return System.currentTimeMillis() < blockedUntil ? why : ""; }
@@ -180,6 +205,7 @@ final class Voix {
     /** Fabrique, une à une, les scènes qui manquent (celle qu'on écoute d'abord). Public pour les essais sur ordinateur. */
     static void work(File files, String key, String id) {
         if (blocked()) return;
+        loadSize(files);
         File f = new File(new File(files, "auto"), "balado/" + id + ".json");
         while (true) {
             Script s; List<Scene> sc;
@@ -204,6 +230,13 @@ final class Voix {
                 }
             }
             if (a == null) { block("minute"); return; }
+            int chars = 0;
+            for (int i = x.first; i <= x.last; i++) chars += Studio.weight(s.voice.get(i));
+            double secs = a.pcm.length / (double) a.rate;
+            if (x.last > x.first && big > SMALLEST && chars > SMALLEST && secs < 0.55 * chars / 14.0) { // son coupé avant la fin : des scènes plus courtes, puis on recommence
+                saveSize(files, Math.min(big, chars) * 2 / 3);
+                continue;
+            }
             try {
                 short[] p = Studio.trim(a.pcm, a.rate);
                 int n = x.last - x.first + 1;
@@ -219,13 +252,13 @@ final class Voix {
     private static void block(String kind) {
         long ms; String m;
         switch (kind) {
-            case "key": ms = 10 * 60_000L; m = "Gemini refuse la clé : voix du téléphone pour l'instant."; break;
-            case "day": ms = 6 * 3600_000L; m = "Le quota gratuit de voix Gemini est atteint pour aujourd'hui : voix du téléphone en attendant."; break;
-            case "net": ms = 60_000L; m = "Pas de connexion : voix du téléphone en attendant."; break;
-            case "minute": ms = 3 * 60_000L; m = "Gemini est très occupé : voix du téléphone en attendant."; break;
-            default: ms = 60 * 60_000L; m = "La voix de studio n'est pas disponible pour l'instant : voix du téléphone."; break;
+            case "key": ms = 10 * 60_000L; m = "Gemini refuse la clé pour les voix de studio."; break;
+            case "day": ms = 6 * 3600_000L; m = "Le quota gratuit de voix Gemini est atteint pour aujourd'hui."; break;
+            case "net": ms = 60_000L; m = "Pas de connexion Internet."; break;
+            case "minute": ms = 3 * 60_000L; m = "Gemini est très occupé en ce moment."; break;
+            default: ms = 60 * 60_000L; m = "Gemini a refusé de fabriquer la voix de studio."; break;
         }
-        why = m; blockedUntil = System.currentTimeMillis() + ms; busyId = "";
+        why = m; detail = Studio.report; blockedUntil = System.currentTimeMillis() + ms; busyId = "";
         LivreService.voixPrete(null, -1);
     }
 

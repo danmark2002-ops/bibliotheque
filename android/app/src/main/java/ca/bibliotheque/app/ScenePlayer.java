@@ -35,13 +35,19 @@ final class ScenePlayer {
             track = new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
                 .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                .setBufferSizeInBytes(frames * 2).setTransferMode(AudioTrack.MODE_STATIC).build();
-            track.write(pcm, offset, frames);
+                .setBufferSizeInBytes(Math.max(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 4, rate * 2))
+                .setTransferMode(AudioTrack.MODE_STREAM).build(); // en continu : une scène de plusieurs minutes ne tient pas toujours d'un bloc dans le lecteur du téléphone
             if (Math.abs(speed - 1f) > 0.01f) { try { track.setPlaybackParams(new android.media.PlaybackParams().setSpeed(speed)); } catch (Exception ignored) { } }
             track.play();
         } catch (Exception e) { release(); live = false; h.post(() -> { if (ls != null) ls.end(); }); return; }
         live = true; paused = false; lastTick = android.os.SystemClock.elapsedRealtime();
         final int g = ++gen;
+        final AudioTrack t = track; final int from = offset;
+        new Thread(() -> { // le son est versé au fil de l'écoute ; en pause, l'écriture attend toute seule
+            int p = from;
+            try { while (p < pcm.length && g == gen) { int w = t.write(pcm, p, Math.min(8192, pcm.length - p)); if (w <= 0) break; p += w; } }
+            catch (Exception ignored) { }
+        }, "scene").start();
         tick(g);
     }
 

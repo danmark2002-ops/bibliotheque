@@ -122,7 +122,7 @@ public class StudioTest {
             else if (mode[0].equals("day")) { code = 429; out = "{\"error\":{\"code\":429,\"message\":\"Quota exceeded for metric generate_content_free_tier_requests, limit: 0\"}}"; }
             else if (mode[0].equals("minute")) { code = 429; out = "{\"error\":{\"code\":429,\"details\":[{\"retryDelay\":\"37s\"}]}}"; }
             else if (mode[0].equals("new") && inter && body.contains("gemini-3.8-flash-tts") && "K".equals(key)) { code = 200; out = "{\"steps\":[{\"type\":\"model_output\",\"content\":[{\"type\":\"audio\",\"data\":\"" + b64 + "\"}]}]}"; }
-            else if (mode[0].equals("old") && path.contains("gemini-2.5-flash-preview-tts:generateContent") && "K".equals(key)) { code = 200; out = "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/L16;codec=pcm;rate=24000\",\"data\":\"" + b64r + "\"}}]}}]}"; }
+            else if (mode[0].equals("old") && path.contains("gemini-3.1-flash-tts-preview:generateContent") && "K".equals(key)) { code = 200; out = "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/L16;codec=pcm;rate=24000\",\"data\":\"" + b64r + "\"}}]}}]}"; }
             byte[] ob = out.getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(code, ob.length); ex.getResponseBody().write(ob); ex.close();
         });
@@ -152,7 +152,17 @@ public class StudioTest {
         }
         mode[0] = "none"; Studio.combo = 0; seen.clear();
         try { Studio.render("K", lines); ok(false, "service absent"); }
-        catch (Studio.Fail f) { ok(f.kind.equals("off") && seen.size() >= 8, "aucun modèle disponible : " + seen.size() + " combinaisons essayées puis « off »"); }
+        catch (Studio.Fail f) { ok(f.kind.equals("off") && seen.size() >= 6, "aucun modèle disponible : " + seen.size() + " combinaisons essayées puis « off »"); }
+        String[] rl = Studio.report.split("\n");
+        ok(rl.length == 6 && rl[0].contains("gemini-3.8-flash-tts (interactions) : 404 models/x is not found"), "réponse exacte de Google gardée pour chaque essai :\n      " + String.join("\n      ", rl));
+
+        // grosse réponse (5 minutes de son, ~19 Mo) : lue directement dans les octets
+        short[] big = new short[R * 300]; for (int i = 0; i < big.length; i++) big[i] = (short) (6000 * Math.sin(i * 0.031));
+        String bigB64 = Base64.getEncoder().encodeToString(wav(big, R));
+        long t0 = System.currentTimeMillis();
+        au = Studio.parse(("{\"steps\":[{\"type\":\"model_output\",\"content\":[{\"type\":\"text\",\"data\":\"court\"},{\"type\":\"audio\",\"data\":\"" + bigB64 + "\"}]}]}").getBytes(StandardCharsets.UTF_8));
+        ok(au.pcm.length == big.length && au.pcm[12345] == big[12345], "5 min de son (" + bigB64.length() / 1_000_000 + " Mo de base64) lues en " + (System.currentTimeMillis() - t0) + " ms");
+        ok(Studio.gmsg(400, "{\"error\":{\"message\":\"Invalid value at \\\"speech_config\\\"\",\"status\":\"INVALID_ARGUMENT\"}}").equals("400 Invalid value at \"speech_config\""), "message de Google extrait : " + Studio.gmsg(400, "{\"error\":{\"message\":\"Invalid value at \\\"speech_config\\\"\"}}"));
 
         // corps JSON valides (vérifiés ensuite par Python) et tours de parole fusionnés
         try (PrintWriter w = new PrintWriter("bodies.txt", "UTF-8")) { for (String b : bodies) w.println(b.replace("\n", " ")); }
