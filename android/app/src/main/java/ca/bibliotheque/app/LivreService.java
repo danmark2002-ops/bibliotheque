@@ -138,8 +138,31 @@ public class LivreService extends MediaBrowserService {
         applyPhone();
         AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
         if (Build.VERSION.SDK_INT >= 26) focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
-        tts = new TextToSpeech(this, st -> {
-            if (st != TextToSpeech.SUCCESS) return;
+        String sherpa = sherpaEngine();
+        tts = sherpa != null ? new TextToSpeech(this, st -> initTts(st, attrs, sherpa), sherpa) : new TextToSpeech(this, st -> initTts(st, attrs, null));
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
+    }
+
+    /** Le moteur de voix SherpaTTS ou VoxSherpa, s'il est installé : la lecture l'utilise directement (sans passer par le moteur par défaut du téléphone). */
+    private String sherpaEngine() {
+        try {
+            for (android.content.pm.ResolveInfo ri : getPackageManager().queryIntentServices(new Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0)) {
+                String pkg = ri.serviceInfo.packageName, label = String.valueOf(ri.loadLabel(getPackageManager()));
+                if (pkg.contains("woheller69") || (pkg.toLowerCase(Locale.ROOT).contains("sherpa") || label.toLowerCase(Locale.ROOT).contains("sherpa"))) return pkg;
+            }
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    private void initTts(int st, AudioAttributes attrs, String engine) {
+        if (st != TextToSpeech.SUCCESS) {
+            if (engine != null) { // le moteur Sherpa ne répond pas : on revient au moteur par défaut du téléphone
+                tts = new TextToSpeech(this, st2 -> initTts(st2, attrs, null));
+            }
+            return;
+        }
+        {
             int r = tts.setLanguage(Locale.CANADA_FRENCH);
             if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
             tts.setAudioAttributes(attrs);
@@ -151,9 +174,7 @@ public class LivreService extends MediaBrowserService {
             });
             ttsReady = true;
             if (playing) main.post(this::speak);
-        });
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
+        }
     }
 
     /** La voix française de meilleure qualité installée sur le téléphone (sans Internet, pour l'auto). */
