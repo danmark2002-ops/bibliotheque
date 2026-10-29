@@ -90,6 +90,13 @@ public class LivreService extends MediaBrowserService {
     private final java.util.Map<String, Double> f0 = new java.util.HashMap<>(); // hauteur mesurée de chaque voix française (Hz)
     private final java.util.ArrayDeque<android.speech.tts.Voice> probeList = new java.util.ArrayDeque<>();
     private boolean probing; private int probeToken; private String probeId = "";
+    // Voix du téléphone à deux timbres : un moteur comme SherpaTTS ignore la hauteur demandée et les deux animateurs sonnent pareil.
+    // Chaque réplique est donc fabriquée en fichier, puis jouée plus grave (Alex) ou plus aiguë (Camille) ; le débit demandé au moteur compense le ralentissement.
+    private final java.util.HashMap<Integer, short[]> phPcm = new java.util.HashMap<>();
+    private final java.util.HashSet<Integer> phAsked = new java.util.HashSet<>();
+    private int phRate = 22050, phGen, phWait = -1;
+    private boolean phFail;
+    private static final float PH_ALEX = 0.74f, PH_CAMILLE = 1.06f;
     // Voix de studio (Gemini) : le balado est joué par des scènes de son déjà fabriquées (Voix), sinon par les voix du téléphone
     private final ScenePlayer clip = new ScenePlayer();
     private Voix.Script script;
@@ -169,8 +176,8 @@ public class LivreService extends MediaBrowserService {
             try { defaultVoice = tts.getVoice(); profVoice = chosenVoice(); } catch (Exception ignored) { }
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
-                @Override public void onDone(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } main.post(() -> spoken(id)); }
-                @Override public void onError(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } main.post(() -> spoken(id)); }
+                @Override public void onDone(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } if (id != null && id.startsWith("ph:")) { main.post(() -> phoneReady(id, true)); return; } main.post(() -> spoken(id)); }
+                @Override public void onError(String id) { if (id != null && id.startsWith("probe:")) { main.post(() -> probeDone(id)); return; } if (id != null && id.startsWith("ph:")) { main.post(() -> phoneReady(id, false)); return; } main.post(() -> spoken(id)); }
             });
             ttsReady = true;
             if (playing) main.post(this::speak);
@@ -498,6 +505,7 @@ public class LivreService extends MediaBrowserService {
             prof = isProf;
             duo = isDuo;
             if (duo) duoPick();
+            phReset();
             clipScene = -1; clipData = null; voiceWaitSince = 0; skipScene = -1; vMode = "";
             profDone = !isProf || data.optBoolean("done", true);
             waitingMore = false;
@@ -590,10 +598,81 @@ public class LivreService extends MediaBrowserService {
             return;
         }
         String x = units.get(idx);
+        if (duo && phoneShifted() && phoneSpeak(t)) return;
         if (duo) { float[] ps = ProfStyle.duo(this, x, idx, speaker(), duoA != null && duoA.equals(duoB), duoReal); tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]); }
         else if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
         tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
         updateState();
+    }
+
+    // ---------------------------------------------------------------- voix du téléphone : deux timbres (Camille plus aiguë, Alex plus grave)
+    private void phReset() { phGen++; phPcm.clear(); phAsked.clear(); phWait = -1; phFail = false; }
+
+    /** Deux voix du téléphone qui ne sont pas vraiment un homme et une femme : on fabrique nous-mêmes l'écart de timbre */
+    private boolean phoneShifted() { return !duoReal && !phFail && ttsReady; }
+
+    private float phFactor(int speaker) { return speaker == 1 ? PH_ALEX : PH_CAMILLE; }
+
+    /** Joue la réplique courante (fabriquée en fichier puis décalée). Vrai : c'est pris en charge (en cours ou en attente) ; faux : voix du téléphone habituelle. */
+    private boolean phoneSpeak(int t) {
+        final int i = idx, sp = speaker();
+        short[] pcm = phPcm.get(i);
+        if (pcm == null) {
+            phoneAsk(i); phWait = i; vMode = "phone"; updateState();
+            main.postDelayed(() -> { if (phWait == i && playing && t == token && phPcm.get(i) == null) phoneFail(); }, 15000); // le moteur ne répond pas : retour à la voix habituelle
+            return true;
+        }
+        phWait = -1;
+        for (java.util.Iterator<Integer> it = phPcm.keySet().iterator(); it.hasNext(); ) if (it.next() < i - 1) it.remove();
+        for (java.util.Iterator<Integer> it = phAsked.iterator(); it.hasNext(); ) if (it.next() < i - 1) it.remove();
+        vMode = "phone";
+        clip.start(pcm, Math.round(phRate * phFactor(sp)), new int[]{0, pcm.length}, 0, 1f, new ScenePlayer.Listener() {
+            @Override public void line(int k) { }
+            @Override public void end() { if (phFail) return; main.post(() -> spoken(t + ":" + i)); }
+        });
+        if (!clip.live()) { phFail = true; return false; }
+        phoneAsk(i + 1); phoneAsk(i + 2); // les suivantes se fabriquent pendant que celle-ci joue
+        updateState();
+        return true;
+    }
+
+    private void phoneAsk(int i) {
+        if (i < 0 || i >= units.size() || phPcm.containsKey(i) || phAsked.contains(i)) return;
+        phAsked.add(i);
+        int sp = i < speakers.size() ? speakers.get(i) : 0;
+        String x = units.get(i);
+        try {
+            android.speech.tts.Voice v = sp == 1 ? duoB : duoA;
+            if (v == null) v = defaultVoice;
+            if (v != null && !v.equals(tts.getVoice())) tts.setVoice(v);
+            float[] ps = ProfStyle.duo(this, x, i, sp, true, false);
+            tts.setPitch(1f);
+            tts.setSpeechRate(Math.max(0.5f, Math.min(3f, ps[1] / phFactor(sp)))); // jouée à phFactor× : le débit demandé compense
+            File f = new File(getCacheDir(), "ph" + i + ".wav");
+            if (tts.synthesizeToFile(x, new Bundle(), f, "ph:" + phGen + ":" + i) != TextToSpeech.SUCCESS) phoneFail();
+        } catch (Exception e) { phoneFail(); }
+    }
+
+    private void phoneReady(String id, boolean ok) {
+        try {
+            String[] a = id.split(":");
+            int g = Integer.parseInt(a[1]), i = Integer.parseInt(a[2]);
+            File f = new File(getCacheDir(), "ph" + i + ".wav");
+            if (g != phGen || phFail) { f.delete(); return; }
+            if (!ok) { f.delete(); phoneFail(); return; }
+            Studio.Audio au = Studio.decode(Compat.readAll(f), 22050);
+            f.delete();
+            if (au == null || au.pcm == null || au.pcm.length < 200) { phoneFail(); return; }
+            phPcm.put(i, au.pcm); phRate = au.rate;
+            if (playing && phWait == i && i == idx) { phWait = -1; speak(); }
+        } catch (Exception e) { phoneFail(); }
+    }
+
+    /** La fabrication en fichier ne marche pas avec ce moteur : on revient à la voix du téléphone habituelle */
+    private void phoneFail() {
+        if (phFail) return;
+        phFail = true; phGen++; phPcm.clear(); phAsked.clear(); phWait = -1;
+        if (playing) main.post(this::speak);
     }
 
     /** Pourquoi la voix de studio manque (balado arrêté) */
