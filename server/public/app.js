@@ -2231,7 +2231,7 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
       $('i', pr).style.width = Math.round(p.f * 100) + '%';
     };
     const testOut = h('div');
-    const testRow = () => AndroidAuto.studioTest ? h('div', { class: 'btestrow' }, h('button', { class: 'btn linkish', onclick: () => this.test(testOut) }, icon('spark'), 'Tester la voix de studio'), testOut) : null;
+    const testRow = () => AndroidAuto.studioTest ? h('div', { class: 'btestrow' }, h('button', { class: 'btn linkish', onclick: () => this.test(testOut) }, icon('spark'), 'Tester la voix de studio'), testOut) : h('span');
     let mode = '', ui = null; // l'écran n'est reconstruit que quand il change de nature : les boutons restent sous le doigt
     const render = () => {
       const info = this.info(b.id) || (this.busy[b.id] ? { done: false, minutes, made: 0, n: 0 } : null);
@@ -2262,9 +2262,14 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
       } else if (m === 'play') {
         if (mode !== 'play') { // le lecteur : construit une fois, puis seulement mis à jour
           mode = 'play';
-          ui = { hosts: h('div', { class: 'bhosts' }, avatar(0), avatar(1)), line: h('p', { class: 'bline' }), bar: h('i'), who: h('span'), left: h('span'),
+          // curseur : on glisse jusqu'à la réplique voulue, la lecture reprend là (flèches = une réplique à la fois)
+          ui = { hosts: h('div', { class: 'bhosts' }, avatar(0), avatar(1)), line: h('p', { class: 'bline' }),
+            seek: h('input', { type: 'range', class: 'bseek', min: '0', max: '0', step: '1', value: '0', 'aria-label': 'Choisir la réplique où reprendre',
+              oninput: (e) => { ui.drag = true; ui.who.textContent = `${this.HOSTS[ui.st?.sp || 0]} · ${+e.target.value + 1} / ${ui.st?.n || 0}`; },
+              onchange: (e) => { ui.drag = false; AndroidAuto.baladoSeek(+e.target.value); setTimeout(render, 250); } }),
+            who: h('span'), left: h('span'),
             play: h('button', { class: 'bplay', onclick: () => { ui.st?.playing ? AndroidAuto.profPause() : AndroidAuto.baladoPlay(b.id); setTimeout(render, 250); } }) };
-          body.replaceChildren(ui.hosts, ui.line, h('div', { class: 'bbar' }, ui.bar), h('div', { class: 'bmeta' }, ui.who, ui.left), pr,
+          body.replaceChildren(ui.hosts, ui.line, h('div', { class: 'bseekwrap' }, ui.seek), h('div', { class: 'bmeta' }, ui.who, ui.left), pr,
             h('div', { class: 'bctl' },
               h('button', { class: 'rbtn', 'aria-label': 'Réplique précédente', onclick: () => ui.st && AndroidAuto.baladoSeek(Math.max(0, ui.st.i - 1)) }, icon('prev')),
               ui.play,
@@ -2280,7 +2285,8 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
         $$('.bhost', ui.hosts).forEach((x) => { const on = +x.dataset.k === st.sp && st.playing; x.classList.toggle('on', on); $('small', x).textContent = on ? 'parle' : ''; });
         const line = st.waiting ? 'Un petit instant… la suite se prépare.' : st.t;
         if (ui.line.textContent !== line) ui.line.textContent = line;
-        ui.bar.style.width = (st.n ? Math.round((st.i / st.n) * 100) : 0) + '%';
+        ui.seek.max = String(Math.max(0, st.n - 1));
+        if (!ui.drag && +ui.seek.value !== st.i) ui.seek.value = String(st.i);
         ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
         const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
         ui.left.textContent = left ? `≈ ${left} min restantes` : '';

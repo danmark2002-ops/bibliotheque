@@ -1077,6 +1077,8 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .balado .bprog .bbar { height: 4px; }
 .balado .bprog .bbar i { transition: width .6s ease; }
 .up.bpill { cursor: pointer; }
+.balado .bseekwrap { padding: 10px 0 2px; }
+.balado .bseek { width: 100%; margin: 0; accent-color: var(--brass); height: 28px; cursor: pointer; }
 
 /* Onglets Livres · Balados · Résumés · Vidéos */
 .kindtabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
