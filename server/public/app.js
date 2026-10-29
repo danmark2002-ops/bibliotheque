@@ -2138,6 +2138,17 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
     toast('Balado supprimé');
     renderLibrary({ now: true });
   },
+  // Choix quand Gemini refuse la voix de studio (quota, refus) : même écran que dans le lecteur, visible dès la fiche du balado
+  blockedChoice(b, render) {
+    let vp = {}; try { vp = JSON.parse(AndroidAuto.baladoVoice(b.id) || '{}'); } catch { }
+    if (!vp.why || vp.working || this.busy[b.id]) return null;
+    return h('div', { class: 'bblock' },
+      h('p', {}, 'Le balado est en pause : sans la voix de studio, Camille et Alex sonneraient comme des robots.'),
+      h('p', { class: 'muted' }, vp.why),
+      h('div', { class: 'prof-row' },
+        h('button', { class: 'btn primary', onclick: () => { AndroidAuto.baladoPlay(b.id); AndroidAuto.baladoRetry(); setTimeout(render, 400); } }, icon('refresh'), 'Réessayer'),
+        h('button', { class: 'btn', onclick: () => { AndroidAuto.baladoPlay(b.id); AndroidAuto.baladoPhone(); setTimeout(render, 400); } }, icon('headphones'), 'Voix du téléphone')));
+  },
   // « Tester la voix de studio » : 2 répliques fabriquées par Gemini avec ta clé, jouées tout de suite ; sinon la réponse exacte de Google
   test(out) {
     if (!AndroidAuto.studioTest) return;
@@ -2238,15 +2249,16 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
           testRow());
       } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
         mode = m;
-        body.replaceChildren(
+        body.replaceChildren(...[
           h('div', { class: 'bhosts' }, avatar(0), avatar(1)),
           h('p', { class: 'bintro', style: { textAlign: 'center' } }, this.busy[b.id] && !info.made ? 'Camille et Alex préparent le début de l’émission…' : `Émission de ${info.minutes} min${info.done ? '' : this.busy[b.id] ? ' · la suite s’écrit, tu peux fermer cette fenêtre ou lire autre chose.' : ' · préparation interrompue.'}`),
           pr,
+          this.blockedChoice(b, render),
           h('button', { class: 'btn primary big', disabled: info.made ? null : true, onclick: () => { stopAllAudio(); AndroidAuto.baladoPlay(b.id); setTimeout(render, 400); } }, icon('play'), 'Écouter'),
           !this.busy[b.id] && !info.done ? h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, info.minutes || minutes, () => render()); render(); } }, icon('refresh'), 'Reprendre la préparation') : null,
           testRow(),
           !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm(`Supprimer le balado de « ${b.title} » ?`)) return; close(); this.remove(b); } }, icon('trash'), 'Supprimer le balado') : null,
-          !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null);
+          !this.busy[b.id] ? h('button', { class: 'btn linkish', onclick: () => { if (!confirm('Refaire ce balado ? L’émission actuelle sera remplacée.')) return; AndroidAuto.remove(this.file(b.id)); AutoSync.writeCatalog(); render(); } }, icon('refresh'), 'Refaire une émission') : null].filter(Boolean));
       } else if (m === 'play') {
         if (mode !== 'play') { // le lecteur : construit une fois, puis seulement mis à jour
           mode = 'play';
@@ -2272,7 +2284,7 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
         ui.who.textContent = `${this.HOSTS[st.sp]} · ${st.i + 1} / ${st.n}`;
         const left = Math.max(0, Math.round(((st.n - st.i) / Math.max(1, st.n)) * (info.minutes || 15)));
         ui.left.textContent = left ? `≈ ${left} min restantes` : '';
-        const vt = st.voice === 'prep' ? 'La voix de studio se prépare… l’écoute partira toute seule.' : st.voice === 'phone' ? st.why + ' (voix du téléphone, à ta demande)' : st.voice === 'studio' ? 'Voix de studio Gemini ✓' : st.voice === 'blocked' ? st.why : '';
+        const vt = st.voice === 'prep' ? 'La voix de studio se prépare… l’écoute partira toute seule.' : st.voice === 'phone' ? st.why + ' (voix du téléphone, à ta demande)' : st.voice === 'studio' ? 'Voix de studio Gemini ✓' : st.voice === 'blocked' ? (st.why || '') : '';
         if (ui.voice.textContent !== vt) ui.voice.textContent = vt;
         const bk = st.voice === 'blocked' ? 'b:' + st.why + st.detail : '';
         if (ui.block.dataset.k !== bk) {
