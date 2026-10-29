@@ -91,7 +91,7 @@ public class LivreService extends MediaBrowserService {
     private final java.util.ArrayDeque<android.speech.tts.Voice> probeList = new java.util.ArrayDeque<>();
     private boolean probing; private int probeToken; private String probeId = "";
     // Voix du téléphone à deux timbres : un moteur comme SherpaTTS ignore la hauteur demandée et les deux animateurs sonnent pareil.
-    // Chaque réplique est donc fabriquée en fichier, puis jouée plus grave (Alex) ou plus aiguë (Camille) ; le débit demandé au moteur compense le ralentissement.
+    // Chaque réplique est donc fabriquée en fichier, puis sa hauteur est changée (PhoneDuo : plus grave pour Alex, plus aiguë pour Camille) sans changer sa vitesse.
     private final java.util.HashMap<Integer, short[]> phPcm = new java.util.HashMap<>();
     private final java.util.HashSet<Integer> phAsked = new java.util.HashSet<>();
     private int phRate = 22050, phGen, phWait = -1;
@@ -626,7 +626,7 @@ public class LivreService extends MediaBrowserService {
         for (java.util.Iterator<Integer> it = phPcm.keySet().iterator(); it.hasNext(); ) if (it.next() < i - 1) it.remove();
         for (java.util.Iterator<Integer> it = phAsked.iterator(); it.hasNext(); ) if (it.next() < i - 1) it.remove();
         vMode = "phone";
-        clip.start(pcm, Math.round(phRate * phFactor(sp)), new int[]{0, pcm.length}, 0, 1f, new ScenePlayer.Listener() {
+        clip.start(pcm, phRate, new int[]{0, pcm.length}, 0, 1f, new ScenePlayer.Listener() {
             @Override public void line(int k) { }
             @Override public void end() { if (phFail) return; main.post(() -> spoken(t + ":" + i)); }
         });
@@ -647,7 +647,7 @@ public class LivreService extends MediaBrowserService {
             if (v != null && !v.equals(tts.getVoice())) tts.setVoice(v);
             float[] ps = ProfStyle.duo(this, x, i, sp, true, false);
             tts.setPitch(1f);
-            tts.setSpeechRate(Math.max(0.5f, Math.min(3f, ps[1] / phFactor(sp)))); // jouée à phFactor× : le débit demandé compense
+            tts.setSpeechRate(ps[1]); // la hauteur est changée ensuite par PhoneDuo, sans toucher à la vitesse
             File f = new File(getCacheDir(), "ph" + i + ".wav");
             if (tts.synthesizeToFile(x, new Bundle(), f, "ph:" + phGen + ":" + i) != TextToSpeech.SUCCESS) phoneFail();
         } catch (Exception e) { phoneFail(); }
@@ -663,8 +663,16 @@ public class LivreService extends MediaBrowserService {
             Studio.Audio au = Studio.decode(Compat.readAll(f), 22050);
             f.delete();
             if (au == null || au.pcm == null || au.pcm.length < 200) { phoneFail(); return; }
-            phPcm.put(i, au.pcm); phRate = au.rate;
-            if (playing && phWait == i && i == idx) { phWait = -1; speak(); }
+            phRate = au.rate;
+            final short[] raw = au.pcm; final double fac = phFactor(i < speakers.size() ? speakers.get(i) : 0); final int gen = phGen;
+            new Thread(() -> { // le changement de hauteur se calcule hors de l'écran (quelques dizaines de ms)
+                short[] y = PhoneDuo.pitchShift(raw, fac);
+                main.post(() -> {
+                    if (gen != phGen || phFail) return;
+                    phPcm.put(i, y);
+                    if (playing && phWait == i && i == idx) { phWait = -1; speak(); }
+                });
+            }, "phone-pitch").start();
         } catch (Exception e) { phoneFail(); }
     }
 
