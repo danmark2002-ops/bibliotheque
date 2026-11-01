@@ -44,17 +44,45 @@ final class VideoServeur {
         server = null; file = null;
     }
 
-    static String localIp() {
+    static String localIp() { return localIp(null); }
+
+    /**
+     * L'adresse de cet appareil sur le Wi-Fi (ou le câble réseau). D'abord celle qu'Android donne pour le réseau en service ;
+     * sinon la meilleure interface : wlan/eth avant les autres, jamais Wi-Fi Direct (p2p, souvent 192.168.49.1 sur les Fire TV),
+     * ni point d'accès, ni données cellulaires, ni VPN.
+     */
+    static String localIp(android.content.Context c) {
+        if (c != null) {
+            try {
+                android.net.ConnectivityManager cm = (android.net.ConnectivityManager) c.getApplicationContext().getSystemService(android.content.Context.CONNECTIVITY_SERVICE);
+                android.net.Network net = android.os.Build.VERSION.SDK_INT >= 23 ? cm.getActiveNetwork() : null;
+                android.net.NetworkCapabilities caps = net == null ? null : cm.getNetworkCapabilities(net);
+                boolean lan = caps != null && (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET));
+                android.net.LinkProperties lp = lan ? cm.getLinkProperties(net) : null;
+                if (lp != null) for (android.net.LinkAddress la : lp.getLinkAddresses()) { InetAddress a = la.getAddress(); if (usable(a)) return a.getHostAddress(); }
+            } catch (Exception ignored) { }
+        }
+        String best = null; int bestScore = -1;
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
                 String n = ni.getName().toLowerCase(Locale.ROOT);
-                if (n.startsWith("rmnet") || n.startsWith("ccmni") || n.startsWith("dummy") || n.startsWith("tun")) continue; // données cellulaires, VPN
+                if (n.startsWith("rmnet") || n.startsWith("ccmni") || n.startsWith("dummy") || n.startsWith("tun") || n.startsWith("p2p")
+                    || n.startsWith("ap") || n.startsWith("swlan") || n.startsWith("rndis") || n.startsWith("bt-pan") || n.startsWith("v4-") || n.startsWith("docker")) continue;
+                int score = n.startsWith("wlan") || n.startsWith("eth") ? 2 : 1;
                 for (InetAddress a : Collections.list(ni.getInetAddresses()))
-                    if (a instanceof java.net.Inet4Address && a.isSiteLocalAddress()) return a.getHostAddress();
+                    if (usable(a) && score > bestScore) { best = a.getHostAddress(); bestScore = score; }
             }
         } catch (Exception ignored) { }
-        return null;
+        return best;
+    }
+
+    /** Adresse de réseau local : 10.x, 172.16-31.x, 192.168.x, ou 100.64-127.x (certains routeurs et réseaux maillés) */
+    static boolean usable(InetAddress a) {
+        if (!(a instanceof java.net.Inet4Address) || a.isLoopbackAddress() || a.isLinkLocalAddress()) return false;
+        if (a.isSiteLocalAddress()) return true;
+        byte[] b = a.getAddress();
+        return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
     }
 
     private static void loop() {

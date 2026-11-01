@@ -28,7 +28,7 @@ final class Reception {
     /** Démarre et renvoie l'adresse à ouvrir sur le téléphone, ou null sans réseau local. */
     static synchronized String start(android.content.Context c, Arrive a) throws Exception {
         dir = dir(c); cb = a;
-        String ip = VideoServeur.localIp();
+        String ip = VideoServeur.localIp(c);
         if (ip == null) return null;
         if (server == null || server.isClosed()) {
             ServerSocket s = null;

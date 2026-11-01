@@ -3106,6 +3106,10 @@ const Recv = {
       h('p', {}, 'Sur ton téléphone (branché sur le même Wi-Fi), ouvre le navigateur — Chrome ou Safari — et tape cette adresse :'),
       h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, '')),
       h('p', { class: 'muted' }, 'Touche « Choisir des livres », sélectionne tes PDF, EPUB ou Word : ils apparaissent ici, puis sur l\'étagère. Garde cette fenêtre ouverte pendant l\'envoi.'),
+      h('details', { class: 'recv-help' }, h('summary', {}, 'La page ne s\'ouvre pas sur le téléphone ?'),
+        h('p', {}, 'Certains Wi-Fi empêchent les appareils de se parler entre eux : Wi-Fi « invité », hôtel, chalet loué, certains routeurs. La télé et le téléphone ont Internet, mais ne se voient pas.'),
+        h('p', {}, 'Solution qui marche partout : sur le téléphone, active le « Partage de connexion » (point d\'accès), connecte la télé à ce Wi-Fi, puis rouvre cette fenêtre : une nouvelle adresse s\'affiche. Tape-la dans le navigateur du téléphone.'),
+        h('p', { class: 'muted' }, 'Vérifie aussi que le téléphone est bien sur le Wi-Fi (pas sur les données cellulaires) et tape l\'adresse exactement, avec le « : » et le numéro à la fin.')),
       this.list), { wide: true });
     const scrim = $$('.scrim').pop();
     new MutationObserver((_, o) => { if (!scrim.isConnected) { o.disconnect(); if (!this.busy && !this.queue.length) { try { AndroidAI.receiveStop(); } catch {} } } }).observe(document.body, { childList: true });
