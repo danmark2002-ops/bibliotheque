@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 23 // téléviseurs plus anciens (Fire TV, Android TV 6 et 7) : les fonctions récentes sont activées selon la version
         targetSdk 36
-        versionCode 110
-        versionName '10.19'
+        versionCode 111
+        versionName '10.20'
     }
 
     signingConfigs {

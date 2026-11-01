@@ -1,5 +1,22 @@
 /* Mode local : tout reste dans le navigateur (IndexedDB), aucun serveur. */
 'use strict';
+// Appareils plus anciens (Fire TV, Android 6-7, moteur web pas à jour) : les quelques fonctions récentes utilisées,
+// un journal des erreurs (Réglages → Options avancées → Journal des problèmes) et le mode « appareil modeste ».
+(() => {
+  const def = (o, k, v) => { if (!o[k]) Object.defineProperty(o, k, { value: v, writable: true, configurable: true }); };
+  def(Array.prototype, 'at', function (n) { n = Math.trunc(n) || 0; if (n < 0) n += this.length; return n < 0 || n >= this.length ? undefined : this[n]; });
+  def(String.prototype, 'at', function (n) { n = Math.trunc(n) || 0; if (n < 0) n += this.length; return n < 0 || n >= this.length ? undefined : this[n]; });
+  def(String.prototype, 'replaceAll', function (a, b) { return this.replace(a instanceof RegExp ? a : new RegExp(String(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), b); });
+  def(Object, 'hasOwn', (o, k) => Object.prototype.hasOwnProperty.call(o, k));
+  const KEY = 'bib.errlog';
+  let last = '', lastT = 0;
+  const add = (m) => { m = String(m); const t = Date.now(); if (m === last && t - lastT < 5000) return; last = m; lastT = t; try { const l = JSON.parse(localStorage.getItem(KEY) || '[]'); l.push(new Date(t - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ') + ' ' + m.slice(0, 400)); localStorage.setItem(KEY, JSON.stringify(l.slice(-25))); } catch (e) { } };
+  window.addEventListener('error', (e) => { if (e && e.message) add(e.message + (e.filename ? ' @' + String(e.filename).split('/').pop() + ':' + e.lineno + ':' + e.colno : '')); });
+  window.addEventListener('unhandledrejection', (e) => { const r = e && e.reason; add('promesse : ' + ((r && (r.stack || r.message)) || r)); });
+  window.__errlog = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { return []; } };
+  window.__errclear = () => { try { localStorage.removeItem(KEY); } catch (e) { } };
+  try { if (window.AndroidAI && AndroidAI.lowEnd && AndroidAI.lowEnd()) document.documentElement.classList.add('lowend'); } catch (e) { }
+})();
 window.LocalAPI = (() => {
   const PALETTE = ['#7a2e2e', '#1f4e5f', '#3b5d3a', '#5b3a6b', '#8a5a1c', '#2c3e66', '#6b2d4f', '#355c55', '#7d4b2a', '#3d3d5c'];
   const rid = () => Math.random().toString(36).slice(2, 11) + Date.now().toString(36).slice(-3);

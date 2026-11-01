@@ -219,11 +219,11 @@ input, select { font: inherit; color: inherit; }
 }
 .cover img { display: block; width: 100%; height: auto; max-height: 340px; object-fit: cover; }
 .cover::before { /* dos du livre */
-  content: ''; position: absolute; inset: 0 auto 0 0; width: 9%; z-index: 2;
+  content: ''; position: absolute; top: 0; right: auto; bottom: 0; left: 0; width: 9%; z-index: 2;
   background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.18) 40%, rgba(0,0,0,.12) 70%, transparent);
 }
 .cover::after { /* reflet */
-  content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 2; pointer-events: none;
   background: linear-gradient(115deg, rgba(255,255,255,.16), transparent 35%, transparent 70%, rgba(0,0,0,.12));
 }
 /* Couverture générée (texte) */
@@ -251,7 +251,7 @@ input, select { font: inherit; color: inherit; }
   font-size: 10px; font-weight: 600; color: var(--ink-2); letter-spacing: .04em; white-space: nowrap;
 }
 .status-pill {
-  position: absolute; z-index: 4; inset: auto 6px 6px 6px; text-align: center; font-size: 10px;
+  position: absolute; z-index: 4; top: auto; right: 6px; bottom: 6px; left: 6px; text-align: center; font-size: 10px;
   padding: 3px 4px; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff;
 }
 .organize .book { animation: wiggle .5s ease-in-out infinite alternate; }
@@ -267,7 +267,7 @@ input, select { font: inherit; color: inherit; }
 .empty p { color: var(--ink-2); margin: 0 0 16px; }
 
 .dropzone {
-  position: fixed; inset: 0; z-index: 90; display: none; place-items: center;
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 90; display: none; place-items: center;
   background: rgba(10, 7, 5, .7); backdrop-filter: blur(6px);
   font: italic 600 28px var(--font-display); color: var(--brass);
 }
@@ -281,7 +281,7 @@ input, select { font: inherit; color: inherit; }
 .up .bar { margin-top: 8px; max-width: none; }
 
 /* ---------- Feuilles / panneaux ---------- */
-.scrim { position: fixed; inset: 0; z-index: 60; background: rgba(8, 5, 3, .55); backdrop-filter: blur(4px); display: grid; place-items: end center; animation: fade .2s; }
+.scrim { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 60; background: rgba(8, 5, 3, .55); backdrop-filter: blur(4px); display: grid; place-items: end center; animation: fade .2s; }
 @media (min-width: 720px) { .scrim { place-items: center; } }
 @keyframes fade { from { opacity: 0; } }
 .sheet {
@@ -358,7 +358,7 @@ input, select { font: inherit; color: inherit; }
 /* ---------- Lecteur ---------- */
 .reader {
   --paper: #f6efe1; --paper-ink: #2c241b; --paper-2: #e9dfcb; --chrome: rgba(246,239,225,.86); --chrome-ink: #2c241b;
-  position: fixed; inset: 0; z-index: 50; background: var(--paper); color: var(--paper-ink);
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 50; background: var(--paper); color: var(--paper-ink);
   display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .reader[data-theme="clair"] { --paper: #fdfcf9; --paper-ink: #1c1b19; --paper-2: #ecebe6; --chrome: rgba(253,252,249,.86); --chrome-ink: #1c1b19; }
@@ -385,7 +385,7 @@ input, select { font: inherit; color: inherit; }
 
 .stage { flex: 1; position: relative; overflow: hidden; perspective: 1600px; }
 .page {
-  position: absolute; inset: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start;
   padding: 70px 14px 90px; -webkit-overflow-scrolling: touch;
 }
 .page.pdf { align-items: center; }
@@ -399,7 +399,7 @@ input, select { font: inherit; color: inherit; }
 .reader.pdf-mode .page.pdf:not(.zoom) .folio { display: none; }
 .reader.pdf-mode[data-theme="nuit"] .page.pdf:not(.zoom) { background: #1b1b1b; }
 /* Pli de page */
-.curl-shade, .curl-flap, .curl-flap > div { position: absolute; inset: 0; pointer-events: none; }
+.curl-shade, .curl-flap, .curl-flap > div { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; }
 .curl-shade { z-index: 2; overflow: hidden; }
 .curl-flap { z-index: 4; filter: drop-shadow(0 0 7px rgba(0,0,0,.3)); }
 .curl-flap > div { background: var(--paper); }
@@ -423,7 +423,7 @@ input, select { font: inherit; color: inherit; }
 .prose .s { transition: background .25s; border-radius: 3px; }
 .prose .s.cur { background: rgba(212,171,106,.38); box-shadow: 0 0 0 2px rgba(212,171,106,.38); }
 .folio { position: absolute; bottom: 18px; left: 0; right: 0; text-align: center; font: italic 13px var(--font-display); opacity: .45; pointer-events: none; }
-.loading { position: absolute; inset: 0; display: grid; place-items: center; font: italic 18px var(--font-display); opacity: .5; }
+.loading { position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: grid; place-items: center; font: italic 18px var(--font-display); opacity: .5; }
 .tapzone { position: absolute; top: 60px; bottom: 80px; width: 22%; z-index: 3; }
 .tapzone.l { left: 0; } .tapzone.r { right: 0; }
 
@@ -450,7 +450,7 @@ input, select { font: inherit; color: inherit; }
 @keyframes wv { 0%, 100% { height: 3px; } 50% { height: 14px; } }
 .paused .wave i { animation: none; height: 3px; }
 
-.watermark { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.watermark { position: absolute; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 2; }
 
 /* Animation d'ouverture */
 .flyer { position: fixed; z-index: 80; pointer-events: none; border-radius: 3px 6px 6px 3px; overflow: hidden; box-shadow: 0 30px 60px rgba(0,0,0,.5); }
@@ -493,7 +493,7 @@ input, select { font: inherit; color: inherit; }
     radial-gradient(120% 70% at 85% 0%, rgba(255,255,255,.18), transparent 60%),
     linear-gradient(165deg, color-mix(in srgb, var(--c) 84%, #fff), var(--c) 46%, color-mix(in srgb, var(--c) 66%, #000)); }
 }
-.gen .deco { position: absolute; inset: 0; z-index: -1; color: #f6ecd8; pointer-events: none; }
+.gen .deco { position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: -1; color: #f6ecd8; pointer-events: none; }
 .gen .deco { background: center / cover no-repeat; }
 .gen .mid { position: relative; }
 .gen.v1 { padding: 20% 18% 16% 22%; }
@@ -1105,3 +1105,8 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .btestrow { margin-top: 6px; }
 .btest { margin: 8px 0 0; font-size: 14px; }
 .btest.ok { color: var(--brass); }
+
+/* Appareil modeste (peu de mémoire : vieilles Fire TV…) : pas de flou derrière les fenêtres, très coûteux pour la carte graphique */
+.lowend *, .lowend *::before, .lowend *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+.lowend .scrim { background: rgba(8, 5, 3, .86); }
+pre.diag { white-space: pre-wrap; word-break: break-word; font-size: 11px; line-height: 1.45; max-height: 240px; overflow: auto; background: rgba(0,0,0,.25); padding: 10px 12px; border-radius: 10px; margin: 8px 0; }

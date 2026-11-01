@@ -1674,6 +1674,32 @@ function editBook(b) {
       } }, local ? 'Mettre à la poubelle' : 'Supprimer'),
       h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
 }
+// Journal des problèmes : l'appareil, la version du moteur web, les erreurs récentes et les fermetures de l'app.
+// Sur un appareil ancien qui « fait des siennes », la personne le copie et l'envoie : on sait quoi corriger.
+function diagBox() {
+  const ua = navigator.userAgent, A = window.AndroidAI;
+  let crash = '', ver = '';
+  try { crash = (A && A.crashLog && A.crashLog()) || ''; } catch {}
+  try { ver = (A && A.appVersion && A.appVersion()) || ''; } catch {}
+  const errs = (window.__errlog && window.__errlog()) || [];
+  const info = [
+    'Appareil : ' + ((ua.match(/\(([^)]+)\)/) || [])[1] || '?'),
+    'Moteur web : Chrome ' + ((ua.match(/Chrome\/([\d.]+)/) || [])[1] || '?'),
+    'Mode appareil modeste : ' + (document.documentElement.classList.contains('lowend') ? 'oui' : 'non'),
+    'Version de l\'app : ' + (ver || '?')].join('\n');
+  const text = info + '\n\nErreurs récentes :\n' + (errs.length ? errs.join('\n') : 'aucune') + (crash ? '\n\nFermetures de l\'app :\n' + crash : '\n\nFermetures de l\'app : aucune');
+  const pre = h('pre', { class: 'diag' }, text);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); return toast('Journal copié'); } catch {}
+    try { const t = h('textarea', { style: { position: 'fixed', opacity: '0' } }, text); document.body.append(t); t.select(); const ok = document.execCommand('copy'); t.remove(); if (ok) return toast('Journal copié'); } catch {}
+    toast('Copie impossible : fais une capture d\'écran');
+  };
+  return h('div', {}, h('p', { class: 'muted' }, 'Si l\'app se ferme ou fait des siennes, copie ce journal et envoie-le : il dit précisément quoi corriger.'), pre,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', onclick: copy }, 'Copier'),
+      h('button', { class: 'btn', onclick: () => { try { window.__errclear && window.__errclear(); A && A.crashClear && A.crashClear(); } catch {} pre.textContent = info + '\n\nJournal vidé.'; } }, 'Vider')));
+}
+
 function openSettings() {
   const owner = S.me.role === 'owner';
   const local = !!window.LocalAPI;
@@ -1702,6 +1728,7 @@ function openSettings() {
               claudeKey() ? h('button', { class: 'btn', onclick: () => { setClaudeKey(''); close(); toast('Clé Claude retirée'); } }, 'Retirer') : null,
               h('button', { class: 'btn', onclick: () => { const k = ck.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); setClaudeKey(k); close(); toast('Clé Claude enregistrée'); } }, 'Enregistrer'))); })())) : null,
     local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
+    h('details', { class: 'more' }, h('summary', {}, 'Journal des problèmes'), diagBox()),
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
         local ? h('button', { class: 'btn', onclick: () => { close(); openLibraries(); } }, icon('collection'), 'Bibliothèques') : h('button', { class: 'btn', onclick: async () => { await post('/api/logout', {}); close(); boot(); } }, icon('logout'), 'Déconnexion'),

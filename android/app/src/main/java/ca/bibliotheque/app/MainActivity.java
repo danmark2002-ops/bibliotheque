@@ -67,6 +67,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Crashes.install(this);
 
         instance = this;
         web = new WebView(this);
@@ -129,6 +130,22 @@ public class MainActivity extends Activity {
                 Uri u = request.getUrl();
                 if (HOST.equals(u.getHost())) return false;
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (ActivityNotFoundException ignored) { }
+                return true;
+            }
+
+            /**
+             * Le moteur d'affichage est tombé (le plus souvent : manque de mémoire sur une vieille Fire TV). Sans ceci, Android ferme
+             * toute l'app. On le note au journal et on relance l'écran tout de suite : les livres et la lecture en cours sont gardés.
+             */
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                boolean crashed = Build.VERSION.SDK_INT >= 26 && detail != null && detail.didCrash();
+                Crashes.note(MainActivity.this, crashed ? "moteur d'affichage planté — écran relancé" : "moteur d'affichage arrêté par Android (mémoire) — écran relancé");
+                if (view != web) return true;
+                try { ((ViewGroup) web.getParent()).removeView(web); web.destroy(); } catch (Exception ignored) { }
+                Intent again = new Intent(MainActivity.this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(again);
+                finish();
                 return true;
             }
         });
@@ -1246,6 +1263,17 @@ public class MainActivity extends Activity {
     }
 
     /** Vrai sur un téléviseur (Android TV / Google TV). */
+    /** Peu de mémoire (≤ 1,3 Go, ou appareil déclaré « modeste » par Android) : vieilles Fire TV, clés HDMI d'entrée de gamme */
+    static boolean lowEnd(android.content.Context c) {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(ACTIVITY_SERVICE);
+            if (am.isLowRamDevice()) return true;
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            return mi.totalMem > 0 && mi.totalMem < 1_400L * 1024 * 1024;
+        } catch (Exception e) { return false; }
+    }
+
     boolean isTv() {
         android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
         return (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION)
@@ -1591,6 +1619,15 @@ public class MainActivity extends Activity {
     }
 
     class AiBridge {
+        /** Appareil modeste (vieilles Fire TV, 1 Go de mémoire) : la page enlève les effets coûteux (flou) */
+        @JavascriptInterface public boolean lowEnd() { return MainActivity.lowEnd(MainActivity.this); }
+        /** Journal des fermetures de l'app (Réglages → Journal des problèmes) */
+        @JavascriptInterface public String crashLog() { return Crashes.read(MainActivity.this); }
+        @JavascriptInterface public void crashClear() { Crashes.clear(MainActivity.this); }
+        @JavascriptInterface public String appVersion() {
+            try { android.content.pm.PackageInfo p = getPackageManager().getPackageInfo(getPackageName(), 0); return p.versionName + " · Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ") · " + Build.MANUFACTURER + " " + Build.MODEL; }
+            catch (Exception e) { return ""; }
+        }
         /** Réponse : window.__aiStatus("available" | "downloadable" | "downloading" | "unavailable" | "error:…") */
         @JavascriptInterface
         public void status() {

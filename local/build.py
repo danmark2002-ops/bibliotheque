@@ -9,6 +9,30 @@ cdn = '--cdn' in sys.argv  # page publiée (iPhone) : pdf.js chargé depuis le C
 css = (pub / 'app.css').read_text()
 app = (pub / 'app.js').read_text()
 local = (root / 'local.js').read_text()
+
+# Vieux moteurs web (Fire TV plus anciennes, Android 6-7) : la syntaxe récente (?. ?? ||= …) est réécrite en ES2019,
+# que tous comprennent ; le sens est identique, et les appareils récents l'exécutent aussi vite.
+import shutil, subprocess
+TS = pathlib.Path('/opt/node22/lib/node_modules/typescript')
+DOWN = r"""
+const ts = require(process.argv[1]); let s = '';
+process.stdin.setEncoding('utf8'); process.stdin.on('data', (d) => { s += d; }).on('end', () => {
+  const r = ts.transpileModule(s, { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.ESNext, moduleDetection: ts.ModuleDetectionKind.Legacy, removeComments: false, newLine: ts.NewLineKind.LineFeed } });
+  const bad = (r.diagnostics || []).filter((d) => d.category === ts.DiagnosticCategory.Error);
+  if (bad.length) { console.error(bad.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n')).join('\n')); process.exit(2); }
+  process.stdout.write(r.outputText);
+});
+"""
+def downlevel(src, name):
+    node = shutil.which('node')
+    if not node or not TS.exists():
+        print('ATTENTION : TypeScript introuvable,', name, 'non réécrit pour les vieux moteurs web'); return src
+    r = subprocess.run([node, '-e', DOWN, str(TS)], input=src, capture_output=True, text=True)
+    if r.returncode != 0: raise SystemExit(name + ' : réécriture impossible\n' + r.stderr)
+    return r.stdout
+
+app = downlevel(app, 'app.js')
+local = downlevel(local, 'local.js')
 icon = base64.b64encode((pub / 'icon.svg').read_bytes()).decode()
 
 # version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
