@@ -2276,7 +2276,7 @@ Réponds UNIQUEMENT par cet objet JSON, sans rien autour : {"repliques": [{"qui"
           h('p', { class: 'bintro' }, `Camille et Alex discutent de « ${b.title} », comme dans une émission de radio. Idéal à écouter en voiture, en marchant ou les yeux fermés.`),
           h('div', { class: 'field' }, 'Durée', seg),
           h('button', { class: 'btn primary big', onclick: () => { this.prepare(b, minutes, () => render()); render(); } }, icon('mic'), 'Créer le balado'),
-          h('p', { class: 'muted bnote' }, 'Écrit et lu par Gemini avec ta clé gratuite : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'),
+          h('p', { class: 'muted bnote' }, (claudeKey() ? 'Écrit par Claude (ta clé), lu par Gemini avec ta clé gratuite' : 'Écrit et lu par Gemini avec ta clé gratuite') + ' : une voix de femme et une voix d’homme, naturelles. L’écoute commence dès que le début est prêt.'),
           testRow());
       } else if (m.startsWith('ready') && mode !== m) { // créé ou en préparation, mais ne joue pas
         mode = m;
@@ -2365,13 +2365,13 @@ function parseLoose(t) {
   if (ok.some(isLine)) return { repliques: ok.flatMap((x) => isLine(x) ? [x] : Array.isArray(x.repliques) ? x.repliques : []) };
   return ok.find((x) => x && typeof x === 'object' && Object.keys(x).length) || ok[0];
 }
-// Demande du JSON à Gemini ; une réponse illisible ou vide est redemandée (2 fois au plus) avant d'abandonner
+// Demande du JSON à l'IA qui écrit (Claude ou Gemini) ; une réponse illisible ou vide est redemandée (2 fois au plus) avant d'abandonner
 async function askJson(system, prompt, say, good) {
   let last;
   for (let t = 0; t < 3; t++) {
-    try { const r = parseLoose(await onlineAsk(system, prompt, false, true, say)); if (!good || good(r)) return r; last = new Error('Réponse de Gemini incomplète.'); }
+    try { const r = parseLoose(await writerAsk(system, prompt, true, say)); if (!good || good(r)) return r; last = new Error('Réponse de l’IA incomplète.'); }
     catch (e) { if (!/illisible|JSON|incompl/i.test(e.message)) throw e; last = e; }
-    say?.('Gemini a mal formé sa réponse : nouvel essai…');
+    say?.(writerName() + ' a mal formé sa réponse : nouvel essai…');
   }
   throw new Error(last.message + ' Réessaie : la préparation reprendra où elle en était.');
 }
@@ -3073,23 +3073,24 @@ ${text}
       let summary = b.summary?.text && b.summary.model && b.summary.model !== 'auto' ? b.summary.text : '';
       const book = condense(t.text, 300000);
       if (!summary) {
-        say('Gemini lit le livre et en dégage les grands messages… (environ une minute)');
+        say(writerName() + ' lit le livre et en dégage les grands messages… (environ une minute)');
         try {
-          summary = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${book}\n</livre>`, false, false, say));
+          summary = Prof.clean0(await writerAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${book}\n</livre>`, false, say));
           // le résumé sert aussi dans la Bibliothèque
-          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini', why: /pro/.test(window.__lastModel || '') ? '' : (window.__lastNote || ''), truncated: t.truncated } }, 'PATCH'); } catch {} }
+          const lm = window.__lastModel || '';
+          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: lm === CLAUDE_MODEL ? CLAUDE_MODEL : /pro/.test(lm) ? 'gemini-pro' : 'gemini', why: lm === CLAUDE_MODEL || /pro/.test(lm) ? '' : (window.__lastNote || ''), truncated: t.truncated } }, 'PATCH'); } catch {} }
         } catch { summary = ''; }
       }
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
-      say('Gemini écrit le scénario du condensé… (environ une minute)');
+      say(writerName() + ' écrit le scénario du condensé… (environ une minute)');
       const words = t.text.split(/\s+/).length;
-      const raw = await onlineAsk('', this.prompt(b, book, words, summary), false, true, say);
+      const raw = await writerAsk('', this.prompt(b, book, words, summary), true, say);
       let script;
       try { script = this.parse(raw); }
       catch {
         // scénario mal formé : Gemini le corrige lui-même
-        say('Gemini corrige le format du condensé…');
-        script = this.parse(await onlineAsk('', `Le texte ci-dessous devait être du JSON valide de la forme {"scenes":[{"phrase":"…","narration":"…","images":["…","…"]}]} mais il contient une erreur de syntaxe. Renvoie exactement le même contenu, corrigé en JSON valide (remplace les guillemets droits à l'intérieur des textes par « »). Rien d'autre.\n\n${raw}`, false, true));
+        say(writerName() + ' corrige le format du condensé…');
+        script = this.parse(await writerAsk('', `Le texte ci-dessous devait être du JSON valide de la forme {"scenes":[{"phrase":"…","narration":"…","images":["…","…"]}]} mais il contient une erreur de syntaxe. Renvoie exactement le même contenu, corrigé en JSON valide (remplace les guillemets droits à l'intérieur des textes par « »). Rien d'autre.\n\n${raw}`, true, say));
       }
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
       say(`Condensé prêt : ${script.scenes.length} scènes. Recherche des images…`);
@@ -3118,7 +3119,7 @@ ${text}
         h('h4', {}, ready ? 'La vidéo est prête 🎬' : busy ? 'La vidéo se prépare…' : 'Le livre en vidéo'),
         h('p', {}, ready
           ? 'Un condensé du livre, en images, avec la voix du Professeur et les phrases choc à l\'écran.'
-          : 'Gemini écrit un condensé du livre (entre le résumé et le livre complet), le téléphone trouve des images libres de droits pour chaque scène, enregistre la voix et monte un fichier MP4. Compte de 5 à 15 minutes ; garde l\'application ouverte.'),
+          : writerName() + ' écrit un condensé du livre (entre le résumé et le livre complet), le téléphone trouve des images libres de droits pour chaque scène, enregistre la voix et monte un fichier MP4. Compte de 5 à 15 minutes ; garde l\'application ouverte.'),
         h('div', { class: 'prof-row' },
           ready ? h('button', { class: 'btn primary', onclick: () => { if (!AndroidVideo.play(b.id)) toast('Aucun lecteur vidéo trouvé sur le téléphone.'); } }, icon('play'), 'Regarder') : null,
           ready ? h('button', { class: 'btn', onclick: () => { const r = AndroidVideo.save(b.id, b.title); toast(r || 'Vidéo enregistrée dans ta Galerie (Films › Bibliotheque)'); } }, icon('download'), 'Télécharger') : null,
@@ -3356,10 +3357,44 @@ async function makeFreeSummary(b) {
     openSummary(S.books.find((x) => x.id === b.id) || { ...b, summary });
   } catch (e) { say(e.message); $('span', box).style.color = 'var(--danger)'; setTimeout(() => box.remove(), 12000); }
 }
+let claudeQ = Promise.resolve();
 function callClaude(key, body) {
-  if (window.AndroidOpen?.claude) return new Promise((res) => { window.__claudeDone = (j) => { window.__claudeDone = null; try { res(JSON.parse(j)); } catch { res({ status: 0, body: '' }); } }; AndroidOpen.claude(key, JSON.stringify(body)); });
+  if (window.AndroidOpen?.claude) { // une demande à la fois : Android rend la réponse par un seul rappel (__claudeDone)
+    const run = () => new Promise((res) => { window.__claudeDone = (j) => { window.__claudeDone = null; try { res(JSON.parse(j)); } catch { res({ status: 0, body: '' }); } }; AndroidOpen.claude(key, JSON.stringify(body)); });
+    const p = claudeQ.then(run, run); claudeQ = p.catch(() => {}); return p;
+  }
   return fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) })
     .then(async (r) => ({ status: r.status, body: await r.text() }), (e) => ({ status: 0, body: e.message }));
+}
+function claudeWhy(status, data) {
+  const m = data?.error?.message || '';
+  return status === 401 ? 'Clé Claude refusée. Vérifie-la (platform.claude.com → API Keys).'
+    : status === 0 ? 'Pas de connexion Internet.'
+    : [429, 529, 503, 500].includes(status) ? 'Claude est occupé. Réessaie dans un moment.'
+    : /credit|balance/i.test(m) ? 'Crédits Claude épuisés pour ce mois (platform.claude.com → Billing).'
+    : 'Erreur de Claude : ' + (m || status);
+}
+// Écriture des balados et des vidéos : Claude si la personne a mis SA clé (crédits API de son forfait, gardée sur cet appareil),
+// sinon Gemini gratuit. Claude indisponible (crédits du mois épuisés, clé refusée, réseau) : Gemini prend le relais tout seul.
+async function claudeAsk(system, prompt, json) {
+  const body = { model: CLAUDE_MODEL, max_tokens: 16000, messages: [{ role: 'user', content: prompt + (json ? '\n\nRéponds uniquement par le JSON demandé, sans texte autour.' : '') }] };
+  if (system) body.system = system;
+  let r;
+  for (let t = 0; t < 3; t++) { r = await callClaude(claudeKey(), body); if (![429, 529, 503, 500].includes(r.status)) break; await new Promise((ok) => setTimeout(ok, 8000 * (t + 1))); }
+  let data = null; try { data = JSON.parse(r.body); } catch {}
+  if (r.status !== 200) throw new Error(claudeWhy(r.status, data));
+  const text = (data?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+  if (!text) throw new Error('Claude n’a rien renvoyé');
+  window.__lastModel = CLAUDE_MODEL; window.__lastNote = '';
+  return text;
+}
+const writerName = () => (claudeKey() ? 'Claude' : 'Gemini');
+async function writerAsk(system, prompt, json, say) {
+  if (claudeKey() && !(Date.now() - (writerAsk.off || 0) < 30 * 60e3)) {
+    try { return await claudeAsk(system, prompt, json); }
+    catch (e) { if (/épuisés|refusée/.test(e.message)) writerAsk.off = Date.now(); say?.(e.message + ' Gemini prend le relais…'); } // crédits épuisés ou clé refusée : on ne redemande pas avant 30 min
+  }
+  return onlineAsk(system, prompt, false, json, say);
 }
 async function makeSummary(b) {
   const box = h('div', { class: 'up' }, h('b', {}, 'Résumé : ' + b.title), h('span', { class: 'muted' }, 'Lecture du livre…'), h('div', { class: 'bar' }, h('i', { class: 'indet' })));
@@ -3372,14 +3407,7 @@ async function makeSummary(b) {
     const r = await callClaude(claudeKey(), { model: CLAUDE_MODEL, max_tokens: 16000,
       messages: [{ role: 'user', content: `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}${t.truncated ? '\n(Le livre est très long : seul le début est fourni.)' : ''}\n\n<livre>\n${t.text}\n</livre>` }] });
     let data = null; try { data = JSON.parse(r.body); } catch {}
-    if (r.status !== 200) {
-      const msg = r.status === 401 ? 'Clé d\'API refusée. Vérifie-la dans console.anthropic.com.'
-        : r.status === 0 ? 'Pas de connexion Internet.'
-        : [429, 529, 503].includes(r.status) ? 'Le service est occupé. Réessaie dans un moment.'
-        : r.status === 400 && /credit|balance/i.test(data?.error?.message || '') ? 'Crédit insuffisant sur ton compte Claude (console.anthropic.com → Billing).'
-        : 'Erreur de Claude : ' + (data?.error?.message || r.status);
-      throw new Error(msg);
-    }
+    if (r.status !== 200) throw new Error(claudeWhy(r.status, data));
     const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
     if (!text) throw new Error('Claude n\'a rien renvoyé. Réessaie.');
     const summary = { text, date: Date.now(), model: CLAUDE_MODEL, truncated: t.truncated };
