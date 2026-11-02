@@ -292,7 +292,9 @@ const NAV = {
 };
 const FMT = { pdf: 'PDF', images: 'BD et photos', audio: 'Livres audio', epub: 'EPUB', mobi: 'Kindle', docx: 'Word', doc: 'Word ancien', odt: 'OpenDocument', rtf: 'RTF', fb2: 'FictionBook', html: 'Page web', txt: 'Texte' };
 const SORTS = { recent: 'Ajout récent', last: 'Dernière lecture', title: 'Titre', author: 'Auteur' };
-S.nav = store.get('nav', { k: 'all' }); S.sort = store.get('sort', 'recent'); S.cols = [];
+// au lancement, on revient toujours à « Tous les livres » si on avait laissé un tri par état (Lecture en cours, Favoris, À lire, Déjà lu, Poubelle) :
+// sinon des livres ajoutés mais jamais ouverts semblaient disparus (Lecture en cours restait choisie, vide)
+S.nav = (() => { const n = store.get('nav', { k: 'all' }); return ['reading', 'fav', 'alire', 'lu', 'trash'].includes(n && n.k) ? { k: 'all' } : n; })(); S.sort = store.get('sort', 'recent'); S.cols = [];
 const authorOf = (b) => (b.author || '').trim() || 'Auteur inconnu';
 const sameNav = (a, b) => a.k === b.k && (a.v || '') === (b.v || '');
 function navTitle(nav = S.nav) {
@@ -615,7 +617,9 @@ function renderLibrary(opts = {}) {
           local ? h('button', { class: 'btn', onclick: openAddMenu }, icon('dots'), 'Autres façons') : null) : null);
       asList ? body.prepend(msg) : (body.querySelector('.shelf') || body).prepend(msg);
     } else if (!books.length) {
-      const msg = h('div', { class: 'empty' }, h('p', {}, q ? 'Aucun livre ne correspond à ta recherche.' : (EMPTY[S.nav.k] || 'Aucun livre ici.')));
+      const msg = h('div', { class: 'empty' }, h('p', {}, q ? 'Aucun livre ne correspond à ta recherche.' : (EMPTY[S.nav.k] || 'Aucun livre ici.')),
+        !q && live.length && S.nav.k !== 'all' ? h('div', { class: 'actions', style: { justifyContent: 'center' } },
+          h('button', { class: 'btn primary', onclick: () => go({ k: 'all' }) }, icon('book'), `Voir tous mes livres (${live.length})`)) : null);
       asList ? body.prepend(msg) : (body.querySelector('.shelf') || body).prepend(msg);
     }
   }
