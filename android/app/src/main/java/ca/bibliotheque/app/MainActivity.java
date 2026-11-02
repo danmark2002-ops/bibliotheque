@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     private static final int FOLDER_REQUEST = 4243;
     private static final int LISTEN_REQUEST = 4244;
     private static final int KEY_REQUEST = 4245;
+    private static final int READ_REQUEST = 4246;
+    private long folderAskedAt;
     // Page de Google pour la clé IA gratuite : ouverte en panneau Chrome, la fermeture (X) déclenche la lecture de la clé copiée
     private androidx.browser.customtabs.CustomTabsSession keySession;
     private String keyBrowser;
@@ -339,6 +341,10 @@ public class MainActivity extends Activity {
                         File f = new File(pdfDir(), safeId(book) + ".pdf");
                         if (!f.exists()) return pdfError(404, "absent");
                         fd = android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                    } else if (folderPath(lib) != null) {
+                        File f = inFolder(folderPath(lib), doc);
+                        if (f == null) return pdfError(404, "dossier");
+                        fd = android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
                     } else {
                         Uri tree = folderTree(lib);
                         if (tree == null || doc == null) return pdfError(404, "dossier");
@@ -393,9 +399,51 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------- Dossier choisi dans l'app (télés sans sélecteur de dossiers : Fire TV…) : « file:/chemin » ----------
+    private static final String PATH = "file:";
+
+    /** Le dossier « file: » d'une bibliothèque, s'il existe et se lit encore */
+    private File folderPath(String lib) {
+        String t = folders().optString(lib == null ? "main" : lib, null);
+        if (t == null || !t.startsWith(PATH)) return null;
+        File d = new File(t.substring(PATH.length()));
+        return d.isDirectory() && d.canRead() ? d : null;
+    }
+
+    /** Un fichier du dossier « file: », par son chemin relatif (jamais en dehors du dossier) */
+    private File inFolder(File root, String rel) {
+        if (root == null || rel == null || rel.isEmpty() || rel.contains("..")) return null;
+        try {
+            File f = new File(root, rel).getCanonicalFile();
+            return f.getPath().startsWith(root.getCanonicalPath() + File.separator) && f.isFile() ? f : null;
+        } catch (IOException e) { return null; }
+    }
+
+    private void walkFiles(File dir, String rel, int depth, JSONArray out) throws Exception {
+        if (depth > 12 || out.length() > 5000) return;
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        java.util.Arrays.sort(kids, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        for (File k : kids) {
+            String name = k.getName();
+            if (name.startsWith(".")) continue;
+            String r = rel.isEmpty() ? name : rel + "/" + name;
+            if (k.isDirectory()) { walkFiles(k, r, depth + 1, out); continue; }
+            if (!isBook(name)) continue;
+            JSONObject o = new JSONObject();
+            o.put("id", r); o.put("name", name); o.put("path", r); o.put("size", k.length()); o.put("mtime", k.lastModified());
+            out.put(o);
+        }
+    }
+
+    /** Lecture des fichiers partagés autorisée ? (Android 6 à 12 : à demander ; ensuite, plus de permission de ce genre) */
+    private boolean canReadStorage() {
+        return Build.VERSION.SDK_INT >= 33 || checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
     private Uri folderTree(String lib) {
         String t = folders().optString(lib == null ? "main" : lib, null);
-        if (t == null || t.isEmpty() || PHONE.equals(t)) return null;
+        if (t == null || t.isEmpty() || PHONE.equals(t) || t.startsWith(PATH)) return null;
         Uri tree = Uri.parse(t);
         for (UriPermission p : getContentResolver().getPersistedUriPermissions())
             if (p.getUri().equals(tree) && p.isReadPermission()) return tree;
@@ -403,7 +451,7 @@ public class MainActivity extends Activity {
     }
 
     private void releaseIfUnused(String tree) {
-        if (PHONE.equals(tree)) return;
+        if (PHONE.equals(tree) || tree.startsWith(PATH)) return;
         JSONObject o = folders();
         for (java.util.Iterator<String> it = o.keys(); it.hasNext(); ) if (tree.equals(o.optString(it.next()))) return;
         try { getContentResolver().releasePersistableUriPermission(Uri.parse(tree), Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { }
@@ -449,6 +497,12 @@ public class MainActivity extends Activity {
     }
 
     private WebResourceResponse folderFile(String lib, String docId) {
+        File root = folderPath(lib);
+        if (root != null) {
+            File f = inFolder(root, docId);
+            try { if (f == null) throw new IOException(); return new WebResourceResponse("application/octet-stream", null, 200, "OK", new java.util.HashMap<>(), new java.io.FileInputStream(f)); }
+            catch (IOException e) { return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0])); }
+        }
         Uri tree = folderTree(lib);
         if (tree == null || docId == null) return new WebResourceResponse("text/plain", "UTF-8", 404, "Introuvable", new java.util.HashMap<>(), new java.io.ByteArrayInputStream(new byte[0]));
         try {
@@ -476,6 +530,8 @@ public class MainActivity extends Activity {
                 String id = it.next();
                 try {
                     JSONObject f = new JSONObject();
+                    String t = o.optString(id);
+                    if (t.startsWith(PATH)) { File d = folderPath(id); f.put("id", id); f.put("ok", d != null); f.put("name", d != null ? d.getName() : "Dossier inaccessible"); out.put(f); continue; }
                     Uri tree = folderTree(id);
                     f.put("id", id); f.put("ok", tree != null); f.put("name", tree != null ? folderName(tree) : "Dossier inaccessible");
                     out.put(f);
@@ -487,11 +543,80 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void pick(String lib) {
             pickingFor = lib == null || lib.isEmpty() ? "main" : lib;
+            folderAskedAt = android.os.SystemClock.elapsedRealtime();
             runOnUiThread(() -> {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
                 try { startActivityForResult(i, FOLDER_REQUEST); } catch (ActivityNotFoundException e) { js("__noPicker", "folder"); js("__folderPicked", ""); }
             });
+        }
+
+        /** Le sélecteur de dossiers d'Android s'est refermé tout de suite (télé sans sélecteur) : on proposera celui de l'app */
+        @JavascriptInterface public boolean pickerMissing() { return android.os.SystemClock.elapsedRealtime() - folderAskedAt < 1500; }
+
+        /** Parcourir les dossiers dans l'app (télés) : permission de lecture des fichiers partagés */
+        @JavascriptInterface public boolean canRead() { return canReadStorage(); }
+        @JavascriptInterface public void askRead() {
+            runOnUiThread(() -> { if (canReadStorage()) js("__readPerm", "1"); else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, READ_REQUEST); });
+        }
+
+        /** Les endroits où chercher : mémoire de l'appareil, clé USB, carte SD… [{"path","name"}] */
+        @JavascriptInterface public String roots() {
+            JSONArray out = new JSONArray();
+            java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+            try {
+                File main = android.os.Environment.getExternalStorageDirectory();
+                if (main != null) seen.add(main.getAbsolutePath());
+                for (File f : getExternalFilesDirs(null)) { // …/Android/data/<app>/files → la racine du support
+                    if (f == null) continue;
+                    String p = f.getAbsolutePath(); int i = p.indexOf("/Android/data/");
+                    if (i > 0) seen.add(p.substring(0, i));
+                }
+                File[] st = new File("/storage").listFiles();
+                if (st != null) for (File f : st) if (f.isDirectory() && f.canRead() && !f.getName().equals("self") && !f.getName().equals("emulated")) seen.add(f.getAbsolutePath());
+                File mnt = new File("/mnt/media_rw"); File[] mm = mnt.listFiles();
+                if (mm != null) for (File f : mm) if (f.isDirectory() && f.canRead()) seen.add(f.getAbsolutePath());
+                for (String p : seen) {
+                    File d = new File(p);
+                    String name = main != null && p.equals(main.getAbsolutePath()) ? "Mémoire de l'appareil" : "Clé USB ou carte (" + d.getName() + ")";
+                    out.put(new JSONObject().put("path", p).put("name", name).put("ok", d.canRead()));
+                }
+            } catch (Exception ignored) { }
+            return out.toString();
+        }
+
+        /** Les sous-dossiers d'un dossier, et combien de livres il contient directement : {"dirs":[{"path","name"}],"books":n} */
+        @JavascriptInterface public String dirs(String path) {
+            JSONObject r = new JSONObject();
+            try {
+                File d = new File(path);
+                JSONArray ds = new JSONArray(); int books = 0;
+                File[] kids = d.listFiles();
+                if (kids != null) {
+                    java.util.Arrays.sort(kids, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+                    for (File k : kids) {
+                        if (k.getName().startsWith(".")) continue;
+                        if (k.isDirectory()) { if (!k.getName().equals("Android")) ds.put(new JSONObject().put("path", k.getAbsolutePath()).put("name", k.getName())); }
+                        else if (isBook(k.getName())) books++;
+                    }
+                }
+                r.put("dirs", ds); r.put("books", books); r.put("ok", kids != null);
+            } catch (Exception e) { try { r.put("ok", false); } catch (Exception ignored) { } }
+            return r.toString();
+        }
+
+        /** Ce dossier devient celui de la bibliothèque */
+        @JavascriptInterface public String pickPath(String lib, String path) {
+            try {
+                File d = new File(path);
+                if (!d.isDirectory() || !d.canRead()) return "";
+                String id = lib == null || lib.isEmpty() ? "main" : lib;
+                JSONObject o = folders();
+                String old = o.optString(id, null);
+                o.put(id, PATH + d.getAbsolutePath()); saveFolders(o);
+                if (old != null && !old.isEmpty()) releaseIfUnused(old);
+                return new JSONObject().put("id", id).put("name", d.getName()).toString();
+            } catch (Exception e) { return ""; }
         }
 
         @JavascriptInterface
@@ -509,7 +634,9 @@ public class MainActivity extends Activity {
                 try {
                     res.put("lib", lib);
                     Uri tree = folderTree(lib);
-                    if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
+                    File root = folderPath(lib);
+                    if (root != null) { JSONArray files = new JSONArray(); walkFiles(root, "", 0, files); res.put("files", files); }
+                    else if (tree == null) { res.put("error", "Le dossier n'est plus accessible. Choisis-le de nouveau."); }
                     else {
                         JSONArray files = new JSONArray();
                         walk(getContentResolver(), tree, DocumentsContract.getTreeDocumentId(tree), "", 0, files);
@@ -1767,6 +1894,7 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == READ_REQUEST) js("__readPerm", grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED ? "1" : "");
     }
 
     @Override

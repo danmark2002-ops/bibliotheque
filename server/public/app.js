@@ -1083,7 +1083,9 @@ async function chooseFolder(libId, { adopt, rename } = {}) {
   const old = folderOf(libId)?.name; // si la bibliothèque portait le nom de l'ancien dossier, elle prend celui du nouveau
   if (old && libs().find((x) => x.id === libId)?.name === old) rename = true;
   if (hasNativeFolder()) {
-    const r = await nativeCall('__folderPicked', () => AndroidFolder.pick(libId));
+    let r = await nativeCall('__folderPicked', () => AndroidFolder.pick(libId));
+    // télé sans sélecteur de dossiers (Fire TV…) : le sélecteur d'Android se referme aussitôt → on parcourt les dossiers dans l'app
+    if (!r && AndroidFolder.pickerMissing && AndroidFolder.pickerMissing()) r = await browseFolder(libId);
     if (!r) return false;
     nameLibAfter(libId, r.name, rename); renderLibrary(); toast(`Dossier « ${r.name} » choisi`);
     await scanFolder(libId, null, { adopt }); return true;
@@ -1092,6 +1094,44 @@ async function chooseFolder(libId, { adopt, rename } = {}) {
   const name = (files[0].webkitRelativePath || '').split('/')[0] || 'Dossier';
   const m = folderMap(); m[libId] = { name }; store.set('folders', m); nameLibAfter(libId, name, rename); renderLibrary();
   await scanFolder(libId, files, { adopt }); return true;
+}
+// Parcourir les dossiers dans l'app : mémoire de l'appareil, clé USB, carte SD (télés sans sélecteur de dossiers d'Android)
+function browseFolder(libId) {
+  const F = window.AndroidFolder;
+  if (!F || !F.roots) return Promise.resolve(null);
+  return new Promise(async (done) => {
+    if (F.canRead && !F.canRead()) {
+      const ok = await new Promise((r) => { window.__readPerm = (v) => { window.__readPerm = null; r(!!v); }; F.askRead(); });
+      if (!ok) { toast('Sans la permission de lire les fichiers, la télé ne peut pas parcourir ses dossiers. Utilise plutôt « Recevoir des livres » (envoi par Wi-Fi).'); return done(null); }
+    }
+    let roots = []; try { roots = JSON.parse(F.roots()); } catch {}
+    const where = h('p', { class: 'fwhere' }), list = h('div', { class: 'fbrowse' });
+    const pickBtn = h('button', { class: 'btn primary', disabled: true }, icon('folder'), 'Choisir ce dossier');
+    let cur = null, finished = false, close = () => {};
+    const finish = (v) => { if (finished) return; finished = true; close(); done(v); };
+    const focusFirst = () => setTimeout(() => list.querySelector('button')?.focus(), 30);
+    const showRoots = () => {
+      cur = null; pickBtn.disabled = true; where.textContent = 'Où sont tes livres ?';
+      list.replaceChildren(...(roots.length ? roots.map((r) => h('button', { class: 'btn fdir', onclick: () => openDir(r.path) }, icon('folder'), r.name)) : [h('p', { class: 'muted' }, 'Aucun espace de stockage lisible sur cet appareil.')]));
+      focusFirst();
+    };
+    const openDir = (path) => {
+      let r = {}; try { r = JSON.parse(F.dirs(path)); } catch {}
+      cur = path; pickBtn.disabled = false;
+      where.textContent = path + (r.books ? ` · ${r.books} livre${r.books > 1 ? 's' : ''} dans ce dossier` : '');
+      const isRoot = roots.some((x) => x.path === path);
+      list.replaceChildren(h('button', { class: 'btn fdir', onclick: () => (isRoot ? showRoots() : openDir(path.replace(/\/[^/]+$/, ''))) }, icon('back'), 'Remonter'),
+        ...(r.dirs || []).map((d) => h('button', { class: 'btn fdir', onclick: () => openDir(d.path) }, icon('folder'), d.name)),
+        r.ok === false ? h('p', { class: 'muted' }, 'Ce dossier ne se lit pas.') : null);
+      focusFirst();
+    };
+    pickBtn.onclick = () => { const r = cur && F.pickPath(libId, cur); if (!r) return toast('Ce dossier ne peut pas être choisi.'); try { finish(JSON.parse(r)); } catch { finish(null); } };
+    close = sheet('Choisir le dossier de tes livres', h('div', {}, where, list, h('div', { class: 'actions', style: { marginTop: '12px' } }, pickBtn),
+      h('p', { class: 'muted' }, 'Les livres d\'une clé USB branchée sur la télé apparaissent ici. Pour envoyer des livres depuis ton téléphone, utilise plutôt « Recevoir des livres ».')), { wide: true });
+    const scrim = $$('.scrim').pop();
+    new MutationObserver((_, o) => { if (!scrim.isConnected) { o.disconnect(); if (!finished) { finished = true; done(null); } } }).observe(document.body, { childList: true });
+    showRoots();
+  });
 }
 // Ajouter un autre dossier = une nouvelle bibliothèque, à son nom ; les autres bibliothèques ne bougent pas
 async function addFolderLib() {
@@ -4809,9 +4849,8 @@ const TV = {
   },
   init() {
     try { this.on = !!(window.AndroidCast && AndroidCast.isTv()); } catch { this.on = false; }
-    window.__noPicker = (what) => toast(what === 'folder'
-      ? 'Cette télé n\'a pas de sélecteur de dossiers. Installe un gestionnaire de fichiers (ex. X-plore) depuis le Play Store de la télé.'
-      : 'Cette télé n\'a pas de sélecteur de fichiers. Installe un gestionnaire de fichiers (ex. X-plore) depuis le Play Store de la télé.');
+    window.__noPicker = (what) => { if (what === 'folder') return; // dossiers : l'app les parcourt elle-même (browseFolder)
+      toast('Cette télé n\'a pas de sélecteur de fichiers. Utilise « Recevoir des livres » (envoi par Wi-Fi depuis ton téléphone) ou « Choisir un dossier ».'); };
     if (!this.on) return;
     document.documentElement.classList.add('tv');
     document.addEventListener('keydown', (e) => this.key(e), true);

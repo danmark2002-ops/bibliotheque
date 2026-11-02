@@ -1110,3 +1110,7 @@ body:has(.scrim) .uploads { opacity: 0; pointer-events: none; transform: transla
 .lowend *, .lowend *::before, .lowend *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 .lowend .scrim { background: rgba(8, 5, 3, .86); }
 pre.diag { white-space: pre-wrap; word-break: break-word; font-size: 11px; line-height: 1.45; max-height: 240px; overflow: auto; background: rgba(0,0,0,.25); padding: 10px 12px; border-radius: 10px; margin: 8px 0; }
+/* Parcourir les dossiers dans l'app (télés sans sélecteur) */
+.fwhere { font-size: 13px; color: var(--ink-2); word-break: break-all; margin: 0 0 10px; }
+.fbrowse { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.fbrowse .fdir { justify-content: flex-start; text-align: left; width: 100%; }
