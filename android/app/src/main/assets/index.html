@@ -26,8 +26,8 @@
   --room-2: #100b07;
   --lamp: rgba(255, 186, 92, .13);
   --ink: #f8eedb;
-  --ink-2: #cdb892;
-  --ink-3: #8f7b5b;
+  --ink-2: #ddcba8;
+  --ink-3: #a8926d;
   --brass: #e4b558;
   --brass-2: #a9732a;
   --brass-hi: #ffe7a8;
@@ -145,17 +145,21 @@ input, select { font: inherit; color: inherit; }
 
 /* ---------- Pièce ---------- */
 .room {
-  min-height: 100vh;
+  min-height: 100vh; position: relative;
+  background: var(--room);
+  padding: max(18px, env(safe-area-inset-top)) 16px 120px;
+}
+/* l'ambiance (photo de bibliothèque, lueur des lampes) : seulement derrière le haut de la page,
+   pour que le reste du défilement n'ait pas ces calques à redessiner */
+.room::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 900px; pointer-events: none; z-index: 0;
   background:
     linear-gradient(180deg, rgba(7, 5, 4, .35), rgba(7, 5, 4, .3) 30%, rgba(7, 5, 4, .4) 55%, transparent 85%) top center / 100% 640px no-repeat,
     var(--room-photo, none) center top / max(100%, 640px) auto no-repeat,
     radial-gradient(1100px 520px at 50% -160px, var(--lamp), transparent 70%),
-    radial-gradient(600px 300px at 85% -60px, var(--lamp), transparent 70%),
-    radial-gradient(900px 600px at 50% 120%, rgba(0,0,0,.35), transparent 70%),
-    var(--room);
-  padding: max(18px, env(safe-area-inset-top)) 16px 120px;
+    radial-gradient(600px 300px at 85% -60px, var(--lamp), transparent 70%);
 }
-.wrap { max-width: 1180px; margin: 0 auto; }
+.wrap { max-width: 1180px; margin: 0 auto; position: relative; z-index: 1; }
 
 .top { display: grid; gap: 14px; margin: 4px 0 18px; }
 .brandbar { display: flex; align-items: center; gap: 10px; padding-bottom: 26px; position: relative; }
@@ -175,9 +179,9 @@ input, select { font: inherit; color: inherit; }
 .wordmark span { font-size: clamp(14px, 3.6vw, 20px); letter-spacing: .32em; margin-top: 4px; font-weight: 500; }
 .brand p { margin: 0; color: var(--ink-2); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
 .top .navline { justify-content: center; text-align: center; }
-.top > .actions { justify-content: center; flex-wrap: nowrap; gap: 8px; }
-.top > .actions .btn.primary { padding: 0 20px 0 16px; }
-@media (max-width: 380px) { .top > .actions { flex-wrap: wrap; } }
+.top > .actions { justify-content: center; flex-wrap: wrap; gap: 8px; }
+.top > .actions .btn.primary { padding: 0 18px 0 14px; }
+@media (max-width: 560px) { .top > .actions { gap: 6px; } .top > .actions .btn.icon { width: 42px; height: 42px; } }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; /* 44 px : cible tactile confortable */
@@ -617,7 +621,8 @@ input, select { font: inherit; color: inherit; }
 .crumb:hover { color: var(--ink); }
 .toolbar { flex-wrap: wrap; }
 .toolbar .search { min-width: 0; flex: 1 1 100%; max-width: none; }
-.toolbar .sortsel { flex: 1 1 auto; border-radius: 999px; padding-left: 16px; }
+.toolbar .sortsel { flex: 1 1 0; min-width: 0; border-radius: 999px; padding-left: 16px; }
+.toolbar .sortsel select { min-width: 0; flex: 1; text-overflow: ellipsis; }
 .tsep { width: 1px; height: 30px; background: linear-gradient(180deg, transparent, var(--brass), transparent); flex: none; margin: 0 2px; }
 @media (min-width: 720px) { .toolbar .search { flex: 1 1 260px; max-width: 420px; } .toolbar .sortsel { flex: 0 1 auto; } }
 .sortsel { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 4px 0 12px; border-radius: 12px; border: 1px solid var(--glass-line); background: var(--glass); font-size: 13px; color: var(--ink-3); }
@@ -1041,9 +1046,6 @@ svg.rot-r { transform: rotate(-90deg); }
 .cover { contain: paint; }
 @media (hover: none), (pointer: coarse) {
   .btn, .hero, .brow { backdrop-filter: none; -webkit-backdrop-filter: none; }
-  .btn { background: rgba(255,255,255,.07); }
-  .btn.primary { background: linear-gradient(180deg, var(--brass), var(--brass-2)); }
-  .hero { background: linear-gradient(120deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); }
   .brow { background: rgba(255,255,255,.05); }
   .book, .cover, .ti { transition: none; }
   .case { box-shadow: inset 0 0 0 7px var(--side), inset 0 0 0 8px rgba(0,0,0,.25); }
@@ -1052,6 +1054,11 @@ svg.rot-r { transform: rotate(-90deg); }
   .plank::after { height: 18px; background: linear-gradient(180deg, rgba(0,0,0,.55), transparent); }
   .cover { box-shadow: 3px 4px 6px -2px rgba(0,0,0,.55); }
   .book:hover, .book:focus-visible, .book:active { transform: none; }
+  .book { perspective: none; }
+  .btn:hover, .btn:active { transform: none; }
+  .btn { background: linear-gradient(180deg, var(--panel-2), var(--panel)); }
+  .btn.primary { background: linear-gradient(180deg, var(--brass-hi, var(--brass)), var(--brass) 45%, var(--brass-2)); }
+  .hero { background: linear-gradient(180deg, var(--panel-2), var(--panel)); }
   .book:hover .cover, .book:focus-visible .cover { transform: none; box-shadow: 4px 6px 12px -3px rgba(0,0,0,.55), 0 1px 2px rgba(0,0,0,.4); }
 }
 
