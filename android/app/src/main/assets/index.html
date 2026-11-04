@@ -5837,12 +5837,13 @@ const AutoSync = {
         const name = (id) => (L.find((l) => l.id === id) || L[0]).name;
         const prof = new Set(JSON.parse(AndroidAuto.list('prof') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
         const balado = new Set(JSON.parse(AndroidAuto.list('balado') || '[]').filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)));
+        const resume = this.writeSummaries();
         const books = S.books.filter((b) => !b.trashed && b.status === 'ready' && b.kind !== 'audio').map((b) => {
             var _a, _b, _c, _d, _e;
             return ({
                 id: b.id, title: b.title, author: b.author || '', lib: b.lib || 'main', libName: name(b.lib || 'main'), kind: b.kind,
                 cover: ((_a = done[b.id]) === null || _a === void 0 ? void 0 : _a.c) ? `covers/${b.id}.${b.coverUrl ? 'jpg' : 'png'}` : '',
-                last: ((_b = b.progress) === null || _b === void 0 ? void 0 : _b.last) || 0, page: ((_c = b.progress) === null || _c === void 0 ? void 0 : _c.page) || 1, pos: (_e = (_d = b.progress) === null || _d === void 0 ? void 0 : _d.pos) !== null && _e !== void 0 ? _e : -1, prof: prof.has(b.id), balado: balado.has(b.id)
+                last: ((_b = b.progress) === null || _b === void 0 ? void 0 : _b.last) || 0, page: ((_c = b.progress) === null || _c === void 0 ? void 0 : _c.page) || 1, pos: (_e = (_d = b.progress) === null || _d === void 0 ? void 0 : _d.pos) !== null && _e !== void 0 ? _e : -1, prof: prof.has(b.id), balado: balado.has(b.id), resume: resume.has(b.id)
             });
         });
         const body = JSON.stringify({ libs: L.map((l) => ({ id: l.id, name: l.name })), books, rate: store.get('rate', 1) });
@@ -5850,6 +5851,39 @@ const AutoSync = {
             return;
         this.lastCat = body; // rien de changé : on n'écrit pas
         AndroidAuto.writeText('catalog.json', body.slice(0, -1) + ',"updated":' + Date.now() + '}');
+    },
+    // les résumés s'écoutent aussi dans l'auto : resume/<id>.json (mêmes phrases que la lecture), réécrit seulement s'il a changé
+    writeSummaries() {
+        var _a;
+        const have = new Set();
+        const sig = store.get('autoSum', {});
+        let changed = false;
+        for (const b of S.books) {
+            const t = !b.trashed && ((_a = b.summary) === null || _a === void 0 ? void 0 : _a.text);
+            if (!t) {
+                if (sig[b.id]) {
+                    AndroidAuto.remove('resume/' + b.id + '.json');
+                    delete sig[b.id];
+                    changed = true;
+                }
+                continue;
+            }
+            have.add(b.id);
+            const k = t.length + ':' + (b.summary.date || 0);
+            if (sig[b.id] === k)
+                continue;
+            const clean = t.replace(/^\s*#+\s*/gm, '').replace(/\*\*?|__|`/g, '').replace(/^\s*[-*•]\s+/gm, '');
+            const u = [];
+            clean.split(/\n{2,}/).map((p) => p.replace(/\n/g, ' ').trim()).filter(Boolean)
+                .forEach((p, k2, all) => { const ss = sentences(p); ss.forEach((x, j) => u.push([x, 0, j === ss.length - 1 ? (k2 === all.length - 1 ? 2 : 1) : 0])); });
+            if (AndroidAuto.writeText('resume/' + b.id + '.json', JSON.stringify({ v: 1, kind: 'resume', id: b.id, title: b.title, u }))) {
+                sig[b.id] = k;
+                changed = true;
+            }
+        }
+        if (changed)
+            store.set('autoSum', sig);
+        return have;
     },
     async pullProgress() {
         var _a;
@@ -7344,8 +7378,10 @@ Tu restes fidèle aux idées de l'auteur : tu les présentes telles qu'il les fo
         });
         return u;
     },
+    // asks + sys : de quoi écrire les parties suivantes sans le téléphone (dans l'auto : ProfWriter.java, avec {{PREV}} = fin de la partie précédente)
     write(b, work, done) {
-        AndroidAuto.writeText(this.file(b.id), JSON.stringify({ v: 1, kind: 'prof', id: b.id, title: b.title, n: work.n, done, parts: work.parts, u: this.units(work.parts) }));
+        AndroidAuto.writeText(this.file(b.id), JSON.stringify({ v: 1, kind: 'prof', id: b.id, title: b.title, n: work.n, done, parts: work.parts, u: this.units(work.parts),
+            asks: done ? undefined : work.asks, sys: done ? undefined : work.sys }));
         AutoSync.writeCatalog();
     },
     prompt(b, chunk, i, n, prev) {
@@ -7404,12 +7440,23 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
                 throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
             const chunks = chunkText(t.text);
             const old = restart ? null : this.info(b.id);
-            const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [] };
+            const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [],
+                asks: chunks.map((c, i) => this.prompt(b, c, i, chunks.length, '{{PREV}}')), sys: this.persona + this.toneNote() };
+            if (work.parts.length && work.parts.length < chunks.length)
+                this.write(b, work, false); // l'auto saura écrire la suite même si le téléphone se ferme
             for (let i = work.parts.length; i < chunks.length; i++) {
                 if (this.stopped[b.id]) {
                     delete this.stopped[b.id];
                     box.remove();
                     return;
+                }
+                const cur = this.info(b.id); // l'auto a peut-être écrit des parties pendant ce temps : on les garde
+                if (cur && cur.n === chunks.length && cur.made > i) {
+                    work.parts = cur.parts;
+                    i = cur.made - 1;
+                    if (cur.made >= chunks.length)
+                        break;
+                    continue;
                 }
                 say(i ? `Le Professeur parle · il prépare la partie ${i + 1} sur ${chunks.length}, qui suivra toute seule` : `Le Professeur se prépare… il commencera tout seul dans environ 30 secondes${eng === 'online' ? ' (Gemini)' : ''}`);
                 bar(i / chunks.length);

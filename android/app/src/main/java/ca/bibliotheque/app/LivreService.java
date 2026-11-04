@@ -52,6 +52,7 @@ public class LivreService extends MediaBrowserService {
     private static final String STYLE_BROWSABLE = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT";
     private static final String STYLE_PLAYABLE = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT";
     private static final int STYLE_GRID = 2;
+    private static final int STYLE_LIST = 1;
     private static final int MAX_TABS = 4; // limite d'onglets d'Android Auto
 
     private MediaSession session;
@@ -318,23 +319,42 @@ public class LivreService extends MediaBrowserService {
             }
             out.add(folder("all", "Toutes ensemble"));
         } else if ("all".equals(parentId)) {
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null) out.add(book(b)); }
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null) out.add(bookFolder(b)); }
             if (out.isEmpty()) out.add(info("Aucun livre pour l'instant."));
         } else if ("recent".equals(parentId)) {
-            List<JSONObject> list = new ArrayList<>();
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optLong("last") > 0) list.add(b); }
-            java.util.Collections.sort(list, (a, b) -> Long.compare(b.optLong("last"), a.optLong("last")));
+            // « En cours » : ce qu'on écoutait, du plus récent au plus ancien, chacun avec sa façon (livre, Professeur, balado, résumé) — un toucher et ça reprend
             JSONObject prog = autoProgress();
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("balado") && prog.has("balado:" + b.optString("id"))) out.add(baladoItem(b)); }
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && prog.has("prof:" + b.optString("id"))) out.add(profItem(b)); }
-            for (int i = 0; i < Math.min(30, list.size()); i++) out.add(book(list.get(i)));
-            if (out.isEmpty()) out.add(info("Aucune lecture en cours. Choisis un livre dans une bibliothèque."));
+            List<Object[]> list = new ArrayList<>();
+            for (int i = 0; i < books.length(); i++) {
+                JSONObject b = books.optJSONObject(i); if (b == null) continue;
+                String id = b.optString("id");
+                long tb = Math.max(b.optLong("last"), prog.optJSONObject(id) == null ? 0 : prog.optJSONObject(id).optLong("t"));
+                if (tb > 0) list.add(new Object[]{tb, modeItem(b, "", true)});
+                for (String m : new String[]{"prof", "balado", "resume"}) {
+                    JSONObject p = prog.optJSONObject(m + ":" + id);
+                    if (p != null && b.optBoolean(m)) list.add(new Object[]{p.optLong("t", 1), modeItem(b, m, true)});
+                }
+            }
+            java.util.Collections.sort(list, (a, c) -> Long.compare((Long) c[0], (Long) a[0]));
+            for (int i = 0; i < Math.min(30, list.size()); i++) out.add((MediaItem) list.get(i)[1]);
+            if (out.isEmpty()) out.add(info("Aucune écoute en cours. Choisis un livre dans une bibliothèque."));
         } else if (parentId.startsWith("lib:")) {
             String lib = parentId.substring(4);
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("balado") && lib.equals(b.optString("lib"))) out.add(baladoItem(b)); }
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean("prof") && lib.equals(b.optString("lib"))) out.add(profItem(b)); }
-            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && lib.equals(b.optString("lib"))) out.add(book(b)); }
+            for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && lib.equals(b.optString("lib"))) out.add(bookFolder(b)); }
             if (out.isEmpty()) out.add(info("Cette bibliothèque est vide."));
+        } else if (parentId.startsWith("bk:")) {
+            // un livre : on choisit comment l'écouter
+            String id = parentId.substring(3);
+            for (int i = 0; i < books.length(); i++) {
+                JSONObject b = books.optJSONObject(i); if (b == null || !id.equals(b.optString("id"))) continue;
+                out.add(modeItem(b, "", false));
+                if (b.optBoolean("prof")) out.add(modeItem(b, "prof", false));
+                if (b.optBoolean("balado")) out.add(modeItem(b, "balado", false));
+                if (b.optBoolean("resume")) out.add(modeItem(b, "resume", false));
+                if (!b.optBoolean("prof") || !b.optBoolean("balado") || !b.optBoolean("resume"))
+                    out.add(info("Professeur, balado et résumé se créent dans Mike Library sur le téléphone."));
+            }
+            if (out.isEmpty()) out.add(info("Ce livre n'est plus dans la bibliothèque."));
         }
         result.sendResult(out);
     }
@@ -358,23 +378,40 @@ public class LivreService extends MediaBrowserService {
     private MediaItem folder(String id, String name) {
         Bundle ex = new Bundle();
         ex.putInt(STYLE_PLAYABLE, STYLE_GRID);
+        ex.putInt(STYLE_BROWSABLE, STYLE_GRID); // les livres (dossiers) en grille de couvertures
         MediaDescription d = new MediaDescription.Builder().setMediaId(id).setTitle(name).setExtras(ex).build();
         return new MediaItem(d, MediaItem.FLAG_BROWSABLE);
     }
 
-    private MediaItem profItem(JSONObject b) {
-        String id = b.optString("id");
-        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:prof:" + id).setTitle("🎓 " + b.optString("title")).setSubtitle("Le Professeur bizarroïde");
+    private Uri coverUri(JSONObject b) {
         String cover = b.optString("cover", "");
-        if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
-        return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
+        return !cover.isEmpty() && new File(dir(), cover).exists() ? Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())) : null;
     }
 
-    private MediaItem baladoItem(JSONObject b) {
+    /** Un livre dans une bibliothèque : un dossier ; on y choisit Lire en entier, le Professeur, le balado ou le résumé */
+    private MediaItem bookFolder(JSONObject b) {
         String id = b.optString("id");
-        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:balado:" + id).setTitle("🎙 " + b.optString("title")).setSubtitle("Balado à deux voix");
-        String cover = b.optString("cover", "");
-        if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
+        StringBuilder sub = new StringBuilder(b.optString("author", ""));
+        int extra = (b.optBoolean("prof") ? 1 : 0) + (b.optBoolean("balado") ? 1 : 0) + (b.optBoolean("resume") ? 1 : 0);
+        if (extra > 0) sub.append(sub.length() > 0 ? " · " : "").append(extra + 1).append(" façons d'écouter");
+        Bundle ex = new Bundle(); ex.putInt(STYLE_PLAYABLE, STYLE_LIST);
+        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("bk:" + id).setTitle(b.optString("title")).setSubtitle(sub.toString()).setExtras(ex);
+        Uri u = coverUri(b); if (u != null) d.setIconUri(u);
+        return new MediaItem(d.build(), MediaItem.FLAG_BROWSABLE);
+    }
+
+    /**
+     * Une façon d'écouter un livre : "" = le livre en entier, "prof" = le Professeur bizarroïde, "balado" = balado à deux voix, "resume" = le résumé.
+     * Dans le dossier du livre, le titre dit la façon ; dans « En cours », le titre du livre et la façon en dessous.
+     */
+    private MediaItem modeItem(JSONObject b, String mode, boolean inRecent) {
+        String id = b.optString("id");
+        boolean ready = !mode.isEmpty() || new File(dir(), "books/" + id + ".json").exists();
+        String what = mode.equals("prof") ? "🎓 Le Professeur bizarroïde" : mode.equals("balado") ? "🎙 Balado à deux voix" : mode.equals("resume") ? "📝 Le résumé" : "📖 Le livre en entier";
+        String hint = mode.equals("prof") ? "Le livre expliqué avec passion" : mode.equals("balado") ? "Camille et Alex en discutent" : mode.equals("resume") ? "L'essentiel, lu à voix haute" : !ready ? "En préparation sur le téléphone…" : "Lecture intégrale, là où tu étais";
+        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:" + (mode.isEmpty() ? "" : mode + ":") + id)
+            .setTitle(inRecent ? b.optString("title") : what).setSubtitle(inRecent ? what.substring(what.indexOf(' ') + 1) : hint);
+        Uri u = coverUri(b); if (u != null) d.setIconUri(u);
         return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
     }
 
@@ -382,15 +419,6 @@ public class LivreService extends MediaBrowserService {
         return new MediaItem(new MediaDescription.Builder().setMediaId("info").setTitle(text).build(), MediaItem.FLAG_BROWSABLE);
     }
 
-    private MediaItem book(JSONObject b) {
-        String id = b.optString("id");
-        boolean ready = new File(dir(), "books/" + id + ".json").exists();
-        String sub = !ready ? "En préparation sur le téléphone…" : b.optString("author", "");
-        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId("book:" + id).setTitle(b.optString("title")).setSubtitle(sub);
-        String cover = b.optString("cover", "");
-        if (!cover.isEmpty() && new File(dir(), cover).exists()) d.setIconUri(Uri.parse("content://" + Couvertures.AUTH + "/" + Uri.encode(new File(cover).getName())));
-        return new MediaItem(d.build(), MediaItem.FLAG_PLAYABLE);
-    }
 
     // ---------------------------------------------------------------- lecture
     private class Callback extends MediaSession.Callback {
@@ -491,12 +519,13 @@ public class LivreService extends MediaBrowserService {
         clip.stop();
         boolean isDuo = id.startsWith("balado:");
         boolean isProf = id.startsWith("prof:") || isDuo; // le balado se joue comme un cours : rythme parlé, suite attendue si elle se prépare
+        boolean isSum = id.startsWith("resume:");
         String realId = id.substring(id.indexOf(':') + 1);
         JSONObject meta = null;
         JSONArray books = catalog().optJSONArray("books");
         if (books != null) for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && realId.equals(b.optString("id"))) meta = b; }
-        String txt = read(new File(dir(), (isDuo ? "balado/" : isProf ? "prof/" : "books/") + realId + ".json"));
-        if (meta == null || txt == null) { inter.clear(); error(isDuo ? "Le balado n'est pas encore prêt. Crée-le sur ton téléphone." : isProf ? "Le cours du Professeur n'est pas encore prêt. Prépare-le sur ton téléphone." : "Ce livre n'est pas encore prêt. Ouvre la Bibliothèque sur ton téléphone quelques instants."); return; }
+        String txt = read(new File(dir(), (isDuo ? "balado/" : isProf ? "prof/" : isSum ? "resume/" : "books/") + realId + ".json"));
+        if (meta == null || txt == null) { inter.clear(); error(isDuo ? "Le balado n'est pas encore prêt. Crée-le sur ton téléphone." : isProf ? "Le cours du Professeur n'est pas encore prêt. Prépare-le sur ton téléphone." : isSum ? "Le résumé n'est pas encore prêt. Crée-le sur ton téléphone." : "Ce livre n'est pas encore prêt. Ouvre Mike Library sur ton téléphone quelques instants."); return; }
         try {
             JSONObject data = new JSONObject(txt);
             JSONArray u = data.getJSONArray("u");
@@ -516,7 +545,7 @@ public class LivreService extends MediaBrowserService {
             totalChars = startChars[units.size()];
             bookId = id;
             if (isDuo) loadScript(txt); else { script = null; scenes = new ArrayList<>(); }
-            title = (isDuo ? "🎙 " : isProf ? "🎓 " : "") + meta.optString("title"); author = isDuo ? "Balado à deux voix" : isProf ? "Le Professeur bizarroïde" : meta.optString("author"); libName = meta.optString("libName");
+            title = (isDuo ? "🎙 " : isProf ? "🎓 " : isSum ? "📝 " : "") + meta.optString("title"); author = isDuo ? "Balado à deux voix" : isProf ? "Le Professeur bizarroïde" : isSum ? "Le résumé" : meta.optString("author"); libName = meta.optString("libName");
             rate = (float) catalog().optDouble("rate", 1.0);
             idx = startIndex(meta);
             art = null;
@@ -534,7 +563,7 @@ public class LivreService extends MediaBrowserService {
     private int startIndex(JSONObject meta) {
         JSONObject prog = autoProgress().optJSONObject(bookId);
         long phoneLast = meta.optLong("last");
-        if (prof) return prog == null ? 0 : clamp(prog.optInt("i"));
+        if (prof || bookId.startsWith("resume:")) return prog == null ? 0 : clamp(prog.optInt("i"));
         if (prog != null && prog.optLong("t") >= phoneLast) return clamp(prog.optInt("i"));
         if (phoneLast == 0) return 0;
         if (isPdf) {
@@ -873,8 +902,13 @@ public class LivreService extends MediaBrowserService {
         }
         if (idx + 1 >= units.size()) {
             if (prof && !profDone) {
-                // la partie suivante se prépare sur le téléphone : on l'attend, elle partira toute seule
-                if (!waitingMore) { waitingMore = true; say("Un petit instant… je prépare la suite !", "wait"); }
+                // la partie suivante n'est pas encore écrite : on l'attend, elle partira toute seule.
+                // Le téléphone l'écrit s'il est ouvert ; sinon (dans l'auto), le service l'écrit lui-même avec Gemini.
+                if (!waitingMore) {
+                    waitingMore = true; say("Un petit instant… je prépare la suite !", "wait");
+                    final String key = bookId;
+                    if (!duo) main.postDelayed(() -> { if (waitingMore && key.equals(bookId)) ProfWriter.next(this, key.substring(5)); }, 6000);
+                }
                 return;
             }
             idx = units.size() - 1; pause(); error(duo ? "Fin du balado." : prof ? "Fin du cours." : "Fin du livre."); return;
@@ -1006,6 +1040,15 @@ public class LivreService extends MediaBrowserService {
         LivreService s = instance; if (s == null) return;
         s.main.post(() -> s.reloadProf(key));
     }
+
+    /** Le service n'a pas pu écrire la suite du Professeur : on le dit (Android Auto affiche la raison) */
+    static void profFailed(String id, String why) {
+        LivreService s = instance; if (s == null) return;
+        s.main.post(() -> { if (s.bookId != null && s.bookId.equals("prof:" + id) && s.waitingMore) { s.waitingMore = false; if (s.playing) s.pause(); s.error(why); } });
+    }
+
+    /** Dossier des fichiers de l'auto (pour ProfWriter) */
+    File autoDir() { return dir(); }
 
     private void reloadProf(String key) { // key : « prof:<id> » ou « balado:<id> »
         if (bookId == null || !bookId.equals(key)) return;
