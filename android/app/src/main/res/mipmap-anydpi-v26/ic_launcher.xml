@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône Mike Library (Android 8+) : la forme choisie par le téléphone (rond, carré arrondi…) découpe le fond noir -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground android:drawable="@mipmap/ic_launcher_fg" />
+</adaptive-icon>

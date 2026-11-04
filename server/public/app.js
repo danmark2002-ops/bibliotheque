@@ -114,7 +114,11 @@ const isNative = () => !!window.AndroidApp;
 
 if (!store.get('etagere15', false)) { store.set('view', 'shelf'); store.set('etagere15', true); } // retour à l'étagère après la mise à jour
 const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf'), ck: store.get('ck', 'livres') };
-document.documentElement.dataset.decor = store.get('decor', 'noyer');
+if (!store.get('mike1', false)) { // passage à Mike Library : le nouveau décor partout, une seule fois
+  try { store.set('decor', 'mike'); store.set('decorAll', 'mike'); const l = store.get('libs', null); if (Array.isArray(l)) store.set('libs', l.map((x) => ({ ...x, decor: 'mike' }))); } catch {}
+  store.set('mike1', true);
+}
+document.documentElement.dataset.decor = store.get('decor', 'mike');
 
 // ================= Démarrage =================
 async function boot() {
@@ -403,7 +407,7 @@ async function moveBooks(list, libId) {
 function newLibPrompt() {
   const name = (prompt('Nom de la nouvelle bibliothèque :', '') || '').trim().slice(0, 60); if (!name) return null;
   const l = libs(); const used = new Set(l.map((x) => x.decor));
-  const lib = { id: 'lib' + Date.now().toString(36), name, decor: DECORS.map(([k]) => k).find((k) => !used.has(k)) || 'noyer' };
+  const lib = { id: 'lib' + Date.now().toString(36), name, decor: 'mike' };
   l.push(lib); saveLibs(l); return lib;
 }
 // Rangée de pastilles : la bibliothèque du livre est cochée, on touche une autre pour l'y ranger
@@ -651,16 +655,17 @@ function renderLibrary(opts = {}) {
   const kinds = local && owner && S.ck && S.ck !== 'livres';
   const room = h('div', { class: 'room' }, h('div', { class: 'wrap' },
     h('header', { class: 'top' },
+      h('div', { class: 'brandbar' },
+        h('span', { class: 'mark', 'aria-hidden': 'true' }),
+        h('h1', { class: 'wordmark', 'aria-label': 'Mike Library' }, h('b', {}, 'Mike'), h('span', {}, 'Library')),
+        local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null),
       h('div', { class: 'brand' },
-        h('div', { class: 'brand-row' },
-          local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null,
-          local ? h('button', { class: 'libswitch', title: 'Changer de bibliothèque', onclick: openLibraries }, h('h1', {}, libName()), icon('chev')) : h('h1', {}, S.me.library || 'Bibliothèque')),
         h('p', { class: 'navline' },
           navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null,
           h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`,
           S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)),
       actions),
-    local && owner ? libTabs() : null,
+    local && owner ? (libTabs() || h('div', { class: 'libtabs' }, h('button', { class: 'libtab sel', title: 'Changer de bibliothèque', onclick: openLibraries }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[curLib()?.decor] || '#555' } }), h('span', {}, libName()), h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev'))))) : (!local ? h('p', { class: 'muted', style: { textAlign: 'center' } }, S.me.library || '') : null),
     local && owner ? kindTabs() : null,
     kinds ? creationsEl(S.ck) : null,
     !kinds && current ? heroEl(current) : null,
@@ -1021,15 +1026,15 @@ window.__webBook = async (j) => {
 
 // ================= Bibliothèques et dossiers sources =================
 // Chaque bibliothèque a son nom, son décor et (si on veut) son dossier source. « Toutes » les montre ensemble.
-const DECORS = [['noyer', 'Noyer'], ['chene', 'Chêne clair'], ['acajou', 'Acajou'], ['ebene', 'Ébène'], ['ardoise', 'Ardoise'], ['olivier', 'Olivier'], ['bouleau', 'Bouleau']];
-const DECOR_SWATCH = { noyer: '#6d4427', chene: '#cfa977', acajou: '#7a2f22', ebene: '#2a2a30', ardoise: '#3e5566', olivier: '#5d6233', bouleau: '#d9d4c7' };
+const DECORS = [['mike', 'Mike (noir et or)'], ['noyer', 'Noyer'], ['chene', 'Chêne clair'], ['acajou', 'Acajou'], ['ebene', 'Ébène'], ['ardoise', 'Ardoise'], ['olivier', 'Olivier'], ['bouleau', 'Bouleau']];
+const DECOR_SWATCH = { mike: '#c9952f', noyer: '#6d4427', chene: '#cfa977', acajou: '#7a2f22', ebene: '#2a2a30', ardoise: '#3e5566', olivier: '#5d6233', bouleau: '#d9d4c7' };
 const FOLDER = { busy: false };
 const hasNativeFolder = () => !!window.AndroidFolder;
 function libsRaw() {
   let l = store.get('libs', null);
   if (!l || !l.length) {
     let name = 'Ma Bibliothèque'; try { name = localStorage.getItem('bib.libname') || name; } catch {}
-    l = [{ id: 'main', name, decor: store.get('decor', 'noyer') }]; store.set('libs', l);
+    l = [{ id: 'main', name, decor: store.get('decor', 'mike') }]; store.set('libs', l);
   }
   return l;
 }
@@ -1045,7 +1050,7 @@ S.lib = store.get('lib', 'main');
 const curLib = () => (S.lib === 'all' ? null : libs().find((x) => x.id === S.lib) || libs()[0]);
 const libName = () => (curLib() ? curLib().name : 'Toutes les bibliothèques');
 const inLib = (b) => S.lib === 'all' || (b.lib || 'main') === curLib().id;
-function applyDecor() { document.documentElement.dataset.decor = curLib() ? curLib().decor : store.get('decorAll', 'ebene'); tiPaint(); }
+function applyDecor() { document.documentElement.dataset.decor = curLib() ? curLib().decor : store.get('decorAll', 'mike'); tiPaint(); }
 applyDecor();
 function switchLib(id) { S.lib = id; store.set('lib', id); applyDecor(); S.nav = { k: 'all' }; store.set('nav', S.nav); S.filter = ''; renderLibrary(); scrollTo(0, 0); }
 
@@ -1136,7 +1141,7 @@ function browseFolder(libId) {
 // Ajouter un autre dossier = une nouvelle bibliothèque, à son nom ; les autres bibliothèques ne bougent pas
 async function addFolderLib() {
   const l = libs(); const used = new Set(l.map((x) => x.decor));
-  const order = ['acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer'];
+  const order = ['mike', 'acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer'];
   const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
   const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor };
   l.push(lib); saveLibs(l);
@@ -1553,10 +1558,10 @@ async function importReceived(r) {
 // La bibliothèque principale vidée de son dossier et de ses livres n'a plus d'onglet (s'il en reste d'autres)
 const visibleLibs = () => libs();
 // Ce que l'on fabrique à partir des livres : balados, résumés, vidéos (un onglet chacun, à côté des livres)
-const CK = [['livres', 'Livres'], ['balados', 'Balados'], ['resumes', 'Résumés'], ['videos', 'Vidéos']];
+const CK = [['livres', 'Livres', 'book'], ['balados', 'Balados', 'headphones'], ['resumes', 'Résumés', 'spark'], ['videos', 'Vidéos', 'film']];
 function kindTabs() {
-  return h('div', { class: 'kindtabs', role: 'tablist' }, CK.map(([k, l]) => h('button', { class: 'kindtab' + ((S.ck || 'livres') === k ? ' sel' : ''), role: 'tab', 'aria-selected': (S.ck || 'livres') === k ? 'true' : 'false',
-    onclick: () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); } }, l)));
+  return h('div', { class: 'kindtabs', role: 'tablist' }, CK.map(([k, l, ic]) => h('button', { class: 'kindtab' + ((S.ck || 'livres') === k ? ' sel' : ''), role: 'tab', 'aria-selected': (S.ck || 'livres') === k ? 'true' : 'false',
+    onclick: () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); } }, icon(ic), h('span', {}, l))));
 }
 function creationsEl(kind) {
   const live = S.books.filter((b) => !b.trashed && b.status === 'ready');
@@ -1615,7 +1620,7 @@ function libTabs() {
   };
   return h('nav', { class: 'libtabs', 'aria-label': 'Bibliothèques' },
     l.map((x) => tab(x.id, x.name, x.decor)),
-    l.length > 1 ? tab('all', 'Toutes', store.get('decorAll', 'ebene')) : null,
+    l.length > 1 ? tab('all', 'Toutes', store.get('decorAll', 'mike')) : null,
     h('button', { class: 'libtab add', onclick: addFolderLib, title: 'Ajouter un dossier (nouvelle bibliothèque)' }, icon('plus'), h('span', {}, 'Ajouter un dossier')));
 }
 
@@ -1633,7 +1638,7 @@ function openLibraries() {
   const close = sheet('Bibliothèques', h('div', {},
     h('div', { class: 'libs' },
       libs().map((l) => row(l.id, l.name, l.decor, m[l.id] ? '📁 ' + m[l.id].name : 'Sans dossier source', count(l.id))),
-      libs().length > 1 ? row('all', 'Toutes ensemble', store.get('decorAll', 'ebene'), 'Toutes les bibliothèques réunies', live.length) : null),
+      libs().length > 1 ? row('all', 'Toutes ensemble', store.get('decorAll', 'mike'), 'Toutes les bibliothèques réunies', live.length) : null),
     h('div', { class: 'actions', style: { marginTop: '16px', justifyContent: 'flex-end' } },
       h('button', { class: 'btn primary', onclick: () => { close(); addFolderLib(); } }, icon('plus'), 'Ajouter un dossier'))));
 }
@@ -1750,7 +1755,7 @@ function openSettings() {
   const lib = local ? curLib() : null;
   const nameIn = h('input', { value: local ? (lib ? lib.name : '') : S.me.library, maxlength: 80 });
   const pw = h('input', { type: 'password', placeholder: 'Laisser vide pour ne pas changer', autocomplete: 'new-password' });
-  let decor = local ? (lib ? lib.decor : store.get('decorAll', 'ebene')) : store.get('decor', 'noyer');
+  let decor = local ? (lib ? lib.decor : store.get('decorAll', 'mike')) : store.get('decor', 'noyer');
   const picker = decorPicker(decor, (k) => { decor = k; document.documentElement.dataset.decor = k; });
   const close = sheet('Réglages', h('div', {},
     local ? h('p', { class: 'muted', style: { marginTop: '-6px' } }, lib ? 'Bibliothèque : ' + lib.name : 'Toutes les bibliothèques ensemble') : null,

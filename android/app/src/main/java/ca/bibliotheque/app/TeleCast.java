@@ -111,7 +111,7 @@ final class TeleCast {
         RemoteMediaClient rmc = s.getRemoteMediaClient();
         if (rmc == null) { state("error", "La télé ne répond pas."); return; }
         MediaMetadata md = new MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE);
-        md.putString(MediaMetadata.KEY_TITLE, pendingTitle == null ? "Bibliothèque" : pendingTitle);
+        md.putString(MediaMetadata.KEY_TITLE, pendingTitle == null ? "Mike Library" : pendingTitle);
         md.putString(MediaMetadata.KEY_SUBTITLE, "Le condensé du Professeur bizarroïde");
         MediaInfo mi = new MediaInfo.Builder(pendingUrl).setStreamType(MediaInfo.STREAM_TYPE_BUFFERED).setContentType("video/mp4").setMetadata(md).build();
         String name = s.getCastDevice() == null ? "la télé" : s.getCastDevice().getFriendlyName();

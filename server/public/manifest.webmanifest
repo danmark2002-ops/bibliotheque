@@ -1,9 +1,9 @@
 {
-  "name": "Bibliothèque",
-  "short_name": "Bibliothèque",
+  "name": "Mike Library",
+  "short_name": "Mike Library",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#140f0b",
-  "theme_color": "#140f0b",
+  "theme_color": "#070504",
   "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

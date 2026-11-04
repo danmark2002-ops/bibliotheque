@@ -33,18 +33,21 @@ def downlevel(src, name):
 
 app = downlevel(app, 'app.js')
 local = downlevel(local, 'local.js')
-icon = base64.b64encode((pub / 'icon.svg').read_bytes()).decode()
+icon = base64.b64encode((pub / 'icon-64.png').read_bytes()).decode()
+# emblème Mike Library (en-tête) : intégré à la page, aucun fichier à servir à part
+mark = base64.b64encode((pub / 'mark.webp').read_bytes()).decode()
+css = css.replace("url('mark.webp')", f"url(data:image/webp;base64,{mark})")
 
 # version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
-apple = '\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Bibliothèque">\n<link rel="apple-touch-icon" href="icon-180.png">' if cdn else ''
+apple = '\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Mike Library">\n<link rel="apple-touch-icon" href="icon-180.png">' if cdn else ''
 html = f"""<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#140f0b">
-<title>Bibliothèque</title>
-<link rel="icon" href="data:image/svg+xml;base64,{icon}">{apple}
+<meta name="theme-color" content="#070504">
+<title>Mike Library</title>
+<link rel="icon" href="data:image/png;base64,{icon}">{apple}
 <link rel="preload" href="fonts/inter.woff" as="font" type="font/woff" crossorigin>
 <link rel="preload" href="fonts/fraunces-italic.woff" as="font" type="font/woff" crossorigin>
 <style>
