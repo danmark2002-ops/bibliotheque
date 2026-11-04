@@ -38,6 +38,8 @@ icon = base64.b64encode((pub / 'icon-64.png').read_bytes()).decode()
 mark = base64.b64encode((pub / 'mark.webp').read_bytes()).decode()
 css = css.replace("url('mark.webp')", f"url(data:image/webp;base64,{mark})")
 spots = base64.b64encode((pub / 'spots.webp').read_bytes()).decode()
+photo = base64.b64encode((pub / 'library.webp').read_bytes()).decode()
+css = css.replace("url('library.webp')", f"url(data:image/webp;base64,{photo})")
 css = css.replace("url('spots.webp')", f"url(data:image/webp;base64,{spots})")
 
 # version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
