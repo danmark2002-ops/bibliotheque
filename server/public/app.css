@@ -35,7 +35,7 @@
   --plank-edge: #f1c47e;
   --side: #24140a;
   --spot: rgba(255, 190, 105, .34);
-  --room-photo: url('library.webp');  /* une bibliothèque la nuit (fenêtres, rayonnages, escalier) derrière l'en-tête */
+  --room-photo: url('library.webp');  /* la Long Room de Trinity College Dublin (photo choisie par le propriétaire ; D. Iliff, CC BY-SA 3.0 : crédit dans Réglages) */
   --danger: #e2735e;
   --ok: #8fbf7f;
   color-scheme: dark;
@@ -136,8 +136,8 @@ input, select { font: inherit; color: inherit; }
 .room {
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(7, 5, 4, .15), rgba(7, 5, 4, .35) 45%, transparent 75%) top center / 100% 600px no-repeat,
-    var(--room-photo, none) right top / max(100%, 860px) auto no-repeat,
+    linear-gradient(180deg, rgba(7, 5, 4, .3), rgba(7, 5, 4, .1) 30%, rgba(7, 5, 4, .3) 60%, transparent 85%) top center / 100% 640px no-repeat,
+    var(--room-photo, none) center top / max(100%, 640px) auto no-repeat,
     radial-gradient(1100px 520px at 50% -160px, var(--lamp), transparent 70%),
     radial-gradient(600px 300px at 85% -60px, var(--lamp), transparent 70%),
     radial-gradient(900px 600px at 50% 120%, rgba(0,0,0,.35), transparent 70%),

@@ -1779,6 +1779,7 @@ function openSettings() {
               h('button', { class: 'btn', onclick: () => { const k = ck.value.trim(); if (!/^sk-ant-/.test(k)) return toast('Colle une clé qui commence par sk-ant-'); setClaudeKey(k); close(); toast('Clé Claude enregistrée'); } }, 'Enregistrer'))); })())) : null,
     local ? h('p', { class: 'muted' }, 'Tes livres sont gardés sur cet appareil. Pour en donner une copie à quelqu\'un, utilise le bouton de partage d\'une bibliothèque.') : null,
     h('details', { class: 'more' }, h('summary', {}, 'Journal des problèmes'), diagBox()),
+    h('p', { class: 'muted', style: { fontSize: '12px' } }, 'Photo d\'arrière-plan : la Long Room, Trinity College Dublin (photo de David Iliff, licence CC BY-SA 3.0).'),
     h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
       h('div', { class: 'actions' },
         local ? h('button', { class: 'btn', onclick: () => { close(); openLibraries(); } }, icon('collection'), 'Bibliothèques') : h('button', { class: 'btn', onclick: async () => { await post('/api/logout', {}); close(); boot(); } }, icon('logout'), 'Déconnexion'),
