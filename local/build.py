@@ -37,6 +37,8 @@ icon = base64.b64encode((pub / 'icon-64.png').read_bytes()).decode()
 # emblème Mike Library (en-tête) : intégré à la page, aucun fichier à servir à part
 mark = base64.b64encode((pub / 'mark.webp').read_bytes()).decode()
 css = css.replace("url('mark.webp')", f"url(data:image/webp;base64,{mark})")
+spots = base64.b64encode((pub / 'spots.webp').read_bytes()).decode()
+css = css.replace("url('spots.webp')", f"url(data:image/webp;base64,{spots})")
 
 # version web (iPhone) : s'installe sur l'écran d'accueil depuis Safari, comme une application
 apple = '\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Mike Library">\n<link rel="apple-touch-icon" href="icon-180.png">' if cdn else ''

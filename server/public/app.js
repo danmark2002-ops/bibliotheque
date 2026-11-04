@@ -638,7 +638,6 @@ function renderLibrary(opts = {}) {
     owner && !local ? h('button', { class: 'btn', onclick: openDashboard, title: 'Lecteurs' }, icon('people'), h('span', { class: 'lbl' }, 'Lecteurs')) : null,
     TV.canCast() ? h('button', { class: 'btn icon', title: 'Caster sur la télé', 'aria-label': 'Caster sur la télé', onclick: () => TV.cast() }, icon('cast')) : null,
     Tele.on() ? h('button', { class: 'btn icon', title: 'Vidéo sur la télé', 'aria-label': 'Vidéo sur la télé', onclick: () => Tele.open() }, icon('tvplay')) : null,
-    h('button', { class: 'btn icon', title: 'Réglages', onclick: openSettings }, icon('gear')),
   );
   const count = S.nav.k === 'authors' ? `${new Set(live.map(authorOf)).size} auteurs` : `${books.length} livre${books.length > 1 ? 's' : ''}`;
   const toolbar = S.books.length ? h('div', { class: 'toolbar' },
@@ -646,6 +645,7 @@ function renderLibrary(opts = {}) {
     S.nav.k !== 'authors' ? h('label', { class: 'sortsel', title: 'Trier' }, h('span', {}, 'Trier'),
       h('select', { onchange: (e) => { S.sort = e.target.value; store.set('sort', S.sort); renderLibrary(); } },
         Object.entries(SORTS).map(([k, l]) => h('option', { value: k, selected: k === S.sort }, l)))) : null,
+    S.nav.k !== 'authors' ? h('span', { class: 'tsep', 'aria-hidden': 'true' }) : null,
     S.nav.k !== 'authors' ? h('button', { class: 'btn icon', title: asList ? 'Voir l\'étagère' : 'Voir la liste', onclick: () => { S.view = asList ? 'shelf' : 'list'; store.set('view', S.view); renderLibrary(); } }, icon(asList ? 'shelf' : 'list')) : null,
     owner && local && S.nav.k !== 'authors' && S.nav.k !== 'trash' && books.length ? h('button', { class: 'btn icon' + (Sel.on ? ' on' : ''), title: 'Sélectionner plusieurs livres', 'aria-label': 'Sélectionner plusieurs livres', onclick: () => (Sel.on ? selEnd() : selStart()) }, icon('checkbox')) : null,
     owner && S.nav.k !== 'authors' && S.nav.k !== 'trash' && books.length ? h('button', { class: 'btn icon' + (S.organize ? ' on' : ''), title: 'Organiser', onclick: () => { S.organize = !S.organize; renderLibrary(); if (S.organize) toast('Touche un livre pour le modifier'); } }, icon('pencil')) : null,
@@ -658,6 +658,7 @@ function renderLibrary(opts = {}) {
       h('div', { class: 'brandbar' },
         h('span', { class: 'mark', 'aria-hidden': 'true' }),
         h('h1', { class: 'wordmark', 'aria-label': 'Mike Library' }, h('b', {}, 'Mike'), h('span', {}, 'Library')),
+        h('button', { class: 'btn icon', title: 'Réglages', 'aria-label': 'Réglages', onclick: openSettings }, icon('gear')),
         local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null),
       h('div', { class: 'brand' },
         h('p', { class: 'navline' },
@@ -698,7 +699,7 @@ function heroEl(b) {
     h('div', { class: 'bar' }, h('i', { style: { width: pct + '%' } })),
     h('div', { class: 'meta' }, `Page ${b.progress.page} sur ${b.pages} · ${pct} % · lu ${lastRead(b.progress.last)}`),
     h('div', { class: 'row' },
-      h('button', { class: 'btn primary', onclick: () => openBook(b, mini) }, icon('book'), 'Continuer'),
+      h('button', { class: 'btn primary', onclick: () => openBook(b, mini) }, icon('play'), 'Continuer'),
       h('button', { class: 'btn', onclick: () => openBook(b, mini, { audio: true }) }, icon('headphones'), 'Écouter'))));
 }
 // l'étagère dépend seulement de la largeur : l'ouverture du clavier (qui change la hauteur) ne doit rien reconstruire,
