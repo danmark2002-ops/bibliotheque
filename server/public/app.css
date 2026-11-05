@@ -784,22 +784,22 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .tv .book:focus { transform: translateY(-10px); outline: none; }
 .tv .book:focus .cover { box-shadow: 0 0 0 4px var(--brass), 10px 16px 22px -6px rgba(0,0,0,.6); }
 /* Télé : menu vertical fixe à gauche, l'étagère occupe tout le reste de l'écran */
-.tv .room { padding: 18px 24px 60px 224px; }
+.tv .room { padding: 4vh 4vw 60px 224px; }
 .tvrail { position: fixed; left: 0; top: 0; bottom: 0; width: 200px; z-index: 5; box-sizing: border-box; overflow-y: auto;
-  padding: 18px 12px; display: flex; flex-direction: column; gap: 3px;
+  padding: 4vh 12px 5vh; display: flex; flex-direction: column; gap: 2px; /* marges : zone sûre des télés qui rognent les bords */
   background: var(--panel); border-right: 1px solid var(--glass-line); }
-.railbrand { display: flex; align-items: center; gap: 10px; padding: 0 6px 14px; }
-.railbrand .mark { width: 40px; height: 40px; border-radius: 13px; box-shadow: none; }
+.railbrand { display: flex; align-items: center; gap: 10px; padding: 0 6px 8px; flex: none; }
+.railbrand .mark { width: 34px; height: 34px; border-radius: 13px; box-shadow: none; }
 .railbrand .wordmark b { font-size: 19px; letter-spacing: .08em; }
 .railbrand .wordmark span { font-size: 10px; letter-spacing: .3em; margin-top: 3px; }
-.railbtn { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 12px; border: 0; border-radius: 10px;
+.railbtn { display: flex; align-items: center; gap: 12px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 10px;
   background: transparent; color: var(--ink-2); font: 500 14px/1.2 var(--font-ui, inherit); text-align: left; cursor: pointer; flex: none; }
 .railbtn svg { width: 20px; height: 20px; flex: none; color: var(--brass); }
 .railbtn.sel { background: var(--brass); color: var(--brass-ink); font-weight: 600; }
 .railbtn.sel svg { color: var(--brass-ink); }
 .tv .railbtn:focus { outline: none; background: var(--panel-2); color: var(--brass-hi); box-shadow: inset 0 0 0 2px var(--brass); }
 .tv .railbtn.sel:focus { background: var(--brass-hi); color: var(--brass-ink); }
-.railsep { display: block; height: 1px; margin: 8px 6px; background: var(--glass-line); flex: none; }
+.railsep { display: block; height: 1px; margin: 5px 6px; background: var(--glass-line); flex: none; }
 .tvtitle { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
 .tvtitle b { font: italic 600 24px/1.2 var(--font-display); color: var(--brass-hi); }
 .tvtitle span { font-size: 13px; color: var(--ink-3); }
