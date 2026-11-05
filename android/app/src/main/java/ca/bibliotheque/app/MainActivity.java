@@ -70,6 +70,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Crashes.install(this);
+        Crashes.exits(this);
 
         instance = this;
         web = new WebView(this);
@@ -1747,7 +1748,7 @@ public class MainActivity extends Activity {
 
     class AiBridge {
         /** Appareil modeste (vieilles Fire TV, 1 Go de mémoire) : la page enlève les effets coûteux (flou) */
-        @JavascriptInterface public boolean lowEnd() { return MainActivity.lowEnd(MainActivity.this); }
+        @JavascriptInterface public boolean lowEnd() { return MainActivity.lowEnd(MainActivity.this) || isTv(); } // télé : effets légers (flou d'arrière-plan coûteux en mémoire vidéo)
         /** Journal des fermetures de l'app (Réglages → Journal des problèmes) */
         @JavascriptInterface public String crashLog() { return Crashes.read(MainActivity.this); }
         @JavascriptInterface public void crashClear() { Crashes.clear(MainActivity.this); }
