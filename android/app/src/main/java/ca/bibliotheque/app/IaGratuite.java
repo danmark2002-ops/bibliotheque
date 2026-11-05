@@ -23,10 +23,12 @@ final class IaGratuite {
     private static long last;
     static long GAP = 6500; // (0 dans les essais sur ordinateur)
     // le premier modèle disponible est utilisé (les noms changent avec le temps)
-    private static final String[] MODELS = {"gemini-flash-latest", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-2.0-flash"};
+    private static volatile String[] MODELS = {"gemini-flash-latest", "gemini-3.8-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-3.5-flash-lite"};
+    /** La liste réelle des modèles de la clé a-t-elle déjà été lue (après des « 404 » partout) ? */
+    private static volatile boolean listed = false;
     private static int model = 0;
     // Gemini Pro d'abord (meilleur), tant que la clé y a droit ; s'il refuse ou que son quota est épuisé, Flash prend le relais
-    private static final String[] PRO = {"gemini-pro-latest", "gemini-2.5-pro"};
+    private static volatile String[] PRO = {"gemini-pro-latest", "gemini-3.1-pro-preview", "gemini-2.5-pro"};
     /** Dernier refus de Pro, en clair (pour comprendre quand Pro ne répond pas) */
     static volatile String lastProNote = "";
     /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
@@ -188,7 +190,7 @@ final class IaGratuite {
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
             if (force != null && code >= 400) throw new ProRefused(code, res[1]);
-            if (code == 404 && model + 1 < MODELS.length) { model++; continue; } // modèle retiré : on prend le suivant
+            if (code == 404) { if (model + 1 < MODELS.length) { model++; continue; } if (discover(key)) continue; } // modèle retiré : le suivant ; au bout, la liste réelle de Google
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 429) { Thread.sleep(urgent ? 4000 : 10000); throw new Exception("quota gratuit momentanément atteint"); }
@@ -232,7 +234,7 @@ final class IaGratuite {
                 if (ps != null) for (int i = 0; i < ps.length(); i++) if (!ps.getJSONObject(i).optBoolean("thought")) sb.append(ps.getJSONObject(i).optString("text", ""));
                 return sb.toString();
             }
-            if (code == 404 && model + 1 < MODELS.length) { model++; continue; }
+            if (code == 404) { if (model + 1 < MODELS.length) { model++; t--; continue; } if (discover(k)) { t--; continue; } }
             if (code == 429 || code >= 500) { Thread.sleep(15000); continue; }
             throw new Exception("erreur " + code);
         }
@@ -254,6 +256,36 @@ final class IaGratuite {
             c.setConnectTimeout(15000); c.setReadTimeout(30000);
             if (!key.isEmpty()) c.setRequestProperty("x-goog-api-key", key);
             return c.getResponseCode();
+        } finally { c.disconnect(); }
+    }
+
+    /** Google a retiré les modèles connus de l'app : on lit ceux que la clé peut utiliser et on les prend, du meilleur au moins bon (une fois) */
+    private static synchronized boolean discover(String key) {
+        if (listed) return false;
+        listed = true;
+        try {
+            String url = base + "/v1beta/models?pageSize=200";
+            String[] res = get(url, key);
+            if (Integer.parseInt(res[0]) >= 400) res = get(url + "&key=" + java.net.URLEncoder.encode(key, "UTF-8"), "");
+            if (Integer.parseInt(res[0]) >= 400) return false;
+            String[] flash = ModelPick.pick(res[1], "flash"), pro = ModelPick.pick(res[1], "pro");
+            if (pro.length > 0) PRO = pro;
+            if (flash.length == 0) return false;
+            MODELS = flash; model = 0;
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
+    private static String[] get(String url, String key) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            c.setConnectTimeout(15000); c.setReadTimeout(30000);
+            if (!key.isEmpty()) c.setRequestProperty("x-goog-api-key", key);
+            int code = c.getResponseCode();
+            InputStream in = code >= 400 ? c.getErrorStream() : c.getInputStream();
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            if (in != null) { byte[] buf = new byte[8192]; int n; while ((n = in.read(buf)) > 0) b.write(buf, 0, n); in.close(); }
+            return new String[]{String.valueOf(code), b.toString("UTF-8")};
         } finally { c.disconnect(); }
     }
 

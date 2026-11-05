@@ -9,6 +9,8 @@ javac -encoding UTF-8 -nowarn -d "$D" $S/Studio.java $S/Quota.java StudioTest.ja
 java -cp "$D" ca.bibliotheque.app.StudioTest 2>&1 | { grep -v "^Picked up" || true; }
 javac -encoding UTF-8 -nowarn -d "$D" $S/Studio.java $S/Quota.java $S/PhoneDuo.java PhoneDuoTest.java 2>&1 | { grep -v "^Picked up\|^Note" || true; }
 java -cp "$D" ca.bibliotheque.app.PhoneDuoTest 2>&1 | { grep -v "^Picked up" || true; }
+javac -encoding UTF-8 -nowarn -d "$D" $S/ModelPick.java ModelPickTest.java 2>&1 | { grep -v "^Picked up\|^Note" || true; }
+java -cp "$D" ca.bibliotheque.app.ModelPickTest 2>&1 | { grep -v "^Picked up" || true; }
 python3 - <<'PY'
 import json
 n=0

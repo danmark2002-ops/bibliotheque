@@ -2688,7 +2688,7 @@ function summaryChoices(b) {
 // (gardée seulement dans ce navigateur). Pro d'abord, Flash en relais : mêmes règles que sur Android.
 if (!window.AndroidAI) window.AndroidAI = (() => {
   const K = 'bib.geminiKey', P = 'bib.proPause';
-  const PRO = ['gemini-pro-latest', 'gemini-2.5-pro'], FLASH = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest'];
+  const PRO = ['gemini-pro-latest', 'gemini-3.1-pro-preview', 'gemini-2.5-pro'], FLASH = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
   const get = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
