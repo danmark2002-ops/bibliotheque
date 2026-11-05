@@ -753,6 +753,9 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
   border: 1px solid var(--brass-2); background: radial-gradient(circle at 50% 35%, rgba(228, 181, 88, .28), rgba(0,0,0,.2) 75%); box-shadow: 0 0 12px -3px var(--glow, transparent); }
 .bact::after { content: ''; flex: none; width: 8px; height: 8px; margin-right: 4px; border-top: 2px solid var(--ink-3); border-right: 2px solid var(--ink-3); transform: rotate(45deg); }
 /* Télé : les actions du livre en grandes tuiles, toutes visibles d'un coup, faciles à viser à la télécommande */
+/* Télé : les fenêtres restent dans la zone sûre de l'écran (beaucoup de télés rognent les bords), et défilent au besoin */
+.tv .scrim { padding: 5vh 5vw; box-sizing: border-box; }
+.tv .sheet { max-height: 90vh; scroll-padding: 24px; }
 .tv .tvbook .bookacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tv .tvbook .bact { flex-direction: column; justify-content: center; text-align: center; gap: 10px; min-height: 104px; padding: 14px 8px; border-radius: 18px; font-size: 15px; line-height: 1.25; }
 .tv .tvbook .bact span { flex: none; }

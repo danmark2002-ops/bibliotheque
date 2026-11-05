@@ -141,7 +141,7 @@ final class IaGratuite {
                     long span = e.code == 404 ? 7 * 24 * 3600_000L : 6 * 3600_000L;
                     pz.set(pm, System.currentTimeMillis() + span);
                     lastProNote = pm + " refusé (" + e.code + (why.isEmpty() ? "" : " : " + why) + ")";
-                    tell(pm + (e.code == 404 ? " n'existe plus" : w.equals("day") ? " : quota gratuit épuisé ou non offert avec ta clé" : " est refusé (" + e.code + ")") + " — essai du suivant…");
+                    if (e.code != 404) tell(pm + (w.equals("day") ? " : quota gratuit épuisé ou non offert avec ta clé" : " est refusé (" + e.code + ")") + " — essai du suivant…"); // modèle retiré par Google : on passe au suivant sans rien dire
                     break;
                 } catch (Fatal f) { throw f;
                 } catch (Exception e) { break; }
