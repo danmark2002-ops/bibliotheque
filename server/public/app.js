@@ -2756,6 +2756,7 @@ const KeyGuide = {
   // then : ce que la personne voulait faire (relancé après le ✅)
   start(then) {
     this.then = then || null;
+    if (TV.on && window.AndroidAI?.receiveKey) return this.startTv();
     if (!this.ok()) return this.manual('');
     if (AndroidAI.web) return this.startWeb();
     try { AndroidAI.keyWarm(); } catch {}
@@ -2771,6 +2772,7 @@ const KeyGuide = {
         h('button', { class: 'btn primary', onclick: () => { close(); this.open(); } }, icon('spark'), 'C\'est parti'))));
   },
   open() {
+    if (TV.on && window.AndroidAI?.receiveKey) return this.startTv(); // télé : jamais la page de Google à l'écran
     this.panel()?.remove();
     document.body.append(h('div', { class: 'kg-panel', id: 'kgPanel' },
       h('div', { class: 'kg-head' }, 'Dans la page de Google en bas, fais ces 4 touchers :'),
@@ -2780,6 +2782,29 @@ const KeyGuide = {
       h('div', { class: 'kg-step' }, h('span', { class: 'kg-num' }, '4'), h('span', {}, 'Quand tu as fini, appuie sur le ', h('span', { class: 'kg-chip x' }, '✕'), ' ', h('span', { class: 'kg-where' }, 'en haut à gauche'), ' pour fermer la page. C\'est tout !'))));
     this.active = true;
     AndroidAI.openKeyPage();
+  },
+  // Télé : pas de vrai navigateur ni de clavier ; la clé arrive du téléphone par le Wi-Fi (même page que « Recevoir des livres »)
+  startTv() {
+    const addr = AndroidAI.receiveStart();
+    if (!addr) return this.manual('Connecte la télé au Wi-Fi de la maison pour recevoir la clé depuis ton téléphone, ou tape-la ici.');
+    let done = false;
+    AndroidAI.receiveKey(true);
+    window.__cleRecue = (t) => {
+      const k = this.find(t);
+      if (!k) return toast('Ce qui a été envoyé n\'est pas une clé (elle commence par AQ. ou AIza).');
+      done = true; close(); this.lastTried = ''; this.verify(k);
+    };
+    const close = sheet('IA gratuite sur la télé', h('div', {},
+      h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut une « clé ». Le plus simple : la faire sur ton téléphone et l\'envoyer à la télé.'),
+      h('ol', { class: 'kg-list' },
+        h('li', {}, 'Sur ton téléphone, branché sur le même Wi-Fi, ouvre Chrome et tape :', h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, ''))),
+        h('li', {}, 'Dans la section « 🔑 Clé IA gratuite », ouvre la page de Google, crée la clé et copie-la.'),
+        h('li', {}, 'Colle-la dans la case, puis « Envoyer la clé à la télé ». La télé la vérifie toute seule.')),
+      h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur tes appareils.'),
+      h('div', { class: 'actions', style: { marginTop: '14px' } },
+        h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'Taper la clé avec la télécommande'))), { wide: true });
+    const scrim = $$('.scrim').pop();
+    new MutationObserver((_, o) => { if (scrim.isConnected) return; o.disconnect(); try { AndroidAI.receiveKey(false); } catch {} window.__cleRecue = null; if (!Recv.busy && !Recv.queue.length && !$('.recv-list')) { try { AndroidAI.receiveStop(); } catch {} } if (!done) this.then = null; }).observe(document.body, { childList: true });
   },
   // Version web (iPhone…) : la page de Google s'ouvre dans un nouvel onglet ; en revenant, « Coller ma clé »
   startWeb() {

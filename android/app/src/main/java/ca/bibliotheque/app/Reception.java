@@ -16,6 +16,9 @@ import java.nio.charset.StandardCharsets;
  */
 final class Reception {
     interface Arrive { void livre(String file, String name); }
+    /** Clé IA envoyée depuis le téléphone (la télé n'a ni navigateur pratique ni clavier) : vérifiée puis gardée par l'app */
+    interface Cle { void recue(String texte); }
+    static volatile Cle cle;
     private static ServerSocket server;
     private static File dir;
     private static Arrive cb;
@@ -68,6 +71,16 @@ final class Reception {
                 if (key.equals("x-name")) name = URLDecoder.decode(val, "UTF-8");
             }
             if (method.equals("GET")) { reply(out, "200 OK", "text/html; charset=utf-8", PAGE.getBytes(StandardCharsets.UTF_8)); return; }
+            if (method.equals("POST") && path.startsWith("/cle")) {
+                if (len <= 0 || len > 2048) { reply(out, "400 Bad Request", "text/plain", new byte[0]); return; }
+                byte[] b = new byte[(int) len]; int got = 0, n;
+                while (got < b.length && (n = in.read(b, got, b.length - got)) > 0) got += n;
+                String t = new String(b, 0, got, StandardCharsets.UTF_8).trim();
+                Cle c = cle;
+                reply(out, c != null && !t.isEmpty() ? "200 OK" : "503 Service Unavailable", "text/plain", "ok".getBytes());
+                if (c != null && !t.isEmpty()) c.recue(t);
+                return;
+            }
             if (method.equals("POST") && path.startsWith("/envoi")) {
                 String clean = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
                 if (clean.length() > 120) clean = clean.substring(clean.length() - 120);
@@ -89,13 +102,21 @@ final class Reception {
     }
 
     private static final String PAGE = "<!doctype html><html lang=fr><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-        + "<title>Envoyer des livres à la Bibliothèque</title><style>"
+        + "<title>Envoyer à Mike Library</title><style>"
         + "body{margin:0;font:17px system-ui,sans-serif;background:#1e1712;color:#f3e9da;padding:22px}h1{font:600 24px Georgia,serif;margin:6px 0 10px}"
         + "label.big{display:block;text-align:center;background:#d4ab6a;color:#241809;font-weight:700;border-radius:16px;padding:20px;margin:18px 0;font-size:19px}"
-        + "input{display:none}.f{background:#2a201a;border-radius:12px;padding:10px 12px;margin:8px 0}.bar{height:6px;background:#3a2c22;border-radius:3px;margin-top:6px;overflow:hidden}"
+        + "#f{display:none}#k{width:100%;box-sizing:border-box;font:16px monospace;padding:14px;border-radius:12px;border:1px solid #6b5640;background:#140f0b;color:#f3e9da}"
+        + "button{width:100%;margin-top:10px;font:700 17px system-ui,sans-serif;border:0;border-radius:14px;padding:15px;background:#d4ab6a;color:#241809}a{color:#e8c27e}h2{font:600 20px Georgia,serif;margin:30px 0 6px}"
+        + "..f{background:#2a201a;border-radius:12px;padding:10px 12px;margin:8px 0}.bar{height:6px;background:#3a2c22;border-radius:3px;margin-top:6px;overflow:hidden}"
         + ".bar i{display:block;height:100%;width:0;background:#d4ab6a}.ok{color:#8fbf7f}.err{color:#e2735e}p{opacity:.8}</style></head><body>"
         + "<h1>📚 Envoyer des livres</h1><p>Choisis tes livres (PDF, EPUB, Word…) : ils arrivent tout de suite dans la Bibliothèque de la télé.</p>"
         + "<label class=big>Choisir des livres<input id=f type=file multiple accept='.pdf,.epub,.docx,.doc,.odt,.rtf,.txt,.md,.mobi,.azw3,.fb2,.mp3,.m4b'></label><div id=l></div>"
+        + "<h2>🔑 Clé IA gratuite pour la télé</h2><p>Pour les vidéos, résumés, balados et le Professeur sur la télé.</p>"
+        + "<p>1. <a href='https://aistudio.google.com/apikey' target=_blank>Ouvre la page des clés de Google</a> : « Créer une clé API », puis copie la clé avec le petit carré.<br>2. Reviens ici, colle-la dans la case et envoie.</p>"
+        + "<input id=k type=text autocomplete=off autocapitalize=off spellcheck=false placeholder='AQ.… ou AIza…'><button id=ks>Envoyer la clé à la télé</button><p id=km></p>"
+        + "<script>document.getElementById('ks').onclick=()=>{const m=document.getElementById('km'),v=document.getElementById('k').value.trim();if(!v){m.textContent='Colle d\\'abord ta clé dans la case.';m.className='err';return}"
+        + "const x=new XMLHttpRequest();x.open('POST','/cle');x.onload=()=>{const ok=x.status==200;m.textContent=ok?'✔ Clé envoyée : regarde la télé, elle la vérifie.':'La télé n\\'attend pas de clé : ouvre d\\'abord « Vidéo » ou les réglages de l\\'IA sur la télé.';m.className=ok?'ok':'err'};"
+        + "x.onerror=()=>{m.textContent='Échec : la télé et le téléphone sont-ils sur le même Wi-Fi ?';m.className='err'};x.send(v)}</script>"
         + "<script>const l=document.getElementById('l');document.getElementById('f').onchange=async e=>{for(const file of e.target.files){"
         + "const d=document.createElement('div');d.className='f';d.innerHTML='<b></b><div class=bar><i></i></div><small></small>';d.querySelector('b').textContent=file.name;l.prepend(d);"
         + "await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/envoi');x.setRequestHeader('X-Name',encodeURIComponent(file.name));"

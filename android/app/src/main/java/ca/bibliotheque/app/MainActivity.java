@@ -1829,6 +1829,8 @@ public class MainActivity extends Activity {
             }); return a == null ? "" : a; } catch (Exception e) { return ""; }
         }
         @JavascriptInterface public void receiveStop() { Reception.stop(); }
+        /** La télé attend une clé IA envoyée depuis le téléphone (page de réception) */
+        @JavascriptInterface public void receiveKey(boolean on) { Reception.cle = on ? (t) -> js("__cleRecue", t) : null; }
         @JavascriptInterface public void receiveDone(String file) { if (file != null && file.matches("[fw]\\d+\\.[a-z0-9]{1,6}")) new File(Reception.dir(MainActivity.this), file).delete(); }
 
         /** Parcours guidé de la clé gratuite : page de Google en panneau, lecture de la copie, vérification */
@@ -1924,6 +1926,11 @@ public class MainActivity extends Activity {
     void openKeyPage() {
         runOnUiThread(() -> {
             Uri url = Uri.parse("https://aistudio.google.com/apikey");
+            if (isTv()) { // télé : pas d'onglet Chrome ; un navigateur seulement s'il y en a un, sinon rien (la clé arrive du téléphone)
+                Intent v = new Intent(Intent.ACTION_VIEW, url);
+                try { if (v.resolveActivity(getPackageManager()) != null) { keyPageOpen = true; startActivity(v); } } catch (Exception e) { keyPageOpen = false; }
+                return;
+            }
             try {
                 androidx.browser.customtabs.CustomTabsIntent.Builder b = keySession != null
                         ? new androidx.browser.customtabs.CustomTabsIntent.Builder(keySession) : new androidx.browser.customtabs.CustomTabsIntent.Builder();
