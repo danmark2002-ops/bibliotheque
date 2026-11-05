@@ -8,6 +8,20 @@
   def(String.prototype, 'at', function (n) { n = Math.trunc(n) || 0; if (n < 0) n += this.length; return n < 0 || n >= this.length ? undefined : this[n]; });
   def(String.prototype, 'replaceAll', function (a, b) { return this.replace(a instanceof RegExp ? a : new RegExp(String(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), b); });
   def(Object, 'hasOwn', (o, k) => Object.prototype.hasOwnProperty.call(o, k));
+  // « for await » sur un flux (pdf.js : texte des pages, pour les résumés, vidéos, balados) : absent avant Chrome 124
+  window.__rsIterOld = typeof ReadableStream !== 'undefined' && !ReadableStream.prototype[Symbol.asyncIterator];
+  if (window.__rsIterOld) {
+    const values = function (o) {
+      const r = this.getReader(), keep = !!(o && o.preventCancel);
+      return {
+        next: () => r.read().then((x) => { if (x.done) { try { r.releaseLock(); } catch (e) { } } return x; }),
+        return: (v) => (keep ? Promise.resolve() : r.cancel(v).catch(() => {})).then(() => { try { r.releaseLock(); } catch (e) { } return { done: true, value: v }; }),
+        [Symbol.asyncIterator]() { return this; },
+      };
+    };
+    def(ReadableStream.prototype, 'values', values);
+    def(ReadableStream.prototype, Symbol.asyncIterator, values);
+  }
   const KEY = 'bib.errlog';
   let last = '', lastT = 0;
   const add = (m) => { m = String(m); const t = Date.now(); if (m === last && t - lastT < 5000) return; last = m; lastT = t; try { const l = JSON.parse(localStorage.getItem(KEY) || '[]'); l.push(new Date(t - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace('T', ' ') + ' ' + m.slice(0, 400)); localStorage.setItem(KEY, JSON.stringify(l.slice(-25))); } catch (e) { } };
@@ -61,7 +75,7 @@ window.LocalAPI = (() => {
       const CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/legacy/build/';
       let m = null, worker = null;
       if (LOCAL_PDF) {
-        try { m = await import(new URL('pdfjs/pdf.min.mjs', location.href).href); worker = new URL('pdfjs/pdf.worker.min.mjs', location.href).href; } catch { m = null; }
+        try { m = await import(new URL('pdfjs/pdf.min.mjs', location.href).href); worker = new URL(window.__rsIterOld ? 'pdfjs/pdf.worker.compat.mjs' : 'pdfjs/pdf.worker.min.mjs', location.href).href; } catch { m = null; }
       }
       if (!m) { worker = CDN + 'pdf.worker.min.mjs'; m = await import(CDN + 'pdf.min.mjs'); }
       m.GlobalWorkerOptions.workerSrc = worker;

@@ -752,6 +752,16 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .bact svg { flex: none; width: 19px; height: 19px; padding: 10px; box-sizing: content-box; border-radius: 50%; color: var(--brass-hi, var(--brass));
   border: 1px solid var(--brass-2); background: radial-gradient(circle at 50% 35%, rgba(228, 181, 88, .28), rgba(0,0,0,.2) 75%); box-shadow: 0 0 12px -3px var(--glow, transparent); }
 .bact::after { content: ''; flex: none; width: 8px; height: 8px; margin-right: 4px; border-top: 2px solid var(--ink-3); border-right: 2px solid var(--ink-3); transform: rotate(45deg); }
+/* Télé : les actions du livre en grandes tuiles, toutes visibles d'un coup, faciles à viser à la télécommande */
+.tv .tvbook .bookacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tv .tvbook .bact { flex-direction: column; justify-content: center; text-align: center; gap: 10px; min-height: 104px; padding: 14px 8px; border-radius: 18px; font-size: 15px; line-height: 1.25; }
+.tv .tvbook .bact span { flex: none; }
+.tv .tvbook .bact svg { width: 24px; height: 24px; padding: 11px; }
+.tv .tvbook .bact::after { display: none; }
+.tv .tvbook .bact:focus { outline: none; background: var(--brass); color: var(--brass-ink); border-color: var(--brass-hi); transform: scale(1.04); }
+.tv .tvbook .bact:focus svg { color: var(--brass-ink); border-color: var(--brass-ink); background: rgba(255, 255, 255, .25); }
+.tv .tvbook .qbar.big { justify-content: center; gap: 28px; }
+.tv .tvbook .tvinfos { margin-top: 10px; }
 .bact.on { border-color: var(--brass); box-shadow: inset 0 1px 0 rgba(255, 231, 168, .08), 0 0 18px -8px var(--glow, transparent); }
 .aiopt { padding: 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel-2); margin-bottom: 12px; }
 .aiopt h4 { margin: 0 0 6px; font: 600 16px var(--font-display); }
@@ -1252,6 +1262,28 @@ pre.diag { white-space: pre-wrap; word-break: break-word; font-size: 11px; line-
         n += this.length; return n < 0 || n >= this.length ? undefined : this[n]; });
     def(String.prototype, 'replaceAll', function (a, b) { return this.replace(a instanceof RegExp ? a : new RegExp(String(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), b); });
     def(Object, 'hasOwn', (o, k) => Object.prototype.hasOwnProperty.call(o, k));
+    // « for await » sur un flux (pdf.js : texte des pages, pour les résumés, vidéos, balados) : absent avant Chrome 124
+    window.__rsIterOld = typeof ReadableStream !== 'undefined' && !ReadableStream.prototype[Symbol.asyncIterator];
+    if (window.__rsIterOld) {
+        const values = function (o) {
+            const r = this.getReader(), keep = !!(o && o.preventCancel);
+            return {
+                next: () => r.read().then((x) => { if (x.done) {
+                    try {
+                        r.releaseLock();
+                    }
+                    catch (e) { }
+                } return x; }),
+                return: (v) => (keep ? Promise.resolve() : r.cancel(v).catch(() => { })).then(() => { try {
+                    r.releaseLock();
+                }
+                catch (e) { } return { done: true, value: v }; }),
+                [Symbol.asyncIterator]() { return this; },
+            };
+        };
+        def(ReadableStream.prototype, 'values', values);
+        def(ReadableStream.prototype, Symbol.asyncIterator, values);
+    }
     const KEY = 'bib.errlog';
     let last = '', lastT = 0;
     const add = (m) => { m = String(m); const t = Date.now(); if (m === last && t - lastT < 5000)
@@ -1340,7 +1372,7 @@ window.LocalAPI = (() => {
             if (LOCAL_PDF) {
                 try {
                     m = await import(new URL('pdfjs/pdf.min.mjs', location.href).href);
-                    worker = new URL('pdfjs/pdf.worker.min.mjs', location.href).href;
+                    worker = new URL(window.__rsIterOld ? 'pdfjs/pdf.worker.compat.mjs' : 'pdfjs/pdf.worker.min.mjs', location.href).href;
                 }
                 catch {
                     m = null;
@@ -5640,6 +5672,9 @@ function sheet(title, body, { wide } = {}) {
     const scrim = h('div', { class: 'scrim', onclick: (e) => { if (e.target === scrim)
             close(); } }, h('div', { class: 'sheet' + (wide ? ' wide' : ''), role: 'dialog', 'aria-label': title }, h('div', { class: 'sheet-head' }, h('h2', {}, title), h('button', { class: 'rbtn', onclick: close, 'aria-label': 'Fermer' }, icon('close'))), body));
     document.body.append(scrim);
+    if (TV.on)
+        setTimeout(() => { if (scrim.isConnected && !scrim.contains(document.activeElement))
+            TV.first(); }, 40); // télécommande : la sélection entre dans la fenêtre
     const onKey = (e) => { if (e.key === 'Escape') {
         close();
         removeEventListener('keydown', onKey);
@@ -5668,8 +5703,15 @@ function editBook(b) {
                 window.__reader.switchView(v);
             else
                 toast(v === 'text' ? 'Le livre s\'ouvrira en texte' : 'Le livre s\'ouvrira en photos'); } }, icon('type'), h('span', {}, store.get('view:' + b.id, 'text') === 'text' ? 'Revenir aux photos' : 'Lire en texte'))
-        : h('button', { class: 'bact', onclick: () => { var _a, _b; close(); Ocr.run(b, ((_b = (_a = window.__reader) === null || _a === void 0 ? void 0 : _a.b) === null || _b === void 0 ? void 0 : _b.id) === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null, b.kind !== 'audio' ? h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null, Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null, Balado.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (((_d = Balado.info(b.id)) === null || _d === void 0 ? void 0 : _d.made) ? ' on' : ''), onclick: () => { close(); Balado.open(b); } }, icon('mic'), h('span', {}, 'Balado')) : null, Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
-    const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {}, actRow, qb, !b.trashed && local ? h('div', { class: 'field' }, 'Ranger dans', libChips([b], () => close())) : null, local && cols.length ? h('p', { class: 'muted' }, 'Collections : ' + cols.join(', ')) : null, b.trashed ? null : h('label', { class: 'field' }, 'Titre', title), b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author), !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null, h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages${b.size ? ' · ' + (b.size > 1e6 ? (b.size / 1e6).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(b.size / 1e3)) + ' ko') : ''}`), h('p', { class: 'muted' }, b.progress ? `Page ${b.progress.page} sur ${b.pages} · dernière lecture : ${lastRead(b.progress.last)} · ouvert ${b.progress.opens} fois` : 'Pas encore ouvert'), b.trashed ? null : h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } }, h('button', { class: 'btn danger', onclick: async () => {
+        : h('button', { class: 'bact', onclick: () => { var _a, _b; close(); Ocr.run(b, ((_b = (_a = window.__reader) === null || _a === void 0 ? void 0 : _a.b) === null || _b === void 0 ? void 0 : _b.id) === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null, b.kind !== 'audio' ? h('button', { class: 'bact ai' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null, Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null, Balado.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (((_d = Balado.info(b.id)) === null || _d === void 0 ? void 0 : _d.made) ? ' on' : ''), onclick: () => { close(); Balado.open(b); } }, icon('mic'), h('span', {}, 'Balado')) : null, Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
+    const infos = [
+        b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
+        b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author),
+        !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null
+    ];
+    if (TV.on && actRow)
+        actRow.prepend(...$$('.bact.ai', actRow)); // télé : Résumé, Professeur, Balado, Vidéo en premier
+    const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', { class: TV.on ? 'tvbook' : '' }, actRow, qb, !b.trashed && local ? h('div', { class: 'field' }, 'Ranger dans', libChips([b], () => close())) : null, local && cols.length ? h('p', { class: 'muted' }, 'Collections : ' + cols.join(', ')) : null, ...(TV.on && !b.trashed ? [h('details', { class: 'more tvinfos' }, h('summary', {}, 'Modifier le titre, l\'auteur ou la couleur'), ...infos)] : infos), h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages${b.size ? ' · ' + (b.size > 1e6 ? (b.size / 1e6).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(b.size / 1e3)) + ' ko') : ''}`), h('p', { class: 'muted' }, b.progress ? `Page ${b.progress.page} sur ${b.pages} · dernière lecture : ${lastRead(b.progress.last)} · ouvert ${b.progress.opens} fois` : 'Pas encore ouvert'), b.trashed ? null : h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } }, h('button', { class: 'btn danger', onclick: async () => {
             if (local) {
                 close();
                 return trashBook(b);
@@ -5681,7 +5723,7 @@ function editBook(b) {
             await loadBooks();
             renderLibrary();
             toast('Livre retiré');
-        } }, local ? 'Mettre à la poubelle' : 'Supprimer'), h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
+        } }, local ? 'Mettre à la poubelle' : 'Supprimer'), h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))), { wide: TV.on });
 }
 // Journal des problèmes : l'appareil, la version du moteur web, les erreurs récentes et les fermetures de l'app.
 // Sur un appareil ancien qui « fait des siennes », la personne le copie et l'envoie : on sait quoi corriger.
@@ -10550,7 +10592,7 @@ const TV = {
             .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
     },
     scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
-    first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || this.focusables(sc)[0]; if (f) {
+    first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || (sc !== document.body && sc.querySelector && (sc.querySelector('.bact.ai') || sc.querySelector('.bact'))) || this.focusables(sc)[0]; if (f) {
         f.focus({ preventScroll: true });
         f.scrollIntoView({ block: 'center' });
     } },

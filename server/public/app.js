@@ -1701,6 +1701,7 @@ function sheet(title, body, { wide } = {}) {
       h('div', { class: 'sheet-head' }, h('h2', {}, title), h('button', { class: 'rbtn', onclick: close, 'aria-label': 'Fermer' }, icon('close'))),
       body));
   document.body.append(scrim);
+  if (TV.on) setTimeout(() => { if (scrim.isConnected && !scrim.contains(document.activeElement)) TV.first(); }, 40); // télécommande : la sélection entre dans la fenêtre
   const onKey = (e) => { if (e.key === 'Escape') { close(); removeEventListener('keydown', onKey); } };
   addEventListener('keydown', onKey);
   return close;
@@ -1723,18 +1724,21 @@ function editBook(b) {
     PAGED(b.kind) && Ocr.on() ? (b.ocr === 'done'
       ? h('button', { class: 'bact on', onclick: () => { close(); const v = store.get('view:' + b.id, 'text') === 'text' ? 'photo' : 'text'; store.set('view:' + b.id, v); if (window.__reader?.b?.id === b.id) window.__reader.switchView(v); else toast(v === 'text' ? 'Le livre s\'ouvrira en texte' : 'Le livre s\'ouvrira en photos'); } }, icon('type'), h('span', {}, store.get('view:' + b.id, 'text') === 'text' ? 'Revenir aux photos' : 'Lire en texte'))
       : h('button', { class: 'bact', onclick: () => { close(); Ocr.run(b, window.__reader?.b?.id === b.id ? window.__reader.page : 1); } }, icon('type'), h('span', {}, b.ocr === 'partial' ? 'Continuer la conversion en texte' : 'Convertir les photos en texte'))) : null,
-    b.kind !== 'audio' ? h('button', { class: 'bact' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null,
-    Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null,
-    Balado.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Balado.info(b.id)?.made ? ' on' : ''), onclick: () => { close(); Balado.open(b); } }, icon('mic'), h('span', {}, 'Balado')) : null,
-    Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
-  const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', {},
+    b.kind !== 'audio' ? h('button', { class: 'bact ai' + (b.summary ? ' on' : ''), onclick: () => { close(); openSummary(b); } }, icon('spark'), h('span', {}, b.summary ? 'Voir le résumé' : 'Résumé IA')) : null,
+    Prof.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (Prof.info(b.id) ? ' on' : ''), onclick: () => { close(); Prof.open(b); } }, icon('prof'), h('span', {}, 'Professeur')) : null,
+    Balado.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (Balado.info(b.id)?.made ? ' on' : ''), onclick: () => { close(); Balado.open(b); } }, icon('mic'), h('span', {}, 'Balado')) : null,
+    Video.on() && b.kind !== 'audio' ? h('button', { class: 'bact ai' + (Video.exists(b.id) ? ' on' : ''), onclick: () => { close(); Video.open(b); } }, icon('film'), h('span', {}, 'Vidéo')) : null) : null;
+  const infos = [
+    b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
+    b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author),
+    !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null];
+  if (TV.on && actRow) actRow.prepend(...$$('.bact.ai', actRow)); // télé : Résumé, Professeur, Balado, Vidéo en premier
+  const close = sheet(b.trashed ? 'Dans la poubelle' : b.title, h('div', { class: TV.on ? 'tvbook' : '' },
     actRow,
     qb,
     !b.trashed && local ? h('div', { class: 'field' }, 'Ranger dans', libChips([b], () => close())) : null,
     local && cols.length ? h('p', { class: 'muted' }, 'Collections : ' + cols.join(', ')) : null,
-    b.trashed ? null : h('label', { class: 'field' }, 'Titre', title),
-    b.trashed ? null : h('label', { class: 'field' }, 'Auteur', author),
-    !b.trashed && b.kind !== 'pdf' ? h('div', { class: 'field' }, 'Couleur de la couverture', sw) : null,
+    ...(TV.on && !b.trashed ? [h('details', { class: 'more tvinfos' }, h('summary', {}, 'Modifier le titre, l\'auteur ou la couleur'), ...infos)] : infos),
     h('p', { class: 'muted' }, `${KIND[b.kind] || b.kind} · ${b.pages} pages${b.size ? ' · ' + (b.size > 1e6 ? (b.size / 1e6).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(b.size / 1e3)) + ' ko') : ''}`),
     h('p', { class: 'muted' }, b.progress ? `Page ${b.progress.page} sur ${b.pages} · dernière lecture : ${lastRead(b.progress.last)} · ouvert ${b.progress.opens} fois` : 'Pas encore ouvert'),
     b.trashed ? null : h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
@@ -1742,7 +1746,7 @@ function editBook(b) {
         if (local) { close(); return trashBook(b); }
         if (!confirm(`Retirer « ${b.title} » de la bibliothèque ?`)) return; await api('/api/books/' + b.id, { method: 'DELETE' }); close(); await loadBooks(); renderLibrary(); toast('Livre retiré');
       } }, local ? 'Mettre à la poubelle' : 'Supprimer'),
-      h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))));
+      h('button', { class: 'btn primary', onclick: async () => { await post('/api/books/' + b.id, { title: title.value, author: author.value, color }, 'PATCH'); close(); await loadBooks(); renderLibrary(); } }, 'Enregistrer'))), { wide: TV.on });
 }
 // Journal des problèmes : l'appareil, la version du moteur web, les erreurs récentes et les fermetures de l'app.
 // Sur un appareil ancien qui « fait des siennes », la personne le copie et l'envoie : on sait quoi corriger.
@@ -4940,7 +4944,7 @@ const TV = {
       .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
   },
   scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
-  first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || this.focusables(sc)[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
+  first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || (sc !== document.body && sc.querySelector && (sc.querySelector('.bact.ai') || sc.querySelector('.bact'))) || this.focusables(sc)[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
   held: null,
   key(e) {
     Shelves.flush();
