@@ -39,6 +39,7 @@ Mise à jour : 2026-10-28 (v10.1). À lire au début de chaque conversation.
 - v10.35 : télé — effets légers (sans flou d'arrière-plan, gourmand en mémoire vidéo) pour éviter les fermetures ; le Journal des problèmes note maintenant la vraie cause d'une fermeture selon Android (mémoire, plantage du moteur d'affichage, app figée).
 - v10.36 : moteurs web plus anciens (télé) — la lecture du texte des PDF ne plante plus (« e is not async iterable ») : Résumé IA, Vidéo, Balado et Professeur fonctionnent ; télé — le menu d'un livre en grandes tuiles (Résumé, Professeur, Balado, Vidéo d'abord), sélection dès l'ouverture, titre/auteur repliés.
 - v10.37 : télé — tourner les pages à la télécommande ne fait plus apparaître de cadre blanc sur le côté (la touche n'est plus aussi passée à la navigation d'Android, et le cadre de sélection d'Android est coupé : l'app dessine les siens).
+- v10.38 : télé — à l'ouverture d'une fenêtre, la sélection va sur le bouton principal (ex. « Faire le résumé ») et jamais sur le X : OK ne referme plus la fenêtre par erreur.
 - Idée à débattre (propriétaire, 2026-10-28) : étagères séparées pour balados / résumés / vidéos faits à partir des livres.
 - Leçon : le masque CSS sur 1 500 icônes ralentissait le défilement (mesuré) → images déjà colorées ; content-visibility reste exclu (sautait sur Android, v6.8).
 - v9.1 envoi chiffré de livres · v9.2–9.8 télé (télécommande, loupe, icônes sous les livres) · v10.0 Gemini Pro : raison du refus lue, attente ≤ 15 s · v10.1 clés chiffrées (Keystore), couvertures protégées.

@@ -10593,10 +10593,15 @@ const TV = {
             .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
     },
     scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
-    first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || (sc !== document.body && sc.querySelector && (sc.querySelector('.bact.ai') || sc.querySelector('.bact'))) || this.focusables(sc)[0]; if (f) {
-        f.focus({ preventScroll: true });
-        f.scrollIntoView({ block: 'center' });
-    } },
+    first() {
+        const sc = this.scope();
+        const all = this.focusables(sc), body = all.filter((x) => !x.closest('.sheet-head')); // dans une fenêtre : jamais d'abord sur le X (OK la fermerait)
+        const f = (sc === document.body && document.querySelector('.wrap .book')) || (sc !== document.body && (body.find((x) => x.matches('.bact.ai')) || body.find((x) => x.matches('.bact')) || body.find((x) => x.matches('.btn.primary')) || body[0])) || all[0];
+        if (f) {
+            f.focus({ preventScroll: true });
+            f.scrollIntoView({ block: 'center' });
+        }
+    },
     held: null,
     key(e) {
         var _a;
