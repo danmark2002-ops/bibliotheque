@@ -795,10 +795,11 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .railbtn { display: flex; align-items: center; gap: 12px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 10px;
   background: transparent; color: var(--ink-2); font: 500 14px/1.2 var(--font-ui, inherit); text-align: left; cursor: pointer; flex: none; }
 .railbtn svg { width: 20px; height: 20px; flex: none; color: var(--brass); }
-.railbtn.sel { background: var(--brass); color: var(--brass-ink); font-weight: 600; }
-.railbtn.sel svg { color: var(--brass-ink); }
-.tv .railbtn:focus { outline: none; background: var(--panel-2); color: var(--brass-hi); box-shadow: inset 0 0 0 2px var(--brass); }
-.tv .railbtn.sel:focus { background: var(--brass-hi); color: var(--brass-ink); }
+/* la page affichée : texte or et petite barre à gauche ; la SÉLECTION de la télécommande, elle, est le bloc doré plein (un seul repère fort) */
+.railbtn.sel { color: var(--brass-hi); font-weight: 600; box-shadow: inset 3px 0 0 var(--brass); border-radius: 4px 10px 10px 4px; }
+.tv .railbtn:focus { outline: none; background: var(--brass); color: var(--brass-ink); box-shadow: 0 0 0 2px var(--brass-hi), 0 6px 18px -6px var(--glow); transform: scale(1.04); }
+.tv .railbtn:focus svg { color: var(--brass-ink); }
+.railbtn { transition: transform .12s, background-color .12s; }
 .railsep { display: block; height: 1px; margin: 5px 6px; background: var(--glass-line); flex: none; }
 .tvtitle { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
 .tvtitle b { font: italic 600 24px/1.2 var(--font-display); color: var(--brass-hi); }

@@ -806,10 +806,11 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .railbtn { display: flex; align-items: center; gap: 12px; min-height: 32px; padding: 0 12px; border: 0; border-radius: 10px;
   background: transparent; color: var(--ink-2); font: 500 14px/1.2 var(--font-ui, inherit); text-align: left; cursor: pointer; flex: none; }
 .railbtn svg { width: 20px; height: 20px; flex: none; color: var(--brass); }
-.railbtn.sel { background: var(--brass); color: var(--brass-ink); font-weight: 600; }
-.railbtn.sel svg { color: var(--brass-ink); }
-.tv .railbtn:focus { outline: none; background: var(--panel-2); color: var(--brass-hi); box-shadow: inset 0 0 0 2px var(--brass); }
-.tv .railbtn.sel:focus { background: var(--brass-hi); color: var(--brass-ink); }
+/* la page affichée : texte or et petite barre à gauche ; la SÉLECTION de la télécommande, elle, est le bloc doré plein (un seul repère fort) */
+.railbtn.sel { color: var(--brass-hi); font-weight: 600; box-shadow: inset 3px 0 0 var(--brass); border-radius: 4px 10px 10px 4px; }
+.tv .railbtn:focus { outline: none; background: var(--brass); color: var(--brass-ink); box-shadow: 0 0 0 2px var(--brass-hi), 0 6px 18px -6px var(--glow); transform: scale(1.04); }
+.tv .railbtn:focus svg { color: var(--brass-ink); }
+.railbtn { transition: transform .12s, background-color .12s; }
 .railsep { display: block; height: 1px; margin: 5px 6px; background: var(--glass-line); flex: none; }
 .tvtitle { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
 .tvtitle b { font: italic 600 24px/1.2 var(--font-display); color: var(--brass-hi); }
@@ -4213,8 +4214,21 @@ function renderLibrary(opts = {}) {
 // Télé : le menu vertical à gauche (logo, sortes de contenu, actions), pensé pour la télécommande
 function tvRail(current) {
     const ck = S.ck || 'livres';
-    const item = (label, ic, fn, sel) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn }, icon(ic), h('span', {}, label));
-    return h('nav', { class: 'tvrail', 'aria-label': 'Menu' }, h('div', { class: 'railbrand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'wordmark' }, h('b', {}, 'Mike'), h('span', {}, 'Library'))), CK.map(([k, l, ic]) => item(l, ic, () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); }, ck === k)), current ? item('Reprendre', 'play', () => openBook(current)) : null, h('i', { class: 'railsep' }), item('Chercher', 'loupe', () => { const open = !(S.tvFind || S.filter); S.ck = 'livres'; store.set('ck', 'livres'); S.tvFind = open; if (!open)
+    const item = (label, ic, fn, sel, more) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn, ...(more || {}) }, icon(ic), h('span', {}, label));
+    // Livres, Balados, Résumés, Vidéos : il suffit de passer dessus avec les flèches, le contenu suit (comme les menus des télés)
+    const pick = (k) => {
+        clearTimeout(tvRail.t);
+        if ((S.ck || 'livres') === k)
+            return;
+        S.ck = k;
+        store.set('ck', k);
+        renderLibrary({ now: true });
+        const b = document.querySelector(`.railbtn[data-ck="${k}"]`);
+        if (b)
+            b.focus({ preventScroll: true });
+    };
+    return h('nav', { class: 'tvrail', 'aria-label': 'Menu' }, h('div', { class: 'railbrand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'wordmark' }, h('b', {}, 'Mike'), h('span', {}, 'Library'))), CK.map(([k, l, ic]) => item(l, ic, () => pick(k), ck === k, { 'data-ck': k, onfocus: () => { clearTimeout(tvRail.t); tvRail.t = setTimeout(() => { var _a, _b; if (((_b = (_a = document.activeElement) === null || _a === void 0 ? void 0 : _a.dataset) === null || _b === void 0 ? void 0 : _b.ck) === k)
+            pick(k); }, 350); } })), current ? item('Reprendre', 'play', () => openBook(current)) : null, h('i', { class: 'railsep' }), item('Chercher', 'loupe', () => { const open = !(S.tvFind || S.filter); S.ck = 'livres'; store.set('ck', 'livres'); S.tvFind = open; if (!open)
         S.filter = ''; renderLibrary({ now: true }); if (open)
         setTimeout(() => { const i = $('.search'); if (i)
             i.focus(); }, 60); }, S.tvFind || !!S.filter), item('Ajouter un livre', 'plus', openAddMenu), item('Dossier de PDF', 'folder', () => (S.lib !== 'all' ? openFolder() : addFolderLib())), folderInfo() || (S.lib === 'all' && libsWithFolder().length) ? item('Actualiser', 'refresh', () => refreshFolders()) : null, Recv.ok() ? item('Recevoir (Wi-Fi)', 'wifi', () => Recv.open()) : null, h('i', { class: 'railsep' }), item('Réglages', 'gear', openSettings), item('Menu', 'menu', openDrawer));
@@ -5569,7 +5583,7 @@ function creationsEl(kind) {
         creationsEl.t = setTimeout(() => { if (S.ck === 'balados' && !$('.scrim') && !$('.reader'))
             renderLibrary({ now: true }); }, 2500);
     if (!items.length)
-        return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, HOW[kind]));
+        return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, TV.on ? HOW[kind].replace('Appui long sur un livre (ou ⋮)', 'Dans Livres, garde OK enfoncé sur un livre (ou ⋮ dans le livre ouvert)') : HOW[kind]));
     return h('div', { class: 'mklist' }, h('p', { class: 'muted mkcount' }, `${items.length} ${NAME[kind]}${items.length > 1 ? 's, faits' : ', fait'} à partir de tes livres`), items.map((x) => h('div', { class: 'mkrow', role: 'button', tabindex: '0', onclick: x.open }, h('span', { class: 'mkthumb' }, coverEl(x.b)), h('span', { class: 'mkinfo' }, h('b', {}, x.b.title), h('small', {}, x.sub), h('em', {}, x.note)), h('span', { class: 'mkgo' }, icon(x.ic), x.act), h('button', { class: 'mkdel', 'aria-label': `Supprimer (${NAME[kind]} de « ${x.b.title} »)`, title: 'Supprimer', onclick: (e) => {
             e.stopPropagation();
             if (!confirm(`Supprimer ${kind === 'videos' ? 'la vidéo' : 'le ' + NAME[kind]} de « ${x.b.title} » ? Le livre, lui, reste dans ta bibliothèque.`))

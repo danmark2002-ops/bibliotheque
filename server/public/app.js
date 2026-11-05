@@ -698,10 +698,17 @@ function renderLibrary(opts = {}) {
 // Télé : le menu vertical à gauche (logo, sortes de contenu, actions), pensé pour la télécommande
 function tvRail(current) {
   const ck = S.ck || 'livres';
-  const item = (label, ic, fn, sel) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn }, icon(ic), h('span', {}, label));
+  const item = (label, ic, fn, sel, more) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn, ...(more || {}) }, icon(ic), h('span', {}, label));
+  // Livres, Balados, Résumés, Vidéos : il suffit de passer dessus avec les flèches, le contenu suit (comme les menus des télés)
+  const pick = (k) => {
+    clearTimeout(tvRail.t);
+    if ((S.ck || 'livres') === k) return;
+    S.ck = k; store.set('ck', k); renderLibrary({ now: true });
+    const b = document.querySelector(`.railbtn[data-ck="${k}"]`); if (b) b.focus({ preventScroll: true });
+  };
   return h('nav', { class: 'tvrail', 'aria-label': 'Menu' },
     h('div', { class: 'railbrand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'wordmark' }, h('b', {}, 'Mike'), h('span', {}, 'Library'))),
-    CK.map(([k, l, ic]) => item(l, ic, () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); }, ck === k)),
+    CK.map(([k, l, ic]) => item(l, ic, () => pick(k), ck === k, { 'data-ck': k, onfocus: () => { clearTimeout(tvRail.t); tvRail.t = setTimeout(() => { if (document.activeElement?.dataset?.ck === k) pick(k); }, 350); } })),
     current ? item('Reprendre', 'play', () => openBook(current)) : null,
     h('i', { class: 'railsep' }),
     item('Chercher', 'loupe', () => { const open = !(S.tvFind || S.filter); S.ck = 'livres'; store.set('ck', 'livres'); S.tvFind = open; if (!open) S.filter = ''; renderLibrary({ now: true }); if (open) setTimeout(() => { const i = $('.search'); if (i) i.focus(); }, 60); }, S.tvFind || !!S.filter),
@@ -1606,7 +1613,7 @@ function creationsEl(kind) {
   const HOW = { balados: 'Appui long sur un livre (ou ⋮), puis « Balado ».', resumes: 'Appui long sur un livre (ou ⋮), puis « Résumé IA ».', videos: 'Appui long sur un livre (ou ⋮), puis « Vidéo ».' };
   clearTimeout(creationsEl.t); // pendant qu'un balado se fabrique, la liste se met à jour toute seule
   if (kind === 'balados' && items.some((x) => x.act === 'Suivre')) creationsEl.t = setTimeout(() => { if (S.ck === 'balados' && !$('.scrim') && !$('.reader')) renderLibrary({ now: true }); }, 2500);
-  if (!items.length) return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, HOW[kind]));
+  if (!items.length) return h('div', { class: 'empty' }, h('h3', {}, `Pas encore de ${NAME[kind]}`), h('p', {}, TV.on ? HOW[kind].replace('Appui long sur un livre (ou ⋮)', 'Dans Livres, garde OK enfoncé sur un livre (ou ⋮ dans le livre ouvert)') : HOW[kind]));
   return h('div', { class: 'mklist' }, h('p', { class: 'muted mkcount' }, `${items.length} ${NAME[kind]}${items.length > 1 ? 's, faits' : ', fait'} à partir de tes livres`),
     items.map((x) => h('div', { class: 'mkrow', role: 'button', tabindex: '0', onclick: x.open },
       h('span', { class: 'mkthumb' }, coverEl(x.b)),
