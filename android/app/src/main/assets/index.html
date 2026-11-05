@@ -781,6 +781,27 @@ button.dhead > svg { width: 20px; height: 20px; color: var(--ink-3); transform: 
 .tv .reader:focus { outline: none; }
 .tv .book:focus { transform: translateY(-10px); outline: none; }
 .tv .book:focus .cover { box-shadow: 0 0 0 4px var(--brass), 10px 16px 22px -6px rgba(0,0,0,.6); }
+/* Télé : menu vertical fixe à gauche, l'étagère occupe tout le reste de l'écran */
+.tv .room { padding: 18px 24px 60px 224px; }
+.tvrail { position: fixed; left: 0; top: 0; bottom: 0; width: 200px; z-index: 5; box-sizing: border-box; overflow-y: auto;
+  padding: 18px 12px; display: flex; flex-direction: column; gap: 3px;
+  background: var(--panel); border-right: 1px solid var(--glass-line); }
+.railbrand { display: flex; align-items: center; gap: 10px; padding: 0 6px 14px; }
+.railbrand .mark { width: 40px; height: 40px; border-radius: 13px; box-shadow: none; }
+.railbrand .wordmark b { font-size: 19px; letter-spacing: .08em; }
+.railbrand .wordmark span { font-size: 10px; letter-spacing: .3em; margin-top: 3px; }
+.railbtn { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 12px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ink-2); font: 500 14px/1.2 var(--font-ui, inherit); text-align: left; cursor: pointer; flex: none; }
+.railbtn svg { width: 20px; height: 20px; flex: none; color: var(--brass); }
+.railbtn.sel { background: var(--brass); color: var(--brass-ink); font-weight: 600; }
+.railbtn.sel svg { color: var(--brass-ink); }
+.tv .railbtn:focus { outline: none; background: var(--panel-2); color: var(--brass-hi); box-shadow: inset 0 0 0 2px var(--brass); }
+.tv .railbtn.sel:focus { background: var(--brass-hi); color: var(--brass-ink); }
+.railsep { display: block; height: 1px; margin: 8px 6px; background: var(--glass-line); flex: none; }
+.tvtitle { display: flex; align-items: baseline; gap: 12px; margin: 0 0 10px; }
+.tvtitle b { font: italic 600 24px/1.2 var(--font-display); color: var(--brass-hi); }
+.tvtitle span { font-size: 13px; color: var(--ink-3); }
+.tvtitle .crumb { align-self: center; }
 
 /* Vidéo sur la télé : liste des appareils Google Cast */
 button.librow { width: 100%; padding: 10px 12px; gap: 12px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
@@ -3366,6 +3387,7 @@ const store = {
     catch { } },
 };
 const ICONS = {
+    wifi: '<path d="M4 10a12 12 0 0 1 16 0M7 13.5a7.5 7.5 0 0 1 10 0M10 17a3 3 0 0 1 4 0"/><circle cx="12" cy="19.5" r=".6"/>',
     globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     cart: '<path d="M3 4h2l2.4 11h10.2L20 7H6.2"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -3480,7 +3502,7 @@ if (!store.get('etagere15', false)) {
     store.set('etagere15', true);
 } // retour à l'étagère après la mise à jour
 const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf'), ck: store.get('ck', 'livres') };
-if (!store.get('mike1', false)) { // passage à Mike Library : le nouveau décor partout, une seule fois
+if (!store.get('mike2', false)) { // passage à Mike Library : le nouveau décor partout, une seule fois
     try {
         store.set('decor', 'mike');
         store.set('decorAll', 'mike');
@@ -3489,7 +3511,7 @@ if (!store.get('mike1', false)) { // passage à Mike Library : le nouveau décor
             store.set('libs', l.map((x) => ({ ...x, decor: 'mike' })));
     }
     catch { }
-    store.set('mike1', true);
+    store.set('mike2', true);
 }
 document.documentElement.dataset.decor = store.get('decor', 'mike');
 // ================= Démarrage =================
@@ -4121,7 +4143,8 @@ function renderLibrary(opts = {}) {
             await api('/api/books/' + b.id, { method: 'DELETE' }); await loadBooks(); renderLibrary(); toast('Poubelle vidée'); } }, 'Vider') : null) : null;
     const navBack = ['author', 'col', 'fmt'].includes(S.nav.k);
     const kinds = local && owner && S.ck && S.ck !== 'livres';
-    const room = h('div', { class: 'room' }, h('div', { class: 'wrap' }, h('header', { class: 'top' }, h('div', { class: 'brandbar' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('h1', { class: 'wordmark', 'aria-label': 'Mike Library' }, h('b', {}, 'Mike'), h('span', {}, 'Library')), h('button', { class: 'btn icon', title: 'Réglages', 'aria-label': 'Réglages', onclick: openSettings }, icon('gear')), local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null), h('div', { class: 'brand' }, h('p', { class: 'navline' }, navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null, h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`, S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)), actions), local && owner ? (libTabs() || h('div', { class: 'libtabs' }, h('button', { class: 'libtab sel', title: 'Changer de bibliothèque', onclick: openLibraries }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[(_d = curLib()) === null || _d === void 0 ? void 0 : _d.decor] || '#555' } }), h('span', {}, libName()), h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev'))))) : (!local ? h('p', { class: 'muted', style: { textAlign: 'center' } }, S.me.library || '') : null), local && owner ? kindTabs() : null, kinds ? creationsEl(S.ck) : null, !kinds && current ? heroEl(current) : null, kinds ? null : toolbar, kinds ? null : body, !kinds && owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null));
+    const tv = TV.on && local && owner; // télé : menu en rail à gauche, l'étagère prend tout l'écran
+    const room = h('div', { class: 'room' }, tv ? tvRail(current) : null, h('div', { class: 'wrap' }, tv ? h('p', { class: 'tvtitle' }, navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null, h('b', {}, kinds ? CK.find(([k]) => k === S.ck)[1] : navTitle()), kinds ? null : h('span', {}, count)) : null, tv ? null : h('header', { class: 'top' }, h('div', { class: 'brandbar' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('h1', { class: 'wordmark', 'aria-label': 'Mike Library' }, h('b', {}, 'Mike'), h('span', {}, 'Library')), h('button', { class: 'btn icon', title: 'Réglages', 'aria-label': 'Réglages', onclick: openSettings }, icon('gear')), local ? h('button', { class: 'btn icon menu-btn', title: 'Menu', 'aria-label': 'Menu', onclick: openDrawer }, icon('menu')) : null), h('div', { class: 'brand' }, h('p', { class: 'navline' }, navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null, h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`, S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)), actions), local && owner ? (libTabs() || (tv ? null : h('div', { class: 'libtabs' }, h('button', { class: 'libtab sel', title: 'Changer de bibliothèque', onclick: openLibraries }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[(_d = curLib()) === null || _d === void 0 ? void 0 : _d.decor] || '#555' } }), h('span', {}, libName()), h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev')))))) : (!local ? h('p', { class: 'muted', style: { textAlign: 'center' } }, S.me.library || '') : null), local && owner && !tv ? kindTabs() : null, kinds ? creationsEl(S.ck) : null, !kinds && current && !tv ? heroEl(current) : null, kinds || (tv && !S.tvFind && !S.filter) ? null : toolbar, kinds ? null : body, !tv && !kinds && owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null));
     // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
     if (document.activeElement && document.activeElement.classList.contains('search'))
         opts.keepSearch = true; // toute mise à jour pendant la frappe épargne le champ
@@ -4151,6 +4174,15 @@ function renderLibrary(opts = {}) {
         document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
     AutoSync.schedule();
     selBarRender();
+}
+// Télé : le menu vertical à gauche (logo, sortes de contenu, actions), pensé pour la télécommande
+function tvRail(current) {
+    const ck = S.ck || 'livres';
+    const item = (label, ic, fn, sel) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn }, icon(ic), h('span', {}, label));
+    return h('nav', { class: 'tvrail', 'aria-label': 'Menu' }, h('div', { class: 'railbrand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'wordmark' }, h('b', {}, 'Mike'), h('span', {}, 'Library'))), CK.map(([k, l, ic]) => item(l, ic, () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); }, ck === k)), current ? item('Reprendre', 'play', () => openBook(current)) : null, h('i', { class: 'railsep' }), item('Chercher', 'loupe', () => { const open = !(S.tvFind || S.filter); S.ck = 'livres'; store.set('ck', 'livres'); S.tvFind = open; if (!open)
+        S.filter = ''; renderLibrary({ now: true }); if (open)
+        setTimeout(() => { const i = $('.search'); if (i)
+            i.focus(); }, 60); }, S.tvFind || !!S.filter), item('Ajouter un livre', 'plus', openAddMenu), item('Dossier de PDF', 'folder', () => (S.lib !== 'all' ? openFolder() : addFolderLib())), folderInfo() || (S.lib === 'all' && libsWithFolder().length) ? item('Actualiser', 'refresh', () => refreshFolders()) : null, Recv.ok() ? item('Recevoir (Wi-Fi)', 'wifi', () => Recv.open()) : null, h('i', { class: 'railsep' }), item('Réglages', 'gear', openSettings), item('Menu', 'menu', openDrawer));
 }
 function heroEl(b) {
     const pct = Math.round((b.progress.page / b.pages) * 100);
@@ -4852,10 +4884,7 @@ function browseFolder(libId) {
 // Ajouter un autre dossier = une nouvelle bibliothèque, à son nom ; les autres bibliothèques ne bougent pas
 async function addFolderLib() {
     const l = libs();
-    const used = new Set(l.map((x) => x.decor));
-    const order = ['mike', 'acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer'];
-    const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
-    const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor };
+    const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor: 'mike' };
     l.push(lib);
     saveLibs(l);
     const prev = S.lib;
@@ -5409,7 +5438,7 @@ async function importReceived(r) {
     let name = String(m.name || 'Bibliothèque partagée').slice(0, 60), k = 2;
     while (l.some((x) => x.name === name))
         name = `${String(m.name || 'Bibliothèque partagée').slice(0, 54)} (${k++})`;
-    const decor = DECORS.some(([d]) => d === m.decor) ? m.decor : 'acajou';
+    const decor = 'mike';
     // livres envoyés un à un (envoi sécurisé) : ils rejoignent la bibliothèque affichée, sans en créer une nouvelle
     const lib = m.merge ? (curLib() || l[0]) : { id: 'lib' + Date.now().toString(36), name, decor };
     if (!m.merge) {
@@ -10488,7 +10517,7 @@ const TV = {
             .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
     },
     scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
-    first() { const f = this.focusables(this.scope())[0]; if (f) {
+    first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || this.focusables(sc)[0]; if (f) {
         f.focus({ preventScroll: true });
         f.scrollIntoView({ block: 'center' });
     } },

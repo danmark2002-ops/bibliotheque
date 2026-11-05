@@ -19,6 +19,7 @@ const store = {
   set(k, v) { try { localStorage.setItem('bib.' + k, JSON.stringify(v)); } catch {} },
 };
 const ICONS = {
+  wifi: '<path d="M4 10a12 12 0 0 1 16 0M7 13.5a7.5 7.5 0 0 1 10 0M10 17a3 3 0 0 1 4 0"/><circle cx="12" cy="19.5" r=".6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   cart: '<path d="M3 4h2l2.4 11h10.2L20 7H6.2"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -114,9 +115,9 @@ const isNative = () => !!window.AndroidApp;
 
 if (!store.get('etagere15', false)) { store.set('view', 'shelf'); store.set('etagere15', true); } // retour à l'étagère après la mise à jour
 const S = { me: null, books: [], organize: false, filter: '', view: store.get('view', 'shelf'), ck: store.get('ck', 'livres') };
-if (!store.get('mike1', false)) { // passage à Mike Library : le nouveau décor partout, une seule fois
+if (!store.get('mike2', false)) { // passage à Mike Library : le nouveau décor partout, une seule fois
   try { store.set('decor', 'mike'); store.set('decorAll', 'mike'); const l = store.get('libs', null); if (Array.isArray(l)) store.set('libs', l.map((x) => ({ ...x, decor: 'mike' }))); } catch {}
-  store.set('mike1', true);
+  store.set('mike2', true);
 }
 document.documentElement.dataset.decor = store.get('decor', 'mike');
 
@@ -653,8 +654,12 @@ function renderLibrary(opts = {}) {
   ) : null;
   const navBack = ['author', 'col', 'fmt'].includes(S.nav.k);
   const kinds = local && owner && S.ck && S.ck !== 'livres';
-  const room = h('div', { class: 'room' }, h('div', { class: 'wrap' },
-    h('header', { class: 'top' },
+  const tv = TV.on && local && owner; // télé : menu en rail à gauche, l'étagère prend tout l'écran
+  const room = h('div', { class: 'room' }, tv ? tvRail(current) : null, h('div', { class: 'wrap' },
+    tv ? h('p', { class: 'tvtitle' },
+      navBack ? h('button', { class: 'crumb', onclick: () => go({ k: S.nav.k === 'author' ? 'authors' : 'all' }) }, icon('back'), S.nav.k === 'author' ? 'Auteurs' : 'Tous') : null,
+      h('b', {}, kinds ? CK.find(([k]) => k === S.ck)[1] : navTitle()), kinds ? null : h('span', {}, count)) : null,
+    tv ? null : h('header', { class: 'top' },
       h('div', { class: 'brandbar' },
         h('span', { class: 'mark', 'aria-hidden': 'true' }),
         h('h1', { class: 'wordmark', 'aria-label': 'Mike Library' }, h('b', {}, 'Mike'), h('span', {}, 'Library')),
@@ -666,13 +671,13 @@ function renderLibrary(opts = {}) {
           h('b', {}, navTitle()), ` · ${count}${owner ? '' : ' · Bonjour ' + S.me.name}`,
           S.nav.k === 'col' ? h('button', { class: 'crumb', onclick: () => editCollection(S.cols.find((c) => c.id === S.nav.v)) }, icon('pencil')) : null)),
       actions),
-    local && owner ? (libTabs() || h('div', { class: 'libtabs' }, h('button', { class: 'libtab sel', title: 'Changer de bibliothèque', onclick: openLibraries }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[curLib()?.decor] || '#555' } }), h('span', {}, libName()), h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev'))))) : (!local ? h('p', { class: 'muted', style: { textAlign: 'center' } }, S.me.library || '') : null),
-    local && owner ? kindTabs() : null,
+    local && owner ? (libTabs() || (tv ? null : h('div', { class: 'libtabs' }, h('button', { class: 'libtab sel', title: 'Changer de bibliothèque', onclick: openLibraries }, h('span', { class: 'libsw', style: { '--sw': DECOR_SWATCH[curLib()?.decor] || '#555' } }), h('span', {}, libName()), h('span', { class: 'tabmore', 'aria-hidden': 'true' }, icon('chev')))))) : (!local ? h('p', { class: 'muted', style: { textAlign: 'center' } }, S.me.library || '') : null),
+    local && owner && !tv ? kindTabs() : null,
     kinds ? creationsEl(S.ck) : null,
-    !kinds && current ? heroEl(current) : null,
-    kinds ? null : toolbar,
+    !kinds && current && !tv ? heroEl(current) : null,
+    kinds || (tv && !S.tvFind && !S.filter) ? null : toolbar,
     kinds ? null : body,
-    !kinds && owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
+    !tv && !kinds && owner && books.length && S.nav.k !== 'trash' && S.nav.k !== 'authors' ? h('p', { class: 'hint', style: { textAlign: 'center', marginTop: '18px' } }, asList ? (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Les boutons sous chaque livre : favori, à lire, déjà lu, collections.') : (local ? 'Appui long sur un livre (ou ⋮) : résumé IA, Professeur, vidéo, ranger et plus.' : 'Sous chaque livre : favori, à lire, déjà lu, collections. Appui long pour modifier.')) : null,
   ));
   // pendant une recherche, le champ reste en place : sinon le clavier d'Android perd le mot en cours de frappe
   if (document.activeElement && document.activeElement.classList.contains('search')) opts.keepSearch = true; // toute mise à jour pendant la frappe épargne le champ
@@ -689,6 +694,24 @@ function renderLibrary(opts = {}) {
   if (!$('#dz')) document.body.append(h('div', { class: 'dropzone', id: 'dz' }, h('div', {}, 'Dépose tes livres ici')));
   AutoSync.schedule();
   selBarRender();
+}
+// Télé : le menu vertical à gauche (logo, sortes de contenu, actions), pensé pour la télécommande
+function tvRail(current) {
+  const ck = S.ck || 'livres';
+  const item = (label, ic, fn, sel) => h('button', { class: 'railbtn' + (sel ? ' sel' : ''), onclick: fn }, icon(ic), h('span', {}, label));
+  return h('nav', { class: 'tvrail', 'aria-label': 'Menu' },
+    h('div', { class: 'railbrand' }, h('span', { class: 'mark', 'aria-hidden': 'true' }), h('span', { class: 'wordmark' }, h('b', {}, 'Mike'), h('span', {}, 'Library'))),
+    CK.map(([k, l, ic]) => item(l, ic, () => { S.ck = k; store.set('ck', k); renderLibrary({ now: true }); }, ck === k)),
+    current ? item('Reprendre', 'play', () => openBook(current)) : null,
+    h('i', { class: 'railsep' }),
+    item('Chercher', 'loupe', () => { const open = !(S.tvFind || S.filter); S.ck = 'livres'; store.set('ck', 'livres'); S.tvFind = open; if (!open) S.filter = ''; renderLibrary({ now: true }); if (open) setTimeout(() => { const i = $('.search'); if (i) i.focus(); }, 60); }, S.tvFind || !!S.filter),
+    item('Ajouter un livre', 'plus', openAddMenu),
+    item('Dossier de PDF', 'folder', () => (S.lib !== 'all' ? openFolder() : addFolderLib())),
+    folderInfo() || (S.lib === 'all' && libsWithFolder().length) ? item('Actualiser', 'refresh', () => refreshFolders()) : null,
+    Recv.ok() ? item('Recevoir (Wi-Fi)', 'wifi', () => Recv.open()) : null,
+    h('i', { class: 'railsep' }),
+    item('Réglages', 'gear', openSettings),
+    item('Menu', 'menu', openDrawer));
 }
 function heroEl(b) {
   const pct = Math.round((b.progress.page / b.pages) * 100);
@@ -1141,10 +1164,8 @@ function browseFolder(libId) {
 }
 // Ajouter un autre dossier = une nouvelle bibliothèque, à son nom ; les autres bibliothèques ne bougent pas
 async function addFolderLib() {
-  const l = libs(); const used = new Set(l.map((x) => x.decor));
-  const order = ['mike', 'acajou', 'ardoise', 'olivier', 'ebene', 'chene', 'bouleau', 'noyer'];
-  const decor = order.find((k) => !used.has(k)) || order[l.length % order.length];
-  const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor };
+  const l = libs();
+  const lib = { id: 'lib' + Date.now().toString(36), name: 'Nouvelle bibliothèque', decor: 'mike' };
   l.push(lib); saveLibs(l);
   const prev = S.lib;
   const ok = await chooseFolder(lib.id, { adopt: true, rename: true }).catch(() => false);
@@ -1520,7 +1541,7 @@ async function importReceived(r) {
   const m = r.manifest || {}, l = libs();
   let name = String(m.name || 'Bibliothèque partagée').slice(0, 60), k = 2;
   while (l.some((x) => x.name === name)) name = `${String(m.name || 'Bibliothèque partagée').slice(0, 54)} (${k++})`;
-  const decor = DECORS.some(([d]) => d === m.decor) ? m.decor : 'acajou';
+  const decor = 'mike';
   // livres envoyés un à un (envoi sécurisé) : ils rejoignent la bibliothèque affichée, sans en créer une nouvelle
   const lib = m.merge ? (curLib() || l[0]) : { id: 'lib' + Date.now().toString(36), name, decor };
   if (!m.merge) { l.push(lib); saveLibs(l); switchLib(lib.id); }
@@ -4892,7 +4913,7 @@ const TV = {
       .filter((x) => !x.disabled && x.getClientRects().length && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[hidden]'));
   },
   scope() { const sh = [...document.querySelectorAll('.scrim')].pop() || $('.coach'); return sh || $('.reader') || document.body; },
-  first() { const f = this.focusables(this.scope())[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
+  first() { const sc = this.scope(); const f = (sc === document.body && document.querySelector('.wrap .book')) || this.focusables(sc)[0]; if (f) { f.focus({ preventScroll: true }); f.scrollIntoView({ block: 'center' }); } },
   held: null,
   key(e) {
     Shelves.flush();
