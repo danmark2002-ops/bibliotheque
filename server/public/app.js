@@ -4262,8 +4262,10 @@ class Reader {
         if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && wide) { e.preventDefault(); z.x += (e.key === 'ArrowRight' ? -1 : 1) * W * 0.2; this.clampZoom(); this.applyZoom(true); return; }
         if (e.key === 'Enter' && document.activeElement === this.el) { e.preventDefault(); this.loupe(false); return; }
       }
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') this.go(this.page + 1, 1);
-      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') this.go(this.page - 1, -1);
+      const inBar = document.activeElement && document.activeElement.closest && document.activeElement.closest('.r-top, .player, input, select');
+      // page tournée : la touche s'arrête ici (sinon la télé déplace aussi son propre cadre de sélection vers les côtés)
+      if ((e.key === 'ArrowRight' || e.key === 'PageDown') && !inBar) { e.preventDefault(); this.go(this.page + 1, 1); }
+      else if ((e.key === 'ArrowLeft' || e.key === 'PageUp') && !inBar) { e.preventDefault(); this.go(this.page - 1, -1); }
       else if (e.key === 'Escape') this.close();
       else if (e.key === ' ' && this.player) { e.preventDefault(); this.playing ? this.pause() : this.play(); }
     };

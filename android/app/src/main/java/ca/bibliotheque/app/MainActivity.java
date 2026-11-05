@@ -74,6 +74,7 @@ public class MainActivity extends Activity {
 
         instance = this;
         web = new WebView(this);
+        if (Build.VERSION.SDK_INT >= 26) web.setDefaultFocusHighlightEnabled(false); // la page dessine ses propres cadres de sélection (télé) ; pas de second cadre blanc d'Android
         web.setBackgroundColor(Color.parseColor("#140f0b"));
         FrameLayout root = new FrameLayout(this);
         root.addView(web, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
