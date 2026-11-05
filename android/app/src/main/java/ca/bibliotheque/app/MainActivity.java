@@ -2033,6 +2033,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        Reception.cle = null; Reception.stop(); // la réception par Wi-Fi vit tant que l'application est ouverte
         if (instance == this) { instance = null; LivreService.phoneState(""); }
         if (isFinishing()) LivreService.appClosed(); // fermer l'application arrête la lecture
         if (tts != null) { tts.stop(); tts.shutdown(); }

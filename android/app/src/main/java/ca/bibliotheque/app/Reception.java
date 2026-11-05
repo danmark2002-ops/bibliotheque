@@ -109,7 +109,7 @@ final class Reception {
         + "button{width:100%;margin-top:10px;font:700 17px system-ui,sans-serif;border:0;border-radius:14px;padding:15px;background:#d4ab6a;color:#241809}a{color:#e8c27e}h2{font:600 20px Georgia,serif;margin:30px 0 6px}"
         + "..f{background:#2a201a;border-radius:12px;padding:10px 12px;margin:8px 0}.bar{height:6px;background:#3a2c22;border-radius:3px;margin-top:6px;overflow:hidden}"
         + ".bar i{display:block;height:100%;width:0;background:#d4ab6a}.ok{color:#8fbf7f}.err{color:#e2735e}p{opacity:.8}</style></head><body>"
-        + "<h1>📚 Envoyer des livres</h1><p>Choisis tes livres (PDF, EPUB, Word…) : ils arrivent tout de suite dans la Bibliothèque de la télé.</p>"
+        + "<h1>📚 Envoyer des livres</h1><p>Choisis tes livres (PDF, EPUB, Word…) : ils arrivent tout de suite dans Mike Library sur la télé.</p>"
         + "<label class=big>Choisir des livres<input id=f type=file multiple accept='.pdf,.epub,.docx,.doc,.odt,.rtf,.txt,.md,.mobi,.azw3,.fb2,.mp3,.m4b'></label><div id=l></div>"
         + "<h2>🔑 Clé IA gratuite pour la télé</h2><p>Pour les vidéos, résumés, balados et le Professeur sur la télé.</p>"
         + "<p>1. <a href='https://aistudio.google.com/apikey' target=_blank>Ouvre la page des clés de Google</a> : « Créer une clé API », puis copie la clé avec le petit carré.<br>2. Reviens ici, colle-la dans la case et envoie.</p>"
@@ -122,5 +122,5 @@ final class Reception {
         + "await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/envoi');x.setRequestHeader('X-Name',encodeURIComponent(file.name));"
         + "x.upload.onprogress=ev=>{if(ev.lengthComputable)d.querySelector('i').style.width=(ev.loaded*100/ev.total)+'%'};"
         + "x.onload=()=>{const ok=x.status==200;d.querySelector('small').textContent=ok?'✔ Reçu par la télé':'Échec, réessaie';d.querySelector('small').className=ok?'ok':'err';res()};"
-        + "x.onerror=()=>{d.querySelector('small').textContent='Échec : la télé et le téléphone sont-ils sur le même Wi-Fi ?';d.querySelector('small').className='err';res()};x.send(file)})}e.target.value=''}</script></body></html>";
+        + "x.onerror=()=>{d.querySelector('small').textContent='La télé ne répond pas : ouvre Mike Library sur la télé (même Wi-Fi), puis réessaie.';d.querySelector('small').className='err';res()};x.send(file)})}e.target.value=''}</script></body></html>";
 }

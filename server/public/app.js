@@ -865,14 +865,13 @@ const Recv = {
     const close = sheet('Recevoir des livres', h('div', {},
       h('p', {}, 'Sur ton téléphone (branché sur le même Wi-Fi), ouvre le navigateur — Chrome ou Safari — et tape cette adresse :'),
       h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, '')),
-      h('p', { class: 'muted' }, 'Touche « Choisir des livres », sélectionne tes PDF, EPUB ou Word : ils apparaissent ici, puis sur l\'étagère. Garde cette fenêtre ouverte pendant l\'envoi.'),
+      h('p', { class: 'muted' }, 'Touche « Choisir des livres », sélectionne tes PDF, EPUB ou Word : ils apparaissent ici, puis sur l\'étagère. Garde Mike Library ouvert sur la télé pendant l\'envoi.'),
       h('details', { class: 'recv-help' }, h('summary', {}, 'La page ne s\'ouvre pas sur le téléphone ?'),
         h('p', {}, 'Certains Wi-Fi empêchent les appareils de se parler entre eux : Wi-Fi « invité », hôtel, chalet loué, certains routeurs. La télé et le téléphone ont Internet, mais ne se voient pas.'),
         h('p', {}, 'Solution qui marche partout : sur le téléphone, active le « Partage de connexion » (point d\'accès), connecte la télé à ce Wi-Fi, puis rouvre cette fenêtre : une nouvelle adresse s\'affiche. Tape-la dans le navigateur du téléphone.'),
         h('p', { class: 'muted' }, 'Vérifie aussi que le téléphone est bien sur le Wi-Fi (pas sur les données cellulaires) et tape l\'adresse exactement, avec le « : » et le numéro à la fin.')),
       this.list), { wide: true });
     const scrim = $$('.scrim').pop();
-    new MutationObserver((_, o) => { if (!scrim.isConnected) { o.disconnect(); if (!this.busy && !this.queue.length) { try { AndroidAI.receiveStop(); } catch {} } } }).observe(document.body, { childList: true });
   },
   async take() {
     if (this.busy) return; this.busy = true;
@@ -2803,8 +2802,9 @@ const KeyGuide = {
       h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur tes appareils.'),
       h('div', { class: 'actions', style: { marginTop: '14px' } },
         h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'Taper la clé avec la télécommande'))), { wide: true });
+    // la réception reste ouverte (livres envoyés ensuite) ; seule l'attente de la clé s'arrête avec la fenêtre
     const scrim = $$('.scrim').pop();
-    new MutationObserver((_, o) => { if (scrim.isConnected) return; o.disconnect(); try { AndroidAI.receiveKey(false); } catch {} window.__cleRecue = null; if (!Recv.busy && !Recv.queue.length && !$('.recv-list')) { try { AndroidAI.receiveStop(); } catch {} } if (!done) this.then = null; }).observe(document.body, { childList: true });
+    new MutationObserver((_, o) => { if (scrim.isConnected) return; o.disconnect(); try { AndroidAI.receiveKey(false); } catch {} window.__cleRecue = null; if (!done) this.then = null; }).observe(document.body, { childList: true });
   },
   // Version web (iPhone…) : la page de Google s'ouvre dans un nouvel onglet ; en revenant, « Coller ma clé »
   startWeb() {
@@ -4929,6 +4929,8 @@ const TV = {
       toast('Cette télé n\'a pas de sélecteur de fichiers. Utilise « Recevoir des livres » (envoi par Wi-Fi depuis ton téléphone) ou « Choisir un dossier ».'); };
     if (!this.on) return;
     document.documentElement.classList.add('tv');
+    // télé : la réception par Wi-Fi est prête dès l'ouverture (livres et clé IA envoyés depuis le téléphone)
+    setTimeout(() => { try { if (window.AndroidAI?.receiveStart) AndroidAI.receiveStart(); } catch {} }, 2500);
     document.addEventListener('keydown', (e) => this.key(e), true);
     document.addEventListener('keyup', (e) => this.keyUp(e), true);
     setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) this.first(); }, 800);
