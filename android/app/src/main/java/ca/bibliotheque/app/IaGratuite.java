@@ -265,8 +265,8 @@ final class IaGratuite {
         listed = true;
         try {
             String url = base + "/v1beta/models?pageSize=200";
-            String[] res = get(url, key);
-            if (Integer.parseInt(res[0]) >= 400) res = get(url + "&key=" + java.net.URLEncoder.encode(key, "UTF-8"), "");
+            String[] res = listGet(url, key);
+            if (Integer.parseInt(res[0]) >= 400) res = listGet(url + "&key=" + java.net.URLEncoder.encode(key, "UTF-8"), "");
             if (Integer.parseInt(res[0]) >= 400) return false;
             String[] flash = ModelPick.pick(res[1], "flash"), pro = ModelPick.pick(res[1], "pro");
             if (pro.length > 0) PRO = pro;
@@ -276,7 +276,7 @@ final class IaGratuite {
         } catch (Exception e) { return false; }
     }
 
-    private static String[] get(String url, String key) throws Exception {
+    private static String[] listGet(String url, String key) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(15000); c.setReadTimeout(30000);
