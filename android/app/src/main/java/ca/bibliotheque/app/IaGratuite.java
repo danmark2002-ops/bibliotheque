@@ -27,13 +27,13 @@ final class IaGratuite {
     /** La liste réelle des modèles de la clé a-t-elle déjà été lue (après des « 404 » partout) ? */
     private static volatile boolean listed = false;
     private static int model = 0;
-    // Gemini Pro d'abord (meilleur), tant que la clé y a droit ; s'il refuse ou que son quota est épuisé, Flash prend le relais
-    private static volatile String[] PRO = {"gemini-pro-latest", "gemini-3.1-pro-preview", "gemini-2.5-pro"};
-    /** Dernier refus de Pro, en clair (pour comprendre quand Pro ne répond pas) */
-    static volatile String lastProNote = "";
+    // Pas de Gemini Pro : il n'est pas offert avec une clé gratuite (quota « 0 »), chaque essai faisait perdre du temps et
+    // affichait « quota épuisé » sans raison. Seulement Flash ; le modèle qui a répondu est retenu et toujours essayé d'abord.
+    private static volatile boolean loaded = false;
+    private static Context app;
     /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
     static volatile String lastModel = "";
-    /** Messages d'attente pour la personne (« Pro est occupé, nouvel essai dans 40 s… »), propres à chaque demande */
+    /** Messages d'attente pour la personne (« Gemini est occupé, nouvel essai dans 10 s… »), propres à chaque demande */
     interface Status { void say(String s); }
     static final ThreadLocal<Status> STATUS = new ThreadLocal<>();
     private static void tell(String m) { Status st = STATUS.get(); if (st != null) try { st.say(m); } catch (Exception ignored) { } }
@@ -61,28 +61,18 @@ final class IaGratuite {
     /** json : Gemini doit répondre en JSON strict (scénario de la vidéo). */
     static String ask(Context c, String system, String prompt, boolean urgent, boolean json) throws Exception { return ask(c, system, prompt, urgent, json, !urgent); }
 
-    /** wantPro : essayer Gemini Pro d'abord (résumés, vidéos, cours ; question dans l'auto si l'auditeur dit « pro ») */
+    /** wantPro : ignoré (Gemini Pro n'est plus utilisé) */
     static String ask(Context c, String system, String prompt, boolean urgent, boolean json, boolean wantPro) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
-        // 1) Gemini Pro d'abord, modèle par modèle : un nom que la clé gratuite n'a pas (quota « 0 », accès refusé) est écarté
-        //    24 h SANS empêcher les suivants d'essayer (gemini-pro-latest peut viser un Pro payant alors que gemini-2.5-pro reste gratuit).
-        if (wantPro) {
-            final android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
-            String r = tryPro(k, system, prompt, urgent, json, new Pauses() {
-                public long until(String m) { return sp.getLong("proPause_" + m, 0); }
-                public void set(String m, long t) { sp.edit().putLong("proPause_" + m, t).apply(); }
-            });
-            if (r != null) return r;
-        }
-        // 2) Flash
+        remembered(c);
         Exception err = null;
         int tries = urgent ? 5 : 8;
         long offlineSince = 0;
         for (int t = 0; t < tries; t++) {
             try {
-                String r = once(k, system, prompt, urgent, json, null);
-                if (r != null && !r.trim().isEmpty()) { lastModel = MODELS[model]; return r.trim(); }
+                String r = once(k, system, prompt, urgent, json);
+                if (r != null && !r.trim().isEmpty()) { lastModel = MODELS[model]; remember(); return r.trim(); }
                 err = new Exception("réponse vide");
             } catch (Fatal f) { throw f; }
             catch (Exception e) {
@@ -117,39 +107,24 @@ final class IaGratuite {
         return false;
     }
 
-    /** Mémoire des modèles Pro écartés (et jusqu'à quand) */
-    interface Pauses { long until(String model); void set(String model, long until); }
-
-    /** Essaie les modèles Pro un par un. Le texte, ou null si aucun ne répond (Flash prendra alors le relais). */
-    static String tryPro(String k, String system, String prompt, boolean urgent, boolean json, Pauses pz) throws Exception {
-        for (String pm : PRO) {
-            if (System.currentTimeMillis() < pz.until(pm)) continue;
-            for (int t = 0; t <= 1; t++) { // une seule courte attente, puis on passe au suivant : personne n'aime attendre
-                try {
-                    String r = once(k, system, prompt, urgent, json, pm);
-                    if (r != null && !r.trim().isEmpty()) { lastModel = pm; return r.trim(); }
-                    break;
-                } catch (ProRefused e) {
-                    String why = gmsg(e.body);
-                    String w = e.code == 429 ? Quota.why(e.body) : "";
-                    if (w.equals("big")) { tell("Livre trop long pour " + pm + " (quota gratuit par minute) : Gemini Flash s'en charge…"); return null; } // pas de pause : un texte plus court passera
-                    if (w.equals("minute")) {
-                        long ms = Quota.retryMs(e.body);
-                        if (t < 1 && ms <= 15_000L) { ms = urgent ? 8_000L : ms; tell(pm + " est occupé : nouvel essai dans " + (ms / 1000) + " s…"); Thread.sleep(ms); continue; }
-                        tell(pm + " est occupé (limite par minute) : on passe au suivant…"); break;
-                    }
-                    if (e.code >= 500) { if (t < 1) { Thread.sleep(5_000L); continue; } tell(pm + " est surchargé : on passe au suivant…"); break; }
-                    // refus net : ce modèle n'est pas offert à cette clé (ou son quota du jour est épuisé)
-                    long span = e.code == 404 ? 7 * 24 * 3600_000L : 6 * 3600_000L;
-                    pz.set(pm, System.currentTimeMillis() + span);
-                    lastProNote = pm + " refusé (" + e.code + (why.isEmpty() ? "" : " : " + why) + ")";
-                    if (e.code != 404) tell(pm + (w.equals("day") ? " : quota gratuit épuisé ou non offert avec ta clé" : " est refusé (" + e.code + ")") + " — essai du suivant…"); // modèle retiré par Google : on passe au suivant sans rien dire
-                    break;
-                } catch (Fatal f) { throw f;
-                } catch (Exception e) { break; }
+    /** Le modèle Flash qui a répondu la dernière fois : gardé dans le téléphone, il est essayé en premier à chaque demande */
+    private static synchronized void remembered(Context c) {
+        if (app == null) app = c.getApplicationContext();
+        if (loaded) return;
+        loaded = true;
+        try {
+            android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
+            String list = sp.getString("models", ""), ok = sp.getString("flash", "");
+            if (!list.isEmpty()) { MODELS = list.split(","); listed = true; }
+            if (!ok.isEmpty()) {
+                int at = java.util.Arrays.asList(MODELS).indexOf(ok);
+                if (at < 0) { String[] m = new String[MODELS.length + 1]; m[0] = ok; System.arraycopy(MODELS, 0, m, 1, MODELS.length); MODELS = m; at = 0; }
+                model = at;
             }
-        }
-        return null;
+        } catch (Exception ignored) { }
+    }
+    private static void remember() {
+        try { if (app != null) app.getSharedPreferences("ia", Context.MODE_PRIVATE).edit().putString("flash", MODELS[model]).apply(); } catch (Exception ignored) { }
     }
 
     private static void pace() throws InterruptedException {
@@ -168,10 +143,8 @@ final class IaGratuite {
         return x.length() > 140 ? x.substring(0, 140) + "…" : x;
     }
 
-    /** Pro a refusé (code HTTP) : on passe à Flash sans insister */
-    static final class ProRefused extends Exception { final int code; final String body; ProRefused(int c, String b) { super("pro " + c); code = c; body = b == null ? "" : b; } }
 
-    private static String once(String key, String system, String prompt, boolean urgent, boolean json, String force) throws Exception {
+    private static String once(String key, String system, String prompt, boolean urgent, boolean json) throws Exception {
         JSONObject body = new JSONObject();
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
@@ -181,7 +154,7 @@ final class IaGratuite {
         body.put("generationConfig", gc);
         while (true) {
             if (!urgent) pace();
-            String url = base + "/v1beta/models/" + (force != null ? force : MODELS[model]) + ":generateContent";
+            String url = base + "/v1beta/models/" + MODELS[model] + ":generateContent";
             String[] res = http(url, key, body.toString());
             int code = Integer.parseInt(res[0]);
             // certains formats de clés passent mieux dans l'adresse que dans l'en-tête : second essai
@@ -189,11 +162,14 @@ final class IaGratuite {
                 String[] r2 = http(url + "?key=" + java.net.URLEncoder.encode(key, "UTF-8"), "", body.toString());
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
-            if (force != null && code >= 400) throw new ProRefused(code, res[1]);
             if (code == 404) { if (model + 1 < MODELS.length) { model++; continue; } if (discover(key)) continue; } // modèle retiré : le suivant ; au bout, la liste réelle de Google
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");
-            if (code == 429) { Thread.sleep(urgent ? 4000 : 10000); throw new Exception("quota gratuit momentanément atteint"); }
+            if (code == 429) {
+                // quota du jour de CE modèle épuisé (ou modèle absent du palier gratuit) : chaque modèle Flash a le sien, on passe au suivant
+                if (Quota.why(res[1]).equals("day") && model + 1 < MODELS.length) { model++; tell("Gemini : quota du jour atteint pour ce modèle, essai avec " + MODELS[model] + "…"); continue; }
+                Thread.sleep(urgent ? 4000 : 10000); throw new Exception("quota gratuit momentanément atteint");
+            }
             // serveurs surchargés (503, 500…) : on passe au modèle suivant, souvent moins encombré
             if (code >= 500) { model = (model + 1) % MODELS.length; throw new Exception("surchargé (" + code + ")"); }
             if (code >= 400) throw new Exception("erreur " + code);
@@ -207,7 +183,7 @@ final class IaGratuite {
         }
     }
 
-    /** Gemini regarde des images (vignettes JPEG) et répond en JSON. Flash : rapide, et garde le quota de Pro pour l'écriture. */
+    /** Gemini regarde des images (vignettes JPEG) et répond en JSON. Flash : rapide. */
     static String pickImages(Context c, String prompt, java.util.List<byte[]> jpegs) throws Exception {
         String k = key(c);
         if (k.isEmpty()) throw new Fatal("pas de clé");
@@ -268,10 +244,10 @@ final class IaGratuite {
             String[] res = listGet(url, key);
             if (Integer.parseInt(res[0]) >= 400) res = listGet(url + "&key=" + java.net.URLEncoder.encode(key, "UTF-8"), "");
             if (Integer.parseInt(res[0]) >= 400) return false;
-            String[] flash = ModelPick.pick(res[1], "flash"), pro = ModelPick.pick(res[1], "pro");
-            if (pro.length > 0) PRO = pro;
+            String[] flash = ModelPick.pick(res[1], "flash");
             if (flash.length == 0) return false;
             MODELS = flash; model = 0;
+            try { if (app != null) app.getSharedPreferences("ia", Context.MODE_PRIVATE).edit().putString("models", String.join(",", flash)).apply(); } catch (Exception ignored) { }
             return true;
         } catch (Exception e) { return false; }
     }

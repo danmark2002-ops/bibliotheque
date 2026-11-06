@@ -11,6 +11,10 @@ javac -encoding UTF-8 -nowarn -d "$D" $S/Studio.java $S/Quota.java $S/PhoneDuo.j
 java -cp "$D" ca.bibliotheque.app.PhoneDuoTest 2>&1 | { grep -v "^Picked up" || true; }
 javac -encoding UTF-8 -nowarn -d "$D" $S/ModelPick.java ModelPickTest.java 2>&1 | { grep -v "^Picked up\|^Note" || true; }
 java -cp "$D" ca.bibliotheque.app.ModelPickTest 2>&1 | { grep -v "^Picked up" || true; }
+# IA gratuite (Gemini Flash seulement, modèle retenu, quotas) : stubs/ remplace org.json, Context et Secret
+E=$(mktemp -d)
+javac -encoding UTF-8 -nowarn -d "$E" $(find stubs -name '*.java') $S/IaGratuite.java $S/Quota.java $S/ModelPick.java IaTest.java 2>&1 | { grep -v "^Picked up\|^Note" || true; }
+java -Dfile.encoding=UTF-8 -cp "$E" ca.bibliotheque.app.IaTest 2>&1 | { grep -v "^Picked up" || true; }
 python3 - <<'PY'
 import json
 n=0

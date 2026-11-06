@@ -2122,7 +2122,7 @@ const ProfMulti = {
       const say = (m) => { out.textContent = m; };
       try {
         const corpus = await this.build(books, say);
-        say(pro ? 'Le Professeur réfléchit en profondeur (Gemini Pro)…' : 'Le Professeur répond (Gemini Flash)…');
+        say(pro ? 'Le Professeur réfléchit en profondeur…' : 'Le Professeur répond…');
         const hist = this.history.slice(-4).map((x) => `Question : ${x.q}\nTa réponse : ${x.a}`).join('\n\n');
         const prompt = `Tu as lu ${n > 1 ? `ces ${n} livres` : 'ce livre'} (extraits ci-dessous). L'auditeur te pose une question.
 ${n > 1 ? 'Réponds en CROISANT les livres : ce que chacun apporte, où ils se rejoignent, où ils divergent, et ce que leur rencontre fait naître. Nomme les livres (par leur titre) quand tu t\'appuies sur eux.' : ''}
@@ -2138,7 +2138,6 @@ Question : ${v}`;
         const r = Prof.clean(await onlineAsk(Prof.persona + Prof.toneNote(), prompt, !pro, false, say));
         this.history.push({ q: v, a: r });
         out.textContent = r;
-        if (pro && !/pro/.test(window.__lastModel || '')) out.prepend(h('p', { class: 'muted', style: { margin: '0 0 6px' } }, 'Gemini Pro n\'a pas répondu : réponse de Gemini Flash.' + (window.__lastNote ? ' (' + window.__lastNote + ')' : '')));
         this.speak(r);
       } catch (e) { out.textContent = e.message; }
     };
@@ -2552,7 +2551,7 @@ async function makeSynthesis(books) {
     }
     if (!body && window.AndroidAI?.generateOnline && Prof.hasKey()) {
       say('Gemini rédige la synthèse…');
-      try { body = Prof.clean0(await onlineAsk('', `${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(20000)}`, false, false, say)); model = /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini'; } catch { body = null; }
+      try { body = Prof.clean0(await onlineAsk('', `${SYNTH_PROMPT}\n\nRésumés des livres :\n${ctx(20000)}`, false, false, say)); model = 'gemini'; } catch { body = null; }
     }
     if (!body) { say('Synthèse automatique…'); body = autoSynthesis(used, sums); }
     const titles = used.map((b) => b.title);
@@ -2659,7 +2658,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' + (s.why ? ' (Pro n\'a pas répondu : ' + s.why + ')' : '') : s.model === 'auto' ? 'extraits du livre choisis par l\'app (sans IA)' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' : s.model === 'auto' ? 'extraits du livre choisis par l\'app (sans IA)' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -2710,10 +2709,10 @@ function summaryChoices(b) {
 
 // ---------- IA gratuite dans la version web (iPhone, navigateur) ----------
 // Sans application Android, le navigateur parle directement à Gemini avec la clé gratuite de la personne
-// (gardée seulement dans ce navigateur). Pro d'abord, Flash en relais : mêmes règles que sur Android.
+// (gardée seulement dans ce navigateur). Gemini Flash seulement (Pro n'est pas offert aux clés gratuites) ; le modèle qui a répondu est essayé d'abord.
 if (!window.AndroidAI) window.AndroidAI = (() => {
-  const K = 'bib.geminiKey', P = 'bib.proPause';
-  const PRO = ['gemini-pro-latest', 'gemini-3.1-pro-preview', 'gemini-2.5-pro'], FLASH = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
+  const K = 'bib.geminiKey', OK = 'bib.flashOk';
+  const FLASH0 = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite'];
   const get = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
   const set = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2729,32 +2728,18 @@ if (!window.AndroidAI) window.AndroidAI = (() => {
     const body = { contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, maxOutputTokens: json ? 16384 : 8192, ...(json ? { responseMimeType: 'application/json' } : {}) } };
     if (system) body.systemInstruction = { parts: [{ text: system }] };
     const read = async (r) => { const j = await r.json(); return (j.candidates?.[0]?.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || '').join('').trim(); };
-    if (Date.now() > +get(P, 0)) { // 1) Pro
-      for (let m = 0, t = 0; m < PRO.length && t < 3; t++) {
-        let r; try { r = await call(`${base}/${PRO[m]}:generateContent`, key, body); } catch { break; }
-        if (r.ok) { const x = await read(r); if (x) return { text: x, model: PRO[m] }; break; }
-        if (r.status === 404) { m++; t--; continue; }
-        if (r.status === 429) { // pourquoi ? quota du jour (ou Pro absent du palier gratuit), texte trop long pour la minute, ou trop de demandes
-          const b = await r.text().catch(() => '');
-          if (/input_token|InputTokens/.test(b) && !/limit\D{0,6}0\b(?![.\d])/.test(b)) { tell('Livre trop long pour Gemini Pro gratuit : Gemini Flash s\'en charge…'); break; }
-          if (!/PerDay|limit\D{0,6}0\b(?![.\d])/.test(b)) { // limite par minute : une courte attente au plus, sinon Flash cette fois (sans pause de 6 h)
-            const s = (+(b.match(/retryDelay\W+(\d+)/) || [])[1] || 9) + 1;
-            if (t < 1 && s <= 15) { tell(`Gemini Pro est occupé : nouvel essai dans ${s} s…`); await sleep(s * 1000); tell('Gemini Pro : nouvel essai…'); continue; }
-            tell('Gemini Pro est occupé : Gemini Flash s\'en charge cette fois…'); break;
-          }
-        }
-        if (r.status >= 500 && t < 1) { await sleep(5000); continue; }
-        if (r.status >= 500) { tell('Gemini Pro est surchargé : Gemini Flash s\'en charge cette fois…'); break; }
-        tell('Gemini Pro est à court pour aujourd\'hui : Gemini Flash prend le relais…'); set(P, Date.now() + 6 * 3600e3); break;
-      }
-    }
     let last = 'pas de réponse';
-    for (let m = 0, t = 0; m < FLASH.length && t < 6; t++) { // 2) Flash
+    const ok = get(OK, ''), FLASH = ok ? [ok, ...FLASH0.filter((x) => x !== ok)] : FLASH0;
+    for (let m = 0, t = 0; m < FLASH.length && t < 6; t++) {
       let r; try { r = await call(`${base}/${FLASH[m]}:generateContent`, key, body); } catch { last = 'pas de connexion Internet'; await sleep(4000); continue; }
-      if (r.ok) { const x = await read(r); if (x) return { text: x, model: FLASH[m] }; last = 'réponse vide'; continue; }
+      if (r.ok) { const x = await read(r); if (x) { set(OK, FLASH[m]); return { text: x, model: FLASH[m] }; } last = 'réponse vide'; continue; }
       if (r.status === 404) { m++; continue; }
       if ([400, 401, 403].includes(r.status)) throw new Error('La clé Gemini est refusée. Refais « Activer l\'IA gratuite » dans les Réglages.');
-      if (r.status === 429) { last = 'quota gratuit momentanément atteint'; tell('Gemini est occupé : nouvel essai dans 10 s…'); await sleep(10000); continue; }
+      if (r.status === 429) {
+        const b = await r.text().catch(() => '');
+        if (/PerDay|limit\D{0,6}0\b(?![.\d])/.test(b) && m + 1 < FLASH.length) { m++; tell('Quota du jour atteint pour ce modèle : essai avec ' + FLASH[m] + '…'); continue; }
+        last = 'quota gratuit momentanément atteint'; tell('Gemini est occupé : nouvel essai dans 10 s…'); await sleep(10000); continue;
+      }
       last = 'erreur ' + r.status; await sleep(5000);
     }
     throw new Error('Gemini ne répond pas (' + last + ').');
@@ -3244,7 +3229,7 @@ ${text}
           summary = Prof.clean0(await writerAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${book}\n</livre>`, false, say));
           // le résumé sert aussi dans la Bibliothèque
           const lm = window.__lastModel || '';
-          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: lm === CLAUDE_MODEL ? CLAUDE_MODEL : /pro/.test(lm) ? 'gemini-pro' : 'gemini', why: lm === CLAUDE_MODEL || /pro/.test(lm) ? '' : (window.__lastNote || ''), truncated: t.truncated } }, 'PATCH'); } catch {} }
+          if (summary) { try { await post('/api/books/' + b.id, { summary: { text: summary, date: Date.now(), model: lm === CLAUDE_MODEL ? CLAUDE_MODEL : 'gemini', truncated: t.truncated } }, 'PATCH'); } catch {} }
         } catch { summary = ''; }
       }
       if (this.jobs[b.id] === 'cancel') throw new Error('Création de la vidéo annulée.');
@@ -3427,7 +3412,7 @@ function nanoAsk(prompt) {
   return new Promise((res, rej) => { wait[id] = (r) => (r.error ? rej(new Error(r.error)) : res((r.text || '').trim())); AndroidAI.generate(id, prompt); });
 }
 // Gemini en ligne, avec la clé gratuite de la personne : pour les téléphones sans Gemini Nano. Les demandes sont espacées côté Android.
-// say : la phrase d'étape de la carte en cours (« Gemini Pro est occupé : nouvel essai dans 40 s… »)
+// say : la phrase d'étape de la carte en cours (« Gemini est occupé : nouvel essai dans 10 s… »)
 window.__aiProgress = (j) => { try { const r = JSON.parse(j); window.__aiSays?.[r.id]?.(r.msg); } catch {} };
 function onlineAsk(system, prompt, urgent, json, say) {
   const id = 'o' + (++nanoSeq);
@@ -3510,7 +3495,7 @@ async function computeSummary(b, say) {
       say('Gemini rédige le résumé… (environ une minute)');
       try {
         text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 400000)}\n</livre>`, false, false, say));
-        model = /pro/.test(window.__lastModel || '') ? 'gemini-pro' : 'gemini';
+        model = 'gemini';
       } catch (e) { say('Gemini indisponible (' + e.message + ') : IA du téléphone…'); text = null; }
     }
     if (!text && window.AndroidAI) {
