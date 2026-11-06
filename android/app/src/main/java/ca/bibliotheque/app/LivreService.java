@@ -341,7 +341,8 @@ public class LivreService extends MediaBrowserService {
             // onglets : « En cours » puis chaque bibliothèque.
             // Android Auto n'affiche que 4 onglets : au-delà de 3 bibliothèques, elles passent toutes dans l'onglet « Bibliothèques ».
             out.add(folder("recent", "En cours"));
-            if (libs.length() <= MAX_TABS - 1) {
+            out.add(folder("made", "Créations")); // tout ce que l'IA a fait : résumés, balados, cours du Professeur
+            if (libs.length() <= MAX_TABS - 2) {
                 for (int i = 0; i < libs.length(); i++) {
                     JSONObject l = libs.optJSONObject(i);
                     if (l != null) out.add(folder("lib:" + l.optString("id"), l.optString("name")));
@@ -357,6 +358,11 @@ public class LivreService extends MediaBrowserService {
                 if (l != null) out.add(folder("lib:" + l.optString("id"), l.optString("name")));
             }
             out.add(folder("all", "Toutes ensemble"));
+        } else if ("made".equals(parentId)) {
+            // comme les onglets Résumés et Balados de l'application : tout ce qui a été fait à partir des livres, prêt à jouer
+            for (String m : new String[]{"resume", "balado", "prof"})
+                for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null && b.optBoolean(m)) out.add(modeItem(b, m, true)); }
+            if (out.isEmpty()) out.add(info("Aucun résumé, balado ou cours pour l'instant : ils se créent dans Mike Library sur le téléphone."));
         } else if ("all".equals(parentId)) {
             for (int i = 0; i < books.length(); i++) { JSONObject b = books.optJSONObject(i); if (b != null) out.add(bookFolder(b)); }
             if (out.isEmpty()) out.add(info("Aucun livre pour l'instant."));
@@ -402,9 +408,16 @@ public class LivreService extends MediaBrowserService {
     static void catalogChanged() {
         LivreService s = instance; if (s == null) return;
         s.main.post(() -> {
-            JSONArray libs = s.catalog().optJSONArray("libs");
+            JSONObject cat = s.catalog();
+            JSONArray libs = cat.optJSONArray("libs"), books = cat.optJSONArray("books");
             s.notifyChildrenChanged(ROOT);
+            // le dossier de chaque livre aussi : un résumé, un balado ou un cours tout juste fait doit y apparaître (l'auto garde sinon l'ancienne liste)
+            if (books != null) for (int i = 0; i < books.length(); i++) {
+                JSONObject b = books.optJSONObject(i);
+                if (b != null) s.notifyChildrenChanged("bk:" + b.optString("id"));
+            }
             s.notifyChildrenChanged("recent");
+            s.notifyChildrenChanged("made");
             s.notifyChildrenChanged("libs");
             s.notifyChildrenChanged("all");
             if (libs != null) for (int i = 0; i < libs.length(); i++) {

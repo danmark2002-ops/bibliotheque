@@ -156,7 +156,7 @@ async function maintenance() {
   } catch {}
   thumbsSoon();
 }
-async function loadBooks() { S.books = await api('/api/books'); await loadCols(); }
+async function loadBooks() { S.books = await api('/api/books'); await loadCols(); if (typeof AutoSync !== 'undefined') AutoSync.schedule(800); } // résumé, couverture, titre… : l'auto suit tout de suite
 
 // ================= Connexion =================
 function renderAuth() {
@@ -1901,10 +1901,11 @@ const AutoSync = {
       const t = !b.trashed && b.summary?.text;
       if (!t) { if (sig[b.id]) { AndroidAuto.remove('resume/' + b.id + '.json'); delete sig[b.id]; changed = true; } continue; }
       have.add(b.id);
-      const k = t.length + ':' + (b.summary.date || 0);
+      const k = 'v2:' + t.length + ':' + (b.summary.date || 0);
       if (sig[b.id] === k) continue;
+      // une ligne à la fois : un titre (« L'essentiel ») est dit seul, suivi d'une pause, au lieu d'être collé à la phrase suivante
       const clean = t.replace(/^\s*#+\s*/gm, '').replace(/\*\*?|__|`/g, '').replace(/^\s*[-*•]\s+/gm, '');
-      const u = []; clean.split(/\n{2,}/).map((p) => p.replace(/\n/g, ' ').trim()).filter(Boolean)
+      const u = []; clean.split(/\n+/).map((p) => p.trim()).filter(Boolean)
         .forEach((p, k2, all) => { const ss = sentences(p); ss.forEach((x, j) => u.push([x, 0, j === ss.length - 1 ? (k2 === all.length - 1 ? 2 : 1) : 0])); });
       if (AndroidAuto.writeText('resume/' + b.id + '.json', JSON.stringify({ v: 1, kind: 'resume', id: b.id, title: b.title, u }))) { sig[b.id] = k; changed = true; }
     }
