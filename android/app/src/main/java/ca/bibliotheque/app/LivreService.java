@@ -145,9 +145,10 @@ public class LivreService extends MediaBrowserService {
         session.setActive(true); // les boutons de l'auto et du volant arrivent ici dès la connexion
         applyPhone();
         AudioAttributes attrs = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
+        ttsAttrs = attrs;
         if (Build.VERSION.SDK_INT >= 26) focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
-        String sherpa = sherpaEngine();
-        tts = sherpa != null ? new TextToSpeech(this, st -> initTts(st, attrs, sherpa), sherpa) : new TextToSpeech(this, st -> initTts(st, attrs, null));
+        try { awake = ((android.os.PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "MikeLibrary:lecture"); awake.setReferenceCounted(false); } catch (Exception ignored) { }
+        makeTts();
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
     }
@@ -161,6 +162,43 @@ public class LivreService extends MediaBrowserService {
             }
         } catch (Exception ignored) { }
         return null;
+    }
+
+    private AudioAttributes ttsAttrs;
+    /** Le moteur de voix (Sherpa s'il est installé, sinon celui du téléphone) */
+    private void makeTts() {
+        String sherpa = sherpaEngine();
+        tts = sherpa != null ? new TextToSpeech(this, st -> initTts(st, ttsAttrs, sherpa), sherpa) : new TextToSpeech(this, st -> initTts(st, ttsAttrs, null));
+    }
+
+    // ---------------------------------------------------------------- lecture qui ne s'arrête pas toute seule (auto, écran éteint)
+    /**
+     * Le processeur reste éveillé pendant la lecture : sinon, téléphone non branché et écran éteint (Android Auto sans fil),
+     * le téléphone s'endort entre deux phrases et la phrase suivante ne part jamais.
+     */
+    private android.os.PowerManager.WakeLock awake;
+    private void keepAwake(boolean on) {
+        try { if (awake == null) return; if (on) awake.acquire(4L * 3600 * 1000); else if (awake.isHeld()) awake.release(); } catch (Exception ignored) { }
+    }
+    private int stuck = 0, stuckIdx = -1;
+    /**
+     * Chien de garde : certains moteurs de voix (et le moteur qui plante en arrière-plan) ne disent jamais « phrase finie ».
+     * Si une phrase dure bien plus longtemps que prévu, on relance le moteur de voix et on reprend à cette phrase.
+     */
+    private void watch(int t, String text, String what) {
+        long ms = 15000 + (long) (text.length() * 220 / Math.max(0.5f, rate));
+        main.postDelayed(() -> {
+            if (!playing || token != t || waitingMore || asking) return;
+            if (stuckIdx == idx) stuck++; else { stuck = 1; stuckIdx = idx; }
+            Crashes.note(this, "lecture : le moteur de voix ne répondait plus (" + what + ", phrase " + idx + ") — relancé");
+            if (stuck >= 3 && what.equals("phrase") && idx + 1 < units.size()) { idx++; stuck = 0; } // cette phrase-là bloque le moteur : on la saute
+            restartTts();
+        }, ms);
+    }
+    private void restartTts() {
+        ttsReady = false; token++;
+        try { tts.setOnUtteranceProgressListener(null); tts.stop(); tts.shutdown(); } catch (Exception ignored) { }
+        makeTts(); // une fois prêt, initTts reprend la lecture (playing est resté vrai)
     }
 
     private void initTts(int st, AudioAttributes attrs, String engine) {
@@ -205,6 +243,7 @@ public class LivreService extends MediaBrowserService {
     public void onDestroy() {
         save();
         instance = null;
+        keepAwake(false);
         clip.stop(); if (tts != null) { tts.stop(); tts.shutdown(); }
         if (ears != null) { try { ears.destroy(); } catch (Exception ignored) { } }
         session.release();
@@ -586,6 +625,7 @@ public class LivreService extends MediaBrowserService {
         int got = Build.VERSION.SDK_INT >= 26 ? audio.requestAudioFocus(focus) : audio.requestAudioFocus(this::onFocus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
         if (got != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) { error("Le son est occupé par une autre application."); return; }
         playing = true;
+        keepAwake(true);
         session.setActive(true);
         goForeground();
         updateState();
@@ -598,6 +638,7 @@ public class LivreService extends MediaBrowserService {
 
     private void pause() {
         playing = false; token++;
+        keepAwake(false);
         if (tts != null) tts.stop();
         clip.pause(); // la voix de studio reprendra là où elle s'est arrêtée
         save();
@@ -622,7 +663,8 @@ public class LivreService extends MediaBrowserService {
         if (interIdx < inter.size()) {
             String x = inter.get(interIdx);
             expressive(x, interIdx);
-            tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":q" + interIdx);
+            if (tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":q" + interIdx) == TextToSpeech.ERROR) { restartTts(); return; }
+            watch(t, x, "intervention");
             updateState();
             return;
         }
@@ -630,7 +672,8 @@ public class LivreService extends MediaBrowserService {
         if (duo && phoneShifted() && phoneSpeak(t)) return;
         if (duo) { float[] ps = ProfStyle.duo(this, x, idx, speaker(), duoA != null && duoA.equals(duoB), duoReal); tts.setPitch(ps[0]); tts.setSpeechRate(ps[1]); }
         else if (prof) expressive(x, idx); else { tts.setPitch(1f); tts.setSpeechRate(rate); }
-        tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx);
+        if (tts.speak(x, TextToSpeech.QUEUE_FLUSH, new Bundle(), t + ":" + idx) == TextToSpeech.ERROR) { Crashes.note(this, "lecture : moteur de voix déconnecté — relancé"); restartTts(); return; }
+        watch(t, x, "phrase");
         updateState();
     }
 
