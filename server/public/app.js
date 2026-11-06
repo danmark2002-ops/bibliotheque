@@ -912,6 +912,7 @@ const Recv = {
   },
 };
 window.__livreEnvoye = (j) => { try { Recv.queue.push(JSON.parse(j)); Recv.take(); } catch {} };
+window.__cleRecue = (t) => KeyGuide.received(t); // clé envoyée depuis le téléphone : acceptée à tout moment (code de la télé requis)
 
 function addFromLink() {
   const inp = h('input', { type: 'url', placeholder: 'https://…', autocomplete: 'off' });
@@ -2821,13 +2822,7 @@ const KeyGuide = {
   startTv() {
     const addr = AndroidAI.receiveStart();
     if (!addr) return this.manual('Connecte la télé au Wi-Fi de la maison pour recevoir la clé depuis ton téléphone, ou tape-la ici.');
-    let done = false;
-    AndroidAI.receiveKey(true);
-    window.__cleRecue = (t) => {
-      const k = this.find(t);
-      if (!k) return toast('Ce qui a été envoyé n\'est pas une clé (elle commence par AQ. ou AIza).');
-      done = true; close(); this.lastTried = ''; this.verify(k);
-    };
+    let keep = false;
     const close = sheet('IA gratuite sur la télé', h('div', {},
       h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut une « clé ». Le plus simple : la faire sur ton téléphone et l\'envoyer à la télé.'),
       h('ol', { class: 'kg-list' },
@@ -2836,10 +2831,22 @@ const KeyGuide = {
         h('li', {}, 'Colle-la dans la case, puis « Envoyer la clé à la télé ». La télé la vérifie toute seule.')),
       h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur tes appareils.'),
       h('div', { class: 'actions', style: { marginTop: '14px' } },
-        h('button', { class: 'btn', onclick: () => { close(); this.manual(''); } }, 'Taper la clé avec la télécommande'))), { wide: true });
-    // la réception reste ouverte (livres envoyés ensuite) ; seule l'attente de la clé s'arrête avec la fenêtre
+        h('button', { class: 'btn', onclick: () => { keep = true; close(); this.manual(''); } }, 'Taper la clé avec la télécommande'))), { wide: true });
+    this.keySheets.add(close);
+    // fermée par le X : la fonction demandée (vidéo…) ne repart pas toute seule ; une clé envoyée plus tard reste acceptée
     const scrim = $$('.scrim').pop();
-    new MutationObserver((_, o) => { if (scrim.isConnected) return; o.disconnect(); try { AndroidAI.receiveKey(false); } catch {} window.__cleRecue = null; if (!done) this.then = null; }).observe(document.body, { childList: true });
+    new MutationObserver((_, o) => { if (scrim.isConnected) return; o.disconnect(); this.keySheets.delete(close); if (!keep && !this.verifying) this.then = null; }).observe(document.body, { childList: true });
+  },
+  keySheets: new Set(), verifying: false,
+  // Une clé envoyée par la page du téléphone (protégée par le code de la télé) : acceptée à tout moment, vérifiée, puis enregistrée
+  received(t) {
+    const k = this.find(t);
+    if (!k) return toast('Ce qui a été envoyé n\'est pas une clé (elle commence par AQ. ou AIza).');
+    this.verifying = true;
+    for (const c of [...this.keySheets]) { try { c(); } catch {} }
+    this.keySheets.clear();
+    this.verifying = false;
+    this.lastTried = ''; this.verify(k);
   },
   // Version web (iPhone…) : la page de Google s'ouvre dans un nouvel onglet ; en revenant, « Coller ma clé »
   startWeb() {
@@ -2909,8 +2916,11 @@ const KeyGuide = {
   },
   manual(err) {
     const inp = h('input', { type: 'password', placeholder: 'AQ.… ou AIza…', autocomplete: 'off' });
+    const addr = TV.on && window.AndroidAI?.receiveStart ? AndroidAI.receiveStart() : '';
     const close = sheet('Coller la clé', h('div', {},
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, 'Touche longuement la case, puis « Coller ».'),
+      addr ? h('p', {}, 'Le plus simple : envoie-la depuis ton téléphone (section « 🔑 Clé IA gratuite » de cette page). La télé la reçoit et la vérifie toute seule.') : null,
+      addr ? recvCard(addr) : null,
+      h('p', { class: 'muted', style: { marginTop: addr ? '6px' : '-6px' } }, addr ? 'Ou tape-la ici avec la télécommande :' : 'Touche longuement la case, puis « Coller ».'),
       h('label', { class: 'field' }, 'Clé', inp),
       err ? h('p', { style: { color: 'var(--danger)' } }, err) : null,
       h('div', { class: 'actions', style: { marginTop: '14px' } },
@@ -2919,8 +2929,9 @@ const KeyGuide = {
           if (!k) { close(); return this.manual('Ce n\'est pas une clé (elle commence par AQ. ou AIza).'); }
           close();
           if (AndroidAI.checkGeminiKey) { this.lastTried = ''; this.verify(k); } else { AndroidAI.setGeminiKey(k); toast('Clé enregistrée'); const t = this.then; this.then = null; t && t(); }
-        } }, 'Valider'))));
-    setTimeout(() => inp.focus(), 50);
+        } }, 'Valider'))), { wide: !!addr });
+    this.keySheets.add(close);
+    if (!TV.on) setTimeout(() => inp.focus(), 50); // télé : pas de clavier qui surgit tout de suite
   },
 };
 window.__focusBack = () => { if (KeyGuide.active) setTimeout(() => KeyGuide.look(), 250); };

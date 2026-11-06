@@ -1839,13 +1839,15 @@ public class MainActivity extends Activity {
         public String receiveStart() {
             try { String a = Reception.start(MainActivity.this, (file, name) -> {
                 try { js("__livreEnvoye", new JSONObject().put("file", file).put("name", name).toString()); } catch (Exception ignored) { }
-            }); return a == null ? "" : a; } catch (Exception e) { return ""; }
+            });
+            Reception.cle = (t) -> js("__cleRecue", t); // une clé envoyée depuis le téléphone est acceptée tant que la réception est ouverte (code requis)
+            return a == null ? "" : a; } catch (Exception e) { return ""; }
         }
         @JavascriptInterface public void receiveStop() { Reception.stop(); }
         /** Code à 4 chiffres à donner sur le téléphone (il est aussi dans le code QR) */
         @JavascriptInterface public String receivePin() { return Reception.pin(); }
         /** La télé attend une clé IA envoyée depuis le téléphone (page de réception) */
-        @JavascriptInterface public void receiveKey(boolean on) { Reception.cle = on ? (t) -> js("__cleRecue", t) : null; }
+        @JavascriptInterface public void receiveKey(boolean on) { if (on) Reception.cle = (t) -> js("__cleRecue", t); }
         @JavascriptInterface public void receiveDone(String file) { if (file != null && file.matches("[fw]\\d+\\.[a-z0-9]{1,6}")) new File(Reception.dir(MainActivity.this), file).delete(); }
 
         /** Parcours guidé de la clé gratuite : page de Google en panneau, lecture de la copie, vérification */

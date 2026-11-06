@@ -133,7 +133,7 @@ final class Reception {
         + "pi.oninput=()=>{try{localStorage.setItem('mlpin',pi.value.trim())}catch(e){}};"
         + "const why=s=>s==403?'Code incorrect : tape le code à 4 chiffres affiché sur la télé (ou scanne son code QR).':s==415?'Refusé : seulement des livres (PDF, EPUB, Word, texte) ou livres audio.':s==413?'Fichier trop gros (500 Mo au maximum).':null;"
         + "$('ks').onclick=()=>{const m=$('km'),v=$('k').value.trim();if(!v){m.textContent='Colle d\\'abord ta clé dans la case.';m.className='err';return}"
-        + "const x=new XMLHttpRequest();x.open('POST','/cle');x.setRequestHeader('X-Pin',pi.value.trim());x.onload=()=>{const ok=x.status==200;m.textContent=ok?'✔ Clé envoyée : regarde la télé, elle la vérifie.':why(x.status)||'La télé n\\'attend pas de clé : ouvre d\\'abord « Vidéo » ou les réglages de l\\'IA sur la télé.';m.className=ok?'ok':'err'};"
+        + "const x=new XMLHttpRequest();x.open('POST','/cle');x.setRequestHeader('X-Pin',pi.value.trim());x.onload=()=>{const ok=x.status==200;m.textContent=ok?'✔ Clé envoyée : regarde la télé, elle la vérifie.':why(x.status)||'La télé ne peut pas recevoir la clé : ouvre Mike Library sur la télé, puis réessaie.';m.className=ok?'ok':'err'};"
         + "x.onerror=()=>{m.textContent='Échec : la télé et le téléphone sont-ils sur le même Wi-Fi ?';m.className='err'};x.send(v)};"
         + "const l=$('l');$('f').onchange=async e=>{for(const file of e.target.files){"
         + "const d=document.createElement('div');d.className='f';d.innerHTML='<b></b><div class=bar><i></i></div><small></small>';d.querySelector('b').textContent=file.name;l.prepend(d);"
