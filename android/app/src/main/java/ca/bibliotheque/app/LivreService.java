@@ -1116,8 +1116,10 @@ public class LivreService extends MediaBrowserService {
             p.put(isPdf ? "page" : "pos", marks.get(idx));
             p.put("frac", totalChars == 0 ? 0 : (double) startChars[idx] / totalChars);
             all.put(bookId, p);
-            File f = new File(dir(), "progress.json");
-            try (FileOutputStream o = new FileOutputStream(f)) { o.write(all.toString().getBytes(StandardCharsets.UTF_8)); }
+            // écrit à côté puis remplace d'un coup : une coupure pendant l'écriture ne fait jamais perdre la position des livres
+            File f = new File(dir(), "progress.json"), tmp = new File(dir(), "progress.json.tmp");
+            try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(all.toString().getBytes(StandardCharsets.UTF_8)); o.getFD().sync(); }
+            if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f); }
         } catch (Exception ignored) { }
     }
 

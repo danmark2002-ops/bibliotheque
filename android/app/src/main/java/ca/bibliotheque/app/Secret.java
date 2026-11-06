@@ -29,20 +29,26 @@ final class Secret {
         return g.generateKey();
     }
 
-    static synchronized void put(Context c, String name, String value) {
+    /** Chiffre et garde ; faux si le coffre du téléphone ne répond pas : alors rien n'est écrit (jamais de clé en clair) */
+    static synchronized boolean put(Context c, String name, String value) {
         SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        if (value == null || value.isEmpty()) { sp.edit().remove(name).apply(); return; }
+        if (value == null || value.isEmpty()) { sp.edit().remove(name).apply(); return true; }
         try {
             Cipher ci = Cipher.getInstance("AES/GCM/NoPadding"); ci.init(Cipher.ENCRYPT_MODE, key());
             byte[] iv = ci.getIV(), ct = ci.doFinal(value.getBytes("UTF-8"));
-            sp.edit().putString(name, Base64.encodeToString(iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)).apply();
-        } catch (Exception e) { sp.edit().putString(name, "plain:" + value).apply(); } // coffre absent (très rare) : on garde quand même la clé
+            sp.edit().putString(name, Base64.encodeToString(iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)).commit();
+            return true;
+        } catch (Exception e) { Crashes.note(c, "clé « " + name + " » non enregistrée : coffre de clés du téléphone indisponible (" + e.getClass().getSimpleName() + ")"); return false; }
     }
 
     static synchronized String get(Context c, String name) {
         String v = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(name, "");
         if (v.isEmpty()) return "";
-        if (v.startsWith("plain:")) return v.substring(6);
+        if (v.startsWith("plain:")) { // ancienne version : clé gardée en clair ; on la chiffre maintenant (en clair seulement si le coffre est encore absent)
+            String plain = v.substring(6);
+            put(c, name, plain);
+            return plain;
+        }
         try {
             int i = v.indexOf(':');
             Cipher ci = Cipher.getInstance("AES/GCM/NoPadding");

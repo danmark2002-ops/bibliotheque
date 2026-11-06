@@ -44,11 +44,11 @@ final class IaGratuite {
         // ancienne clé en clair : déplacée une fois dans le coffre chiffré, puis effacée
         android.content.SharedPreferences sp = c.getSharedPreferences("ia", Context.MODE_PRIVATE);
         String old = sp.getString("gemini", "");
-        if (!old.isEmpty()) { Secret.put(c, "gemini", old); sp.edit().remove("gemini").apply(); }
+        if (!old.isEmpty() && Secret.put(c, "gemini", old)) sp.edit().remove("gemini").apply();
         return Secret.get(c, "gemini");
     }
 
-    static void setKey(Context c, String k) { c.getSharedPreferences("ia", Context.MODE_PRIVATE).edit().remove("gemini").apply(); Secret.put(c, "gemini", k == null ? "" : k.trim()); }
+    static boolean setKey(Context c, String k) { boolean ok = Secret.put(c, "gemini", k == null ? "" : k.trim()); if (ok) c.getSharedPreferences("ia", Context.MODE_PRIVATE).edit().remove("gemini").apply(); return ok; }
 
     /** Une erreur à montrer telle quelle : inutile de réessayer. */
     static final class Fatal extends Exception { Fatal(String m) { super(m); } }

@@ -155,6 +155,17 @@ public class MainActivity extends Activity {
         });
 
         web.setWebChromeClient(new WebChromeClient() {
+            private int jsErrors = 0;
+            /** Erreurs de la page (JavaScript) : notées dans le Journal des problèmes, pour comprendre un bogue sans câble ni ordinateur */
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage m) {
+                if (m.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR && jsErrors < 15) {
+                    jsErrors++;
+                    String src = m.sourceId() == null ? "" : m.sourceId().replaceAll("^.*/", "");
+                    Crashes.note(MainActivity.this, "page : " + m.message() + (src.isEmpty() ? "" : " (" + src + ":" + m.lineNumber() + ")"));
+                }
+                return false;
+            }
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
@@ -1815,7 +1826,7 @@ public class MainActivity extends Activity {
 
         /** Clé Gemini gratuite de la personne : gardée seulement sur ce téléphone. */
         @JavascriptInterface
-        public void setGeminiKey(String k) { IaGratuite.setKey(MainActivity.this, k); }
+        public boolean setGeminiKey(String k) { return IaGratuite.setKey(MainActivity.this, k); }
         /** Clé Claude (facultative), chiffrée par le coffre d'Android ; seul ce nom est permis */
         @JavascriptInterface public String secretGet(String name) { return "claude".equals(name) ? Secret.get(MainActivity.this, "claude") : ""; }
         @JavascriptInterface public void secretSet(String name, String v) { if ("claude".equals(name)) Secret.put(MainActivity.this, "claude", v == null ? "" : v.trim()); }
@@ -1831,6 +1842,8 @@ public class MainActivity extends Activity {
             }); return a == null ? "" : a; } catch (Exception e) { return ""; }
         }
         @JavascriptInterface public void receiveStop() { Reception.stop(); }
+        /** Code à 4 chiffres à donner sur le téléphone (il est aussi dans le code QR) */
+        @JavascriptInterface public String receivePin() { return Reception.pin(); }
         /** La télé attend une clé IA envoyée depuis le téléphone (page de réception) */
         @JavascriptInterface public void receiveKey(boolean on) { Reception.cle = on ? (t) -> js("__cleRecue", t) : null; }
         @JavascriptInterface public void receiveDone(String file) { if (file != null && file.matches("[fw]\\d+\\.[a-z0-9]{1,6}")) new File(Reception.dir(MainActivity.this), file).delete(); }

@@ -369,12 +369,45 @@ final class VideoMaker {
             long writtenSamples = 0;
             int total = 0; for (Scene s : scenes) total += s.sentences.size();
             int count = 0;
+            // Avec la clé Gemini, la vidéo est racontée par la voix de studio (naturelle), une scène par demande ;
+            // si Google refuse (quota du jour, voix indisponible), la suite est dite par la voix du téléphone.
+            String gkey = ""; try { gkey = IaGratuite.key(ctx); } catch (Exception ignored) { }
+            boolean studio = !gkey.isEmpty();
             try (FileOutputStream out = new FileOutputStream(pcm)) {
                 // carte de titre : 3 s de silence (fixé quand on connaît la fréquence)
                 long titleUs = 3_000_000;
                 boolean titleWritten = false;
                 for (int si = 0; si < scenes.size(); si++) {
                     Scene s = scenes.get(si);
+                    if (studio) {
+                        check();
+                        p.on("voice", (double) count / Math.max(1, total), "Voix de studio… scène " + (si + 1) + " sur " + scenes.size());
+                        Studio.Audio a = studioScene(gkey, s);
+                        if (a != null) {
+                            sampleRate = OUT_RATE;
+                            byte[] data = fadeEdges(resample(pcmBytes(a.pcm), a.rate, sampleRate), sampleRate);
+                            if (!titleWritten) { writeSilence(out, usToSamples(titleUs, sampleRate)); writtenSamples += usToSamples(titleUs, sampleRate); titleWritten = true; }
+                            s.startUs = samplesToUs(writtenSamples, sampleRate);
+                            long start = writtenSamples, len = data.length / 2;
+                            out.write(data); writtenSamples += len;
+                            // sous-titres : chaque phrase reçoit sa part du son, selon sa longueur
+                            int chars = 0; for (String t : s.sentences) chars += t.length();
+                            long acc = 0;
+                            for (String t : s.sentences) {
+                                Seg g = new Seg(); g.scene = si; g.text = t;
+                                g.startUs = samplesToUs(start + len * acc / Math.max(1, chars), sampleRate);
+                                acc += t.length();
+                                g.endUs = samplesToUs(start + len * acc / Math.max(1, chars), sampleRate);
+                                segs.add(g);
+                            }
+                            count += s.sentences.size();
+                            writeSilence(out, usToSamples(900_000, sampleRate)); writtenSamples += usToSamples(900_000, sampleRate);
+                            s.endUs = samplesToUs(writtenSamples, sampleRate);
+                            continue;
+                        }
+                        studio = false;
+                        p.on("voice", (double) count / Math.max(1, total), "Voix de studio indisponible (" + studioWhy + ") : la suite est dite par la voix du téléphone.");
+                    }
                     for (int k = 0; k < s.sentences.size(); k++) {
                         check();
                         String text = s.sentences.get(k);
@@ -418,6 +451,34 @@ final class VideoMaker {
             TextToSpeech t = tts; tts = null;
             mainH.post(() -> { try { t.shutdown(); } catch (Exception ignored) { } });
         }
+    }
+
+    private static volatile String studioWhy = "";
+    /** Une scène dite par la voix de studio ; null si Google refuse (on passe alors à la voix du téléphone) */
+    private static Studio.Audio studioScene(String key, Scene s) throws Exception {
+        StringBuilder t = new StringBuilder();
+        for (String x : s.sentences) { if (t.length() > 0) t.append(' '); t.append(x); }
+        List<Studio.Line> lines = new ArrayList<>();
+        lines.add(new Studio.Line(0, t.toString(), "narratrice de documentaire, chaleureuse, posée et captivante"));
+        for (int tries = 0; tries < 4; tries++) {
+            check();
+            try {
+                Studio.Audio a = Studio.render(key, lines);
+                if (a != null && a.pcm.length > a.rate / 2) return a;
+                studioWhy = "son vide"; return null;
+            } catch (Studio.Fail f) {
+                studioWhy = f.getMessage();
+                if (!f.kind.equals("minute") && !f.kind.equals("net")) return null; // quota du jour, clé, voix refusée : inutile d'insister
+                Thread.sleep(Math.max(5000, Math.min(60000, f.retryMs > 0 ? f.retryMs : 15000)));
+            }
+        }
+        return null;
+    }
+
+    private static byte[] pcmBytes(short[] x) {
+        byte[] b = new byte[x.length * 2];
+        for (int i = 0; i < x.length; i++) { b[2 * i] = (byte) x[i]; b[2 * i + 1] = (byte) (x[i] >> 8); }
+        return b;
     }
 
     private static Context styleCtx; // ton et vitesse du Professeur, les mêmes que pour ses cours

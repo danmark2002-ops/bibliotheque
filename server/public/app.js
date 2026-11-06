@@ -861,6 +861,19 @@ function openAddMenu() {
 
 // « Recevoir des livres » : la télé (ou une tablette) affiche une adresse ; on l'ouvre dans le navigateur du téléphone,
 // on choisit ses livres, et ils arrivent directement ici, par le Wi-Fi de la maison.
+// L'adresse de réception à donner au téléphone : un code QR à scanner (adresse + code inclus), ou l'adresse et le code à taper
+function recvCard(addr) {
+  const pin = window.AndroidAI?.receivePin ? AndroidAI.receivePin() : '';
+  const url = addr + (pin ? '/?p=' + pin : '');
+  let svg = '';
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); svg = q.createSvgTag({ cellSize: 5, margin: 3, scalable: true }); } catch {}
+  return h('div', { class: 'recv-card' },
+    svg ? h('div', { class: 'recv-qr', html: svg, role: 'img', 'aria-label': 'Code QR de l\'adresse de réception' }) : null,
+    h('div', {},
+      svg ? h('p', {}, h('b', {}, 'Scanne ce code avec l\'appareil photo du téléphone'), ' (même Wi-Fi). Ou ouvre Chrome et tape :') : h('p', {}, 'Ouvre Chrome sur le téléphone (même Wi-Fi) et tape :'),
+      h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, '')),
+      pin ? h('p', { class: 'recv-pin' }, 'Code : ', h('b', {}, pin)) : null));
+}
 const Recv = {
   ok: () => !!window.AndroidAI?.receiveStart,
   queue: [], busy: false, list: null, n: 0,
@@ -870,8 +883,7 @@ const Recv = {
     this.n = 0;
     this.list = h('div', { class: 'recv-list' });
     const close = sheet('Recevoir des livres', h('div', {},
-      h('p', {}, 'Sur ton téléphone (branché sur le même Wi-Fi), ouvre le navigateur — Chrome ou Safari — et tape cette adresse :'),
-      h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, '')),
+      recvCard(addr),
       h('p', { class: 'muted' }, 'Touche « Choisir des livres », sélectionne tes PDF, EPUB ou Word : ils apparaissent ici, puis sur l\'étagère. Garde Mike Library ouvert sur la télé pendant l\'envoi.'),
       h('details', { class: 'recv-help' }, h('summary', {}, 'La page ne s\'ouvre pas sur le téléphone ?'),
         h('p', {}, 'Certains Wi-Fi empêchent les appareils de se parler entre eux : Wi-Fi « invité », hôtel, chalet loué, certains routeurs. La télé et le téléphone ont Internet, mais ne se voient pas.'),
@@ -1603,7 +1615,7 @@ function creationsEl(kind) {
     } else if (kind === 'resumes') {
       const t = b.summary?.text; if (!t) continue;
       const mn = Math.max(1, Math.round(t.split(/\s+/).length / 150));
-      items.push({ b, del: () => deleteSummary(b), sub: `Résumé · ${mn} min à lire ou à écouter`, note: b.summary.model === 'auto' ? 'Résumé automatique' : 'Résumé IA', act: 'Ouvrir', ic: 'spark', open: () => openSummary(b) });
+      items.push({ b, del: () => deleteSummary(b), sub: `Résumé · ${mn} min à lire ou à écouter`, note: b.summary.model === 'auto' ? 'Extraits (sans IA)' : 'Résumé IA', act: 'Ouvrir', ic: 'spark', open: () => openSummary(b) });
     } else if (kind === 'videos') {
       if (!window.AndroidVideo || !Video.exists(b.id)) continue;
       items.push({ b, del: () => { AndroidVideo.remove(b.id); toast('Vidéo supprimée'); renderLibrary({ now: true }); }, sub: 'Condensé vidéo', note: 'Prêt', act: 'Regarder', ic: 'film', open: () => Video.open(b) });
@@ -1708,7 +1720,12 @@ function sheet(title, body, { wide } = {}) {
       h('div', { class: 'sheet-head' }, h('h2', {}, title), h('button', { class: 'rbtn', onclick: close, 'aria-label': 'Fermer' }, icon('close'))),
       body));
   document.body.append(scrim);
-  if (TV.on) setTimeout(() => { if (scrim.isConnected && !scrim.contains(document.activeElement)) TV.first(); }, 40); // télécommande : la sélection entre dans la fenêtre
+  if (TV.on) setTimeout(() => { // télécommande : la sélection entre dans la fenêtre, qui reste montrée depuis son titre si le bouton y est visible
+    if (!scrim.isConnected || scrim.contains(document.activeElement)) return;
+    TV.first();
+    const sh = scrim.querySelector('.sheet'), f = document.activeElement;
+    if (sh && f && sh.contains(f)) { sh.scrollTop = 0; if (f.getBoundingClientRect().bottom > sh.getBoundingClientRect().bottom - 8) f.scrollIntoView({ block: 'nearest' }); }
+  }, 40);
   const onKey = (e) => { if (e.key === 'Escape') { close(); removeEventListener('keydown', onKey); } };
   addEventListener('keydown', onKey);
   return close;
@@ -2641,7 +2658,7 @@ function openSummary(b) {
   const s = b.summary;
   if (s?.text) {
     const close = sheet('Résumé', h('div', { class: 'summary' },
-      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' + (s.why ? ' (Pro n\'a pas répondu : ' + s.why + ')' : '') : s.model === 'auto' ? 'résumé automatique : les passages clés du livre' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
+      h('p', { class: 'muted', style: { marginTop: '-6px' } }, `${b.title} · ${lastRead(s.date)} · ${s.model === 'gemini-nano' ? 'IA du téléphone (Gemini Nano)' : s.model === 'gemini-pro' ? 'Gemini Pro' : s.model === 'gemini' ? 'Gemini Flash' + (s.why ? ' (Pro n\'a pas répondu : ' + s.why + ')' : '') : s.model === 'auto' ? 'extraits du livre choisis par l\'app (sans IA)' : 'Claude'}${s.truncated ? ' · livre très long, résumé sur sa plus grande partie' : ''}`),
       h('div', { class: 'sumtext', html: mdToHtml(s.text) }),
       h('div', { class: 'actions', style: { marginTop: '18px', justifyContent: 'space-between' } },
         h('button', { class: 'btn', onclick: async () => { try { await navigator.clipboard.writeText(s.text); toast('Résumé copié'); } catch { toast('Copie impossible'); } } }, icon('copy'), 'Copier'),
@@ -2654,6 +2671,18 @@ function summaryChoices(b) {
   const keyIn = h('input', { type: 'password', placeholder: 'sk-ant-…', value: claudeKey(), autocomplete: 'off' });
   const hasKey = !!window.AndroidAI && Prof.hasKey();
   const canGuide = !!window.AndroidAI && KeyGuide.ok();
+  // Sans clé : on dit franchement ce qui sera fait. Avec l'IA du téléphone (Gemini Nano), un vrai résumé rédigé ;
+  // sans elle, seulement des passages choisis dans le livre, pas un texte écrit par une IA.
+  const extracts = () => [h('h4', {}, 'Extraits du livre (sans IA)'),
+    h('p', {}, 'Ce n\'est pas un résumé rédigé : l\'app choisit les passages les plus importants du livre et les met bout à bout. Pour un vrai résumé, active l\'IA gratuite.'),
+    h('button', { class: canGuide ? 'btn' : 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire les extraits')];
+  const noKey = hasKey ? null : h('div', { class: 'aiopt' },
+    ...(window.AndroidAI && !AndroidAI.web && AndroidAI.status ? [h('h4', {}, 'Sans clé'),
+      h('p', {}, 'L\'IA intégrée du téléphone (Gemini Nano), sans Internet ni compte, si le téléphone l\'a.'),
+      h('button', { class: canGuide ? 'btn' : 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')] : extracts()));
+  if (noKey && window.AndroidAI && !AndroidAI.web && AndroidAI.status) {
+    nanoStatus().then((st) => { if (st !== 'available' && st !== 'downloadable' && st !== 'downloading' && noKey.isConnected) noKey.replaceChildren(...extracts()); }).catch(() => {});
+  }
   const close = sheet('Résumé IA', h('div', {},
     h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
     hasKey ? h('div', { class: 'aiopt' },
@@ -2664,12 +2693,7 @@ function summaryChoices(b) {
       h('h4', {}, 'Activer l\'IA gratuite'),
       h('p', {}, 'Un vrai résumé rédigé par Gemini, l\'IA gratuite de Google. Il faut une clé gratuite : 4 touchers, moins d\'une minute, une seule fois.'),
       h('button', { class: 'btn primary', onclick: () => { close(); KeyGuide.start(() => makeFreeSummary(b)); } }, icon('spark'), 'Activer l\'IA gratuite')) : null,
-    !hasKey ? h('div', { class: 'aiopt' },
-      h('h4', {}, canGuide ? 'Sans clé' : 'Résumé gratuit'),
-      h('p', {}, window.AndroidAI && !AndroidAI.web
-        ? 'Fait sur ton téléphone, sans Internet ni compte : avec l\'IA intégrée de Google (Gemini Nano) si le téléphone l\'a ; sinon, un résumé automatique choisit les passages clés du livre.'
-        : 'Un résumé automatique choisit les passages clés du livre, directement sur l\'appareil.'),
-      h('button', { class: canGuide ? 'btn' : 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé')) : null,
+    !hasKey ? noKey : null,
     h('div', { class: 'aiopt' },
       h('h4', {}, 'Avec ton application d\'IA'),
       h('p', {}, 'Claude, Gemini, ChatGPT… Le livre lui est envoyé avec une demande de résumé déjà écrite.'),
@@ -2807,7 +2831,7 @@ const KeyGuide = {
     const close = sheet('IA gratuite sur la télé', h('div', {},
       h('p', {}, 'Google offre gratuitement son IA, ', h('b', {}, 'Gemini'), '. Il faut une « clé ». Le plus simple : la faire sur ton téléphone et l\'envoyer à la télé.'),
       h('ol', { class: 'kg-list' },
-        h('li', {}, 'Sur ton téléphone, branché sur le même Wi-Fi, ouvre Chrome et tape :', h('div', { class: 'recv-addr' }, addr.replace(/^http:\/\//, ''))),
+        h('li', {}, 'Ouvre la page de la télé sur ton téléphone :', recvCard(addr)),
         h('li', {}, 'Dans la section « 🔑 Clé IA gratuite », ouvre la page de Google, crée la clé et copie-la.'),
         h('li', {}, 'Colle-la dans la case, puis « Envoyer la clé à la télé ». La télé la vérifie toute seule.')),
       h('p', { class: 'muted' }, '✔ Gratuit, aucune carte de crédit. ✔ La clé reste seulement sur tes appareils.'),
@@ -2862,7 +2886,7 @@ const KeyGuide = {
       window.__keyChecked = null; this.checking = false; close();
       let r = {}; try { r = JSON.parse(j); } catch {}
       if (!r.ok) return this.notFound((r.msg || 'Google refuse cette clé.') + ' Copie-la de nouveau depuis la page de Google.');
-      AndroidAI.setGeminiKey(k);
+      if (AndroidAI.setGeminiKey(k) === false) return sheet('Clé non enregistrée', h('p', {}, 'La clé est bonne, mais le coffre de sécurité du téléphone ne répond pas : elle n\'a pas été enregistrée (jamais en clair). Redémarre le téléphone, puis réessaie.'));
       const then = this.then; this.then = null;
       const c2 = sheet('IA activée', h('div', {},
         h('div', { class: 'kg-big' }, '✅'),
@@ -2996,7 +3020,7 @@ ${chunk.replace(/\[page \d+\]/g, '')}`;
       const eng = await this.pickEngine(say);
       const t = await LocalAPI.fullText(b.id, (n, tot) => say(`Lecture du livre… page ${n} sur ${tot}`));
       if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?).');
-      const chunks = chunkText(t.text);
+      const chunks = profChunks(t.text);
       const old = restart ? null : this.info(b.id);
       const work = { n: chunks.length, parts: old && old.n === chunks.length ? old.parts : [],
         asks: chunks.map((c, i) => this.prompt(b, c, i, chunks.length, '{{PREV}}')), sys: this.persona + this.toneNote() };
@@ -3411,7 +3435,21 @@ async function nanoAskRetry(prompt, say) {
   }
 }
 const CHUNK = 6000, MAX_CHUNKS = 24;
-function chunkText(text) {
+// Professeur : au plus 30 parties. Un gros livre donne des parties plus longues (jusqu'à 20 000 caractères chacune) au lieu
+// de 100 appels à l'IA à la suite ; au-delà, les passages les moins importants sont écartés (condense), comme pour le résumé.
+const PROF_MAX = 30, PROF_BIG = 20000;
+function profChunks(text) {
+  let c = chunkText(text);
+  if (c.length <= PROF_MAX) return c;
+  const room = Math.floor(PROF_BIG * PROF_MAX * 0.8); // les paragraphes ne remplissent jamais une partie à ras bord
+  const t = text.length > room ? condense(text, room) : text;
+  for (let size = Math.ceil(t.length / (PROF_MAX * 0.8)), k = 0; k < 6; k++, size = Math.ceil(size * 1.15)) {
+    c = chunkText(t, Math.min(size, PROF_BIG * 1.5));
+    if (c.length <= PROF_MAX) return c;
+  }
+  return c.slice(0, PROF_MAX);
+}
+function chunkText(text, CHUNK = 6000) {
   const out = []; let cur = '';
   for (const para of text.split(/\n{2,}|(?=\[page \d+\])/)) {
     if (cur.length + para.length > CHUNK && cur) { out.push(cur); cur = ''; }

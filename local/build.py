@@ -9,6 +9,8 @@ cdn = '--cdn' in sys.argv  # page publiée (iPhone) : pdf.js chargé depuis le C
 css = (pub / 'app.css').read_text()
 app = (pub / 'app.js').read_text()
 local = (root / 'local.js').read_text()
+# code QR (adresse de réception de la télé à scanner avec le téléphone) : qrcode-generator 1.4.4, licence MIT (Kazuhiko Arase)
+qr = (root / 'vendor' / 'qrcode.js').read_text()
 
 # Vieux moteurs web (Fire TV plus anciennes, Android 6-7) : la syntaxe récente (?. ?? ||= …) est réécrite en ES2019,
 # que tous comprennent ; le sens est identique, et les appareils récents l'exécutent aussi vite.
@@ -61,6 +63,9 @@ html = f"""<!doctype html>
 <body>
 <div id="app"><div class="boot"><div class="boot-mark">❦</div></div></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<script>
+{qr}
+</script>
 <script>
 {local}
 </script>
