@@ -9757,6 +9757,8 @@ const Prof = {
     async pickEngine(say) {
         if (this.engine)
             return this.engine;
+        if (this.hasKey())
+            return (this.engine = 'online'); // avec la clé gratuite : Gemini, bien meilleur que l'IA du téléphone
         let nano = false;
         try {
             nano = await this.ensureNano(say);
@@ -10379,7 +10381,24 @@ function condense(text, maxChars) {
     return out;
 }
 // ---------- IA du téléphone (Gemini Nano) ----------
-function nanoStatus() { return new Promise((res) => { window.__aiStatus = (s) => { window.__aiStatus = null; res(s); }; AndroidAI.status(); }); }
+// une seule question à la fois, et jamais d'attente sans fin : sans réponse en 12 s, l'IA du téléphone est considérée absente
+let nanoStatusP = null;
+function nanoStatus() {
+    if (nanoStatusP)
+        return nanoStatusP;
+    nanoStatusP = new Promise((res) => {
+        const done = (s) => { clearTimeout(t); window.__aiStatus = null; nanoStatusP = null; res(s); };
+        const t = setTimeout(() => done('unavailable'), 12000);
+        window.__aiStatus = done;
+        try {
+            AndroidAI.status();
+        }
+        catch {
+            done('unavailable');
+        }
+    });
+    return nanoStatusP;
+}
 function nanoDownload(onp) {
     return new Promise((res, rej) => { window.__aiDownload = (s) => { if (s.startsWith('progress:'))
         return onp(+s.slice(9)); window.__aiDownload = null; s === 'done' ? res() : rej(new Error('Téléchargement de l\'IA impossible : ' + s.slice(6))); }; AndroidAI.download(); });

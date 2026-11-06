@@ -1745,6 +1745,10 @@ public class MainActivity extends Activity {
     // ---------- IA intégrée au téléphone : Gemini Nano (ML Kit GenAI, API « Prompt ») ----------
     private com.google.mlkit.genai.prompt.java.GenerativeModelFutures nano;
     private final java.util.concurrent.ExecutorService aiExec = java.util.concurrent.Executors.newSingleThreadExecutor();
+    // l'état et le téléchargement de l'IA du téléphone ont chacun leur file : un téléchargement ou une demande bloqués
+    // ne doivent jamais faire attendre sans fin le Professeur, le résumé ou les balados
+    private final java.util.concurrent.ExecutorService aiStatusExec = java.util.concurrent.Executors.newCachedThreadPool();
+    private final java.util.concurrent.ExecutorService aiDlExec = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     private com.google.mlkit.genai.prompt.java.GenerativeModelFutures nano() {
         if (nano == null) nano = com.google.mlkit.genai.prompt.java.GenerativeModelFutures.from(com.google.mlkit.genai.prompt.Generation.INSTANCE.getClient());
@@ -1773,10 +1777,10 @@ public class MainActivity extends Activity {
         public void status() {
             // IA du téléphone (Gemini Nano) : Android 8 ou plus seulement (vieux téléviseurs : non disponible)
             if (Build.VERSION.SDK_INT < 26) { js("__aiStatus", "unavailable"); return; }
-            aiExec.execute(() -> {
+            aiStatusExec.execute(() -> {
                 String r;
                 try {
-                    int st = nano().checkStatus().get();
+                    int st = nano().checkStatus().get(10, java.util.concurrent.TimeUnit.SECONDS);
                     r = st == com.google.mlkit.genai.common.FeatureStatus.AVAILABLE ? "available"
                       : st == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE ? "downloadable"
                       : st == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING ? "downloading" : "unavailable";
@@ -1789,13 +1793,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void download() {
             if (Build.VERSION.SDK_INT < 26) { js("__aiDownload", "error:indisponible"); return; }
-            aiExec.execute(() -> {
+            aiDlExec.execute(() -> {
                 try {
                     nano().download(new com.google.mlkit.genai.common.DownloadCallback() {
                         @Override public void onDownloadProgress(long bytes) { js("__aiDownload", "progress:" + bytes); }
                         @Override public void onDownloadFailed(com.google.mlkit.genai.common.GenAiException e) { js("__aiDownload", "error:" + errText(e)); }
                         @Override public void onDownloadCompleted() { js("__aiDownload", "done"); }
-                    }).get();
+                    }).get(20, java.util.concurrent.TimeUnit.MINUTES);
                     js("__aiDownload", "done");
                 } catch (Throwable e) { js("__aiDownload", "error:" + errText(e)); }
             });
@@ -1892,7 +1896,7 @@ public class MainActivity extends Activity {
                 JSONObject res = new JSONObject();
                 try {
                     res.put("id", id);
-                    com.google.mlkit.genai.prompt.GenerateContentResponse r = nano().generateContent(prompt).get();
+                    com.google.mlkit.genai.prompt.GenerateContentResponse r = nano().generateContent(prompt).get(3, java.util.concurrent.TimeUnit.MINUTES);
                     StringBuilder sb = new StringBuilder();
                     if (r.getCandidates() != null && !r.getCandidates().isEmpty() && r.getCandidates().get(0).getText() != null) sb.append(r.getCandidates().get(0).getText());
                     res.put("text", sb.toString());
