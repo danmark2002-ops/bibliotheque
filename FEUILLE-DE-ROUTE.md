@@ -44,6 +44,7 @@ Mise à jour : 2026-10-28 (v10.1). À lire au début de chaque conversation.
 - v10.40 : télé — le menu de gauche (et l'étagère) respectent aussi la zone sûre : « Menu » n'est plus coupé en bas.
 - v10.41 : télé — menu de gauche plus intuitif : la sélection de la télécommande est le seul bloc doré plein (la page affichée n'a plus qu'une barre et du texte or), et passer sur Livres / Balados / Résumés / Vidéos affiche le contenu sans appuyer sur OK.
 - v10.42 : IA — Google a retiré des modèles Gemini (erreur 404 pour la vidéo) : nouveaux noms connus (3.8 Flash, 3.6 Flash, 3.1 Pro…) et, si tous répondent 404, l'app lit la liste réelle des modèles offerts à la clé et choisit elle-même (ModelPick, essais sur ordinateur).
+- v10.43 : voix de studio — requêtes mises au format actuel de Google (plus de champ « mode » ; generateContent 3.8 : une partie par réplique avec speech_metadata.speaker et le jeu dans style) ; quota épuisé pour un modèle → essai du modèle suivant ; voix québécoises refusées ou quota → retour aux voix de Gemini.
 - Idée à débattre (propriétaire, 2026-10-28) : étagères séparées pour balados / résumés / vidéos faits à partir des livres.
 - Leçon : le masque CSS sur 1 500 icônes ralentissait le défilement (mesuré) → images déjà colorées ; content-visibility reste exclu (sautait sur Android, v6.8).
 - v9.1 envoi chiffré de livres · v9.2–9.8 télé (télécommande, loupe, icônes sous les livres) · v10.0 Gemini Pro : raison du refus lue, attente ≤ 15 s · v10.1 clés chiffrées (Keystore), couvertures protégées.

@@ -122,6 +122,10 @@ public class StudioTest {
             else if (mode[0].equals("day")) { code = 429; out = "{\"error\":{\"code\":429,\"message\":\"Quota exceeded for metric generate_content_free_tier_requests, limit: 0\"}}"; }
             else if (mode[0].equals("minute")) { code = 429; out = "{\"error\":{\"code\":429,\"details\":[{\"retryDelay\":\"37s\"}]}}"; }
             else if (mode[0].equals("new") && inter && body.contains("gemini-3.8-flash-tts") && "K".equals(key)) { code = 200; out = "{\"steps\":[{\"type\":\"model_output\",\"content\":[{\"type\":\"audio\",\"data\":\"" + b64 + "\"}]}]}"; }
+            else if (mode[0].equals("gen38") && !inter && path.contains("gemini-3.8-flash-tts:generateContent") && body.contains("\"speech_metadata\":{\"speaker\":\"Camille\"") && body.contains("\"speech_metadata\":{\"speaker\":\"Alex\"") && "K".equals(key)) { code = 200; out = "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/L16;codec=pcm;rate=24000\",\"data\":\"" + b64r + "\"}}]}}]}"; }
+            else if (mode[0].equals("gen38") && inter) { code = 400; out = "{\"error\":{\"code\":400,\"message\":\"interactions indisponible\"}}"; }
+            else if (mode[0].equals("mixed") && body.contains("gemini-3.8-flash-tts\"") ) { code = 429; out = "{\"error\":{\"code\":429,\"message\":\"Quota exceeded for metric generate_content_free_tier_requests, limit: 0\"}}"; }
+            else if (mode[0].equals("mixed") && inter && body.contains("gemini-3.8-flash-lite-tts") && "K".equals(key)) { code = 200; out = "{\"steps\":[{\"type\":\"model_output\",\"content\":[{\"type\":\"audio\",\"data\":\"" + b64 + "\"}]}]}"; }
             else if (mode[0].equals("old") && path.contains("gemini-3.1-flash-tts-preview:generateContent") && "K".equals(key)) { code = 200; out = "{\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"audio/L16;codec=pcm;rate=24000\",\"data\":\"" + b64r + "\"}}]}}]}"; }
             byte[] ob = out.getBytes(StandardCharsets.UTF_8);
             ex.sendResponseHeaders(code, ob.length); ex.getResponseBody().write(ob); ex.close();
@@ -137,6 +141,19 @@ public class StudioTest {
         au = Studio.render("K", lines);
         ok(au.pcm.length == test.length && seen.size() == 1 && seen.get(0).equals("/v1beta/interactions"), "interface actuelle : réussie du premier coup (" + seen + ")");
         ok(Studio.combo == 0, "combinaison retenue : " + Studio.combo);
+        ok(!bodies.get(bodies.size() - 1).contains("\"mode\""), "interactions : plus de champ « mode » (refusé par Google)");
+        String g38 = Studio.bodyGenerate("gemini-3.8-flash-tts", lines);
+        ok(g38.contains("\"speech_metadata\":{\"speaker\":\"Camille\",\"style\"") && g38.split("speech_metadata").length - 1 == 2 && !g38.contains("Dis cette conversation"), "generateContent 3.8 : une partie par tour avec speech_metadata.speaker, aucune consigne lue à voix haute");
+        ok(Studio.bodyGenerate("gemini-3.1-flash-tts-preview", lines).contains("Dis cette conversation"), "préversion 3.1 : ancien format gardé");
+        try (java.io.FileWriter w = new java.io.FileWriter("bodies.txt", StandardCharsets.UTF_8, true)) { w.write(g38 + "\n"); }
+
+        mode[0] = "gen38"; Studio.combo = 0; seen.clear();
+        au = Studio.render("K", lines);
+        ok(au.pcm.length == test.length && seen.get(seen.size() - 1).contains("gemini-3.8-flash-tts:generateContent"), "generateContent 3.8 accepté (" + seen.size() + " appels)");
+
+        mode[0] = "mixed"; Studio.combo = 0; seen.clear();
+        au = Studio.render("K", lines);
+        ok(au.pcm.length == test.length && seen.size() == 2, "quota épuisé pour un modèle : on passe au modèle suivant, réussi (" + seen + ")");
 
         mode[0] = "old"; Studio.combo = 0; seen.clear();
         au = Studio.render("K", lines);
@@ -148,7 +165,7 @@ public class StudioTest {
         for (String m : new String[]{"key", "day", "minute"}) {
             mode[0] = m; Studio.combo = 0; seen.clear();
             try { Studio.render("K", lines); ok(false, "refus « " + m + " »"); }
-            catch (Studio.Fail f) { ok(f.kind.equals(m) && seen.size() <= 2, "refus « " + m + " » reconnu sans insister (" + seen.size() + " appel(s), retry " + f.retryMs + " ms)"); }
+            catch (Studio.Fail f) { ok(f.kind.equals(m) && seen.size() <= (m.equals("day") ? 3 : 2), "refus « " + m + " » reconnu sans insister (" + seen.size() + " appel(s), retry " + f.retryMs + " ms)"); }
         }
         mode[0] = "none"; Studio.combo = 0; seen.clear();
         try { Studio.render("K", lines); ok(false, "service absent"); }

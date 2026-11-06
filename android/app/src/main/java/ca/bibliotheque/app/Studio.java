@@ -91,7 +91,7 @@ final class Studio {
             if (!st.isEmpty()) b.append(",\"style\":\"").append(esc(st)).append('"');
             b.append("}]}");
         }
-        b.append("]}],\"response_format\":{\"type\":\"audio\"},\"generation_config\":{\"speech_config\":{\"mode\":\"conversational\",\"speakers\":[")
+        b.append("]}],\"response_format\":{\"type\":\"audio\"},\"generation_config\":{\"speech_config\":{\"speakers\":[")
             .append("{\"speaker\":\"").append(NAMES[0]).append("\",\"voice\":\"").append(esc(voices[0])).append("\"},")
             .append("{\"speaker\":\"").append(NAMES[1]).append("\",\"voice\":\"").append(esc(voices[1])).append("\"}]}}}");
         return b.toString();
@@ -103,7 +103,28 @@ final class Studio {
         return style.isEmpty() ? "accent québécois" : style + ", accent québécois";
     }
 
-    static String bodyGenerate(List<Line> lines) {
+    /**
+     * generateContent. Les modèles 3.8 veulent une partie par tour de parole, chacune avec speech_metadata.speaker
+     * (le jeu va dans speech_metadata.style : une consigne écrite dans le texte serait lue à voix haute).
+     * Les préversions plus anciennes lisent encore un seul texte « Nom : réplique ».
+     */
+    static String bodyGenerate(String model, List<Line> lines) {
+        if (!model.contains("preview")) {
+            StringBuilder b = new StringBuilder("{\"contents\":[{\"role\":\"user\",\"parts\":[");
+            List<Line> t = turns(lines);
+            for (int i = 0; i < t.size(); i++) {
+                Line l = t.get(i);
+                if (i > 0) b.append(',');
+                b.append("{\"text\":\"").append(esc(l.text)).append("\",\"speech_metadata\":{\"speaker\":\"").append(NAMES[l.sp]).append('"');
+                String st = accent(l.style);
+                if (!st.isEmpty()) b.append(",\"style\":\"").append(esc(st)).append('"');
+                b.append("}}");
+            }
+            return b.append("]}],\"generationConfig\":{\"responseModalities\":[\"AUDIO\"],")
+                .append("\"speechConfig\":{\"multiSpeakerVoiceConfig\":{\"speakerVoiceConfigs\":[")
+                .append("{\"speaker\":\"").append(NAMES[0]).append("\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"").append(esc(voices[0])).append("\"}}},")
+                .append("{\"speaker\":\"").append(NAMES[1]).append("\",\"voiceConfig\":{\"prebuiltVoiceConfig\":{\"voiceName\":\"").append(esc(voices[1])).append("\"}}}]}}}}").toString();
+        }
         StringBuilder txt = new StringBuilder("Dis cette conversation de balado en français du Québec, avec l'accent québécois, comme deux amis québécois passionnés qui parlent pour de vrai (naturel, émotion, rythme vivant) :\n");
         for (Line l : turns(lines)) {
             txt.append(NAMES[l.sp]);
@@ -246,7 +267,7 @@ final class Studio {
         if (java.util.Arrays.equals(voices, DEFAULT)) return renderWith(key, lines);
         try { return renderWith(key, lines); }
         catch (Fail f) {
-            if (!f.kind.equals("off") && !f.kind.equals("empty")) throw f;
+            if (!f.kind.equals("off") && !f.kind.equals("empty") && !f.kind.equals("day")) throw f;
             String why = report;
             voices = DEFAULT.clone(); localRefused = true;
             Audio a = renderWith(key, lines);
@@ -272,7 +293,7 @@ final class Studio {
     }
 
     private static Audio renderWith(String key, List<Line> lines) throws Fail {
-        Fail last = null;
+        Fail last = null, quota = null;
         StringBuilder rep = new StringBuilder();
         int total = MODELS.length * APIS;
         for (int k = 0; k < total; k++) {
@@ -280,7 +301,7 @@ final class Studio {
             String model = MODELS[c / APIS];
             boolean inter = c % APIS == 0;
             String url = base + (inter ? "/v1beta/interactions" : "/v1beta/models/" + model + ":generateContent");
-            String body = inter ? bodyInteractions(model, lines) : bodyGenerate(lines);
+            String body = inter ? bodyInteractions(model, lines) : bodyGenerate(model, lines);
             try {
                 Audio a = once(url, key, body);
                 combo = c; lastModel = model; report = "";
@@ -290,9 +311,11 @@ final class Studio {
                 if (rep.length() > 0) rep.append('\n');
                 rep.append(model).append(inter ? " (interactions) : " : " (generateContent) : ").append(f.getMessage());
                 report = rep.toString();
-                if (!f.kind.equals("off") && !f.kind.equals("empty")) throw f; // clé, quota, réseau : changer de modèle n'y change rien
+                if (f.kind.equals("day")) { quota = f; if (inter) k++; continue; } // quota de CE modèle épuisé : chaque modèle a le sien, on passe au modèle suivant
+                if (!f.kind.equals("off") && !f.kind.equals("empty")) throw f; // clé, réseau, attente d'une minute : changer de modèle n'y change rien
             }
         }
+        if (quota != null) throw quota;
         throw last != null ? last : new Fail("off", "aucune voix de studio disponible", 0);
     }
 
