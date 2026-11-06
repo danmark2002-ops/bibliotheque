@@ -2687,7 +2687,7 @@ function summaryChoices(b) {
     h('p', { class: 'muted', style: { marginTop: '-6px' } }, b.title),
     hasKey ? h('div', { class: 'aiopt' },
       h('h4', {}, 'Résumé par ton IA gratuite'),
-      h('p', {}, 'Gemini (Pro si ta clé y a droit, sinon Flash) lit le livre en entier et rédige le résumé, avec des phrases clés qui disent ce que le livre nous apprend. Si Gemini n\'est pas disponible, l\'IA du téléphone ou le résumé automatique prend le relais.'),
+      h('p', {}, 'Gemini Flash lit le livre en entier et rédige le résumé, avec des phrases clés qui disent ce que le livre nous apprend. Si Gemini n\'est pas disponible, l\'IA du téléphone ou le résumé automatique prend le relais.'),
       h('button', { class: 'btn primary', onclick: () => { close(); makeFreeSummary(b); } }, icon('spark'), 'Faire le résumé'))
     : canGuide ? h('div', { class: 'aiopt' },
       h('h4', {}, 'Activer l\'IA gratuite'),
@@ -3492,9 +3492,9 @@ async function computeSummary(b, say) {
     if (t.text.replace(/\[page \d+\]|\s/g, '').length < 200) throw new Error('Ce livre ne contient presque pas de texte lisible (PDF scanné ?). Essaie « Avec ton application d\'IA ».');
     let text = null, model = 'auto';
     if (window.AndroidAI?.generateOnline && Prof.hasKey()) { // ta clé gratuite : Gemini lit le livre en entier
-      say('Gemini rédige le résumé… (environ une minute)');
+      say('Gemini lit le livre et rédige le résumé… (1 à 3 minutes)');
       try {
-        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 400000)}\n</livre>`, false, false, say));
+        text = Prof.clean0(await onlineAsk('', `${SUMMARY_PROMPT}\n\nTitre : ${b.title}${b.author ? '\nAuteur : ' + b.author : ''}\n\n<livre>\n${condense(t.text, 300000)}\n</livre>`, false, false, say));
         model = 'gemini';
       } catch (e) { say('Gemini indisponible (' + e.message + ') : IA du téléphone…'); text = null; }
     }

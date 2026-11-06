@@ -30,6 +30,8 @@ final class IaGratuite {
     // Pas de Gemini Pro : il n'est pas offert avec une clé gratuite (quota « 0 »), chaque essai faisait perdre du temps et
     // affichait « quota épuisé » sans raison. Seulement Flash ; le modèle qui a répondu est retenu et toujours essayé d'abord.
     private static volatile boolean loaded = false;
+    private static volatile boolean noThink = false;
+    static int READ_MS = 150_000; // attente maximale d'une réponse (réduite dans les essais sur ordinateur)
     private static Context app;
     /** Le modèle qui a répondu à la dernière demande (affiché sous le résumé) */
     static volatile String lastModel = "";
@@ -67,8 +69,10 @@ final class IaGratuite {
         if (k.isEmpty()) throw new Fatal("Il manque la clé Gemini gratuite : ouvre le Professeur dans la Bibliothèque pour la coller.");
         remembered(c);
         Exception err = null;
-        int tries = urgent ? 5 : 8;
+        int tries = urgent ? 5 : 6;
         long offlineSince = 0;
+        // jamais d'attente sans fin : au bout de ce délai, on le dit (et le résumé passe à l'IA du téléphone)
+        long deadline = System.currentTimeMillis() + (urgent ? 3 : 7) * 60_000L;
         for (int t = 0; t < tries; t++) {
             try {
                 String r = once(k, system, prompt, urgent, json);
@@ -87,8 +91,15 @@ final class IaGratuite {
                 }
                 offlineSince = 0;
             }
+            boolean slow = err instanceof java.net.SocketTimeoutException;
+            if (slow) model = (model + 1) % MODELS.length; // ce modèle est trop lent aujourd'hui : le suivant
+            if (System.currentTimeMillis() > deadline || t + 1 >= tries) break;
+            String why = slow ? "Gemini a mis trop de temps à répondre" : String.valueOf(err.getMessage()).contains("quota") ? "limite gratuite par minute atteinte"
+                : String.valueOf(err.getMessage()).contains("surcharg") ? "serveurs de Gemini surchargés" : "Gemini n'a pas répondu (" + err.getMessage() + ")";
+            tell(why + " — nouvel essai " + (t + 2) + " sur " + tries + " avec " + MODELS[model] + "…");
             Thread.sleep(Math.min(30000L, (urgent ? 2000L : 4000L) * (t + 1)));
         }
+        if (err instanceof java.net.SocketTimeoutException) throw new Exception("Gemini met trop de temps à répondre en ce moment (livre long ou serveurs chargés). Réessaie plus tard : la préparation reprendra où elle en était.");
         String m = err == null ? "?" : String.valueOf(err.getMessage());
         if (m.contains("surcharg")) throw new Exception("Les serveurs de Gemini sont surchargés en ce moment. Réessaie dans quelques minutes : la préparation reprendra où elle en était.");
         throw new Exception("Gemini ne répond pas (" + m + "). Vérifie la connexion Internet, puis réessaie : la préparation reprendra où elle en était.");
@@ -149,10 +160,16 @@ final class IaGratuite {
         if (system != null && !system.isEmpty())
             body.put("systemInstruction", new JSONObject().put("parts", new JSONArray().put(new JSONObject().put("text", system))));
         body.put("contents", new JSONArray().put(new JSONObject().put("role", "user").put("parts", new JSONArray().put(new JSONObject().put("text", prompt)))));
-        JSONObject gc = new JSONObject().put("temperature", 0.9).put("maxOutputTokens", json ? 16384 : 8192);
-        if (json) gc.put("responseMimeType", "application/json");
-        body.put("generationConfig", gc);
         while (true) {
+            // réflexion courte : Flash répond en une minute au lieu de réfléchir longuement sur un livre entier
+            JSONObject gc = new JSONObject().put("temperature", 0.9).put("maxOutputTokens", json ? 16384 : 8192);
+            if (json) gc.put("responseMimeType", "application/json");
+            String mn = MODELS[model];
+            if (!noThink) {
+                if (mn.startsWith("gemini-3") || mn.startsWith("gemini-4")) gc.put("thinkingConfig", new JSONObject().put("thinkingLevel", "low"));
+                else if (mn.startsWith("gemini-2.5-flash")) gc.put("thinkingConfig", new JSONObject().put("thinkingBudget", 0));
+            }
+            body.put("generationConfig", gc);
             if (!urgent) pace();
             String url = base + "/v1beta/models/" + MODELS[model] + ":generateContent";
             String[] res = http(url, key, body.toString());
@@ -163,6 +180,7 @@ final class IaGratuite {
                 if (Integer.parseInt(r2[0]) < 400) { res = r2; code = 200; }
             }
             if (code == 404) { if (model + 1 < MODELS.length) { model++; continue; } if (discover(key)) continue; } // modèle retiré : le suivant ; au bout, la liste réelle de Google
+            if (code == 400 && res[1].contains("hinking") && !noThink) { noThink = true; continue; } // réglage de réflexion refusé par ce modèle : sans
             if (code == 400 && res[1].contains("API_KEY")) throw new Fatal("La clé Gemini est refusée. Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 401 || code == 403) throw new Fatal("La clé Gemini n'est pas autorisée (" + code + "). Refais « Activer l'IA gratuite » dans les Réglages.");
             if (code == 429) {
@@ -269,7 +287,7 @@ final class IaGratuite {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(15000);
-            c.setReadTimeout(180000);
+            c.setReadTimeout(READ_MS);
             c.setRequestMethod("POST");
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");

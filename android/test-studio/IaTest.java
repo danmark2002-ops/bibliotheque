@@ -25,10 +25,12 @@ public class IaTest {
         final Map<String, String> behave = new HashMap<>();
         final List<String> seen = new ArrayList<>();
         final String[] list = {""};
+        final List<String> bodies = new ArrayList<>();
         HttpServer srv = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         srv.createContext("/", ex -> {
             String path = ex.getRequestURI().getPath();
-            ex.getRequestBody().readAllBytes();
+            String reqBody = new String(ex.getRequestBody().readAllBytes(), "UTF-8");
+            bodies.add(reqBody);
             int code = 200; String out;
             if (path.endsWith("/v1beta/models")) { seen.add("LISTE"); out = list[0]; }
             else {
@@ -39,6 +41,8 @@ public class IaTest {
                 switch (b) {
                     case "day": code = 429; out = "{\"error\":{\"code\":429,\"message\":\"Quota exceeded for metric: generate_content_free_tier_requests, limit: 20, model: " + model + "\",\"details\":[{\"violations\":[{\"quotaId\":\"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"}]}]}}"; break;
                     case "minute": code = 429; out = "{\"error\":{\"code\":429,\"message\":\"Resource exhausted\",\"details\":[{\"retryDelay\":\"1s\"}]}}"; behave.put(model, "ok"); break;
+                    case "slow": try { Thread.sleep(1500); } catch (InterruptedException ie) { } break;
+                    case "nothink": if (reqBody.contains("thinkingConfig")) { code = 400; out = "{\"error\":{\"code\":400,\"message\":\"Thinking level is not supported for this model.\"}}"; } break;
                     case "404": code = 404; out = "{\"error\":{\"code\":404,\"message\":\"models/" + model + " is not found\"}}"; break;
                 }
             }
@@ -79,6 +83,23 @@ public class IaTest {
         behave.put("gemini-flash-latest", "minute");
         r = IaGratuite.ask(c, "", "Résume");
         ok(r.equals("Réponse de gemini-flash-latest") && seen.equals(Arrays.asList("gemini-flash-latest", "gemini-flash-latest")), "E : limite par minute → même modèle, après une courte attente (" + seen + ")");
+
+        // F : un modèle trop lent (pas de réponse dans le délai) → message clair, puis le modèle suivant
+        android.content.Context.PREFS.clear(); fresh(); seen.clear(); behave.clear();
+        behave.put("gemini-flash-latest", "slow"); IaGratuite.READ_MS = 700;
+        final List<String> said = new ArrayList<>(); IaGratuite.STATUS.set(said::add);
+        r = IaGratuite.ask(c, "", "Résume");
+        ok(r.equals("Réponse de gemini-3.8-flash") && said.stream().anyMatch(x -> x.contains("trop de temps")), "F : modèle trop lent → « " + (said.isEmpty() ? "" : said.get(0)) + " », puis réponse du suivant");
+        IaGratuite.READ_MS = 150_000; IaGratuite.STATUS.remove();
+
+        // G : réflexion courte demandée aux modèles 3.x ; refusée par un modèle → redemandé sans, aussitôt
+        android.content.Context.PREFS.clear(); fresh(); seen.clear(); behave.clear(); bodies.clear();
+        android.content.Context.PREFS.put("ia/flash", "gemini-3.8-flash"); fresh();
+        IaGratuite.ask(c, "", "Résume");
+        ok(bodies.get(bodies.size() - 1).contains("\"thinkingLevel\":\"low\""), "G : gemini-3.8-flash reçoit thinkingLevel « low »");
+        behave.put("gemini-3.8-flash", "nothink"); bodies.clear(); seen.clear();
+        r = IaGratuite.ask(c, "", "Résume");
+        ok(r.equals("Réponse de gemini-3.8-flash") && seen.size() == 2 && !bodies.get(1).contains("thinkingConfig"), "G : réglage refusé → même modèle, sans réglage (" + seen + ")");
 
         srv.stop(0);
         if (fails > 0) { System.out.println(fails + " échec(s)"); System.exit(1); }
