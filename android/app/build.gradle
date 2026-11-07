@@ -10,8 +10,9 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 22 // Fire TV Stick de base (Fire OS 5 = Android 5.1) et téléviseurs plus anciens : les fonctions récentes sont activées selon la version
         targetSdk 36
-        versionCode 145
-        versionName '10.54'
+        versionCode 146
+        versionName '10.55'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     signingConfigs {
@@ -38,8 +39,10 @@ android {
     packaging {
         jniLibs {
             // le moteur n'utilise que libsherpa-onnx-jni et libonnxruntime (vérifié : readelf) ; x86 retiré (aucun appareil visé)
-            excludes += ['lib/*/libsherpa-onnx-c-api.so', 'lib/*/libsherpa-onnx-cxx-api.so',
-                         'lib/x86/libonnxruntime.so', 'lib/x86/libsherpa-onnx-jni.so', 'lib/x86_64/libonnxruntime.so', 'lib/x86_64/libsherpa-onnx-jni.so']
+            // (sauf pour l'essai sur émulateur x86_64 : -PessaiVoix)
+            excludes += ['lib/*/libsherpa-onnx-c-api.so', 'lib/*/libsherpa-onnx-cxx-api.so']
+            if (!project.hasProperty('essaiVoix'))
+                excludes += ['lib/x86/libonnxruntime.so', 'lib/x86/libsherpa-onnx-jni.so', 'lib/x86_64/libonnxruntime.so', 'lib/x86_64/libsherpa-onnx-jni.so']
         }
     }
 
@@ -64,4 +67,7 @@ dependencies {
     // Voix française hors ligne (Fire TV sans voix française) : sherpa-onnx 1.13.8, Apache 2.0 — l'AAR est téléchargé par la compilation (apk.yml)
     implementation files('libs/sherpa-onnx.aar')
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+    // essai de la voix sur émulateur (android/app/src/androidTest)
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 }
