@@ -1,0 +1,244 @@
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
+	at org.gradle.internal.operations.DefaultBuildOperationQueue$WorkerRunnable.runBatch(DefaultBuildOperationQueue.java:224)
+	at org.gradle.internal.operations.DefaultBuildOperationQueue$WorkerRunnable.run(DefaultBuildOperationQueue.java:192)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:48)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+
+
+> Task :app:mergeLibDexDebug
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugNativeLibs
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:mergeDebugAndroidTestShaders
+> Task :app:compileDebugAndroidTestShaders NO-SOURCE
+> Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libonnxruntime.so, libsherpa-onnx-jni.so. Run with --info option to learn more.
+
+> Task :app:mergeDebugAndroidTestAssets
+> Task :app:compressDebugAndroidTestAssets
+> Task :app:desugarDebugAndroidTestFileDependencies
+> Task :app:dexBuilderDebugAndroidTest
+> Task :app:mergeExtDexDebug
+> Task :app:mergeDebugAndroidTestGlobalSynthetics
+> Task :app:processDebugAndroidTestJavaRes NO-SOURCE
+> Task :app:checkDebugAndroidTestDuplicateClasses
+> Task :app:mergeDebugAndroidTestJniLibFolders
+> Task :app:mergeDebugAndroidTestJavaResource
+> Task :app:mergeLibDexDebugAndroidTest
+> Task :app:mergeProjectDexDebugAndroidTest
+> Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+> Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+> Task :app:validateSigningDebugAndroidTest
+> Task :app:writeDebugAndroidTestSigningConfigVersions
+> Task :app:mergeExtDexDebugAndroidTest
+> Task :app:packageDebugAndroidTest
+> Task :app:createDebugAndroidTestApkListingFileRedirect
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+[EmulatorConsole]: Failed to start Emulator console for 5554
+
+> Task :app:connectedDebugAndroidTest
+Starting 2 tests on emulator-5554 - 11
+
+emulator-5554 - 11 Tests 1/2 completed. (0 skipped) (0 failed)
+Finished 2 tests on emulator-5554 - 11
+
+> Task :app:connectedAndroidTest
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__reactivecircus_android-emulator-runner-1794029485948.json
+[Incubating] Problems report is available at: file:///home/runner/work/bibliotheque/bibliotheque/android/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 2m 9s
+61 actionable tasks: 61 executed
+CODE 0
+==== ENG
+null
+package:com.google.android.tts
+==== LOG
+11-07 05:31:14.606 D/AndroidRuntime( 1373): Shutting down VM
+11-07 05:31:15.562 E/libc    (  419): The property "ro.build.fingerprint" has a value with length 92 that is too large for __system_property_get()/__system_property_read(); use __system_property_read_callback() instead.
+11-07 05:31:27.417 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:27.418 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:32.792 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:32.792 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:33.139 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:33.139 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:33.896 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:33.897 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:34.710 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:34.710 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:37.025 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:37.025 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:40.230 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:40.230 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:43.654 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:43.654 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:44.276 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:44.276 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:46.252 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:46.252 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:47.771 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:47.771 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:48.821 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:48.821 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:49.934 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:49.934 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:51.165 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:51.165 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:54.987 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:54.987 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:31:55.376 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:31:55.376 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:32:11.021 E/libc    ( 3275): Access denied finding property "persist.adb.tls_server.enable"
+11-07 05:32:11.021 E/libc    ( 3275): Access denied finding property "service.adb.tls.port"
+11-07 05:33:08.179 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app. Reason: op android:read_external_storage
+11-07 05:33:08.187 V/BackupManagerService(  499): [UserID:0] restoreAtInstall pkg=ca.bibliotheque.app token=1 restoreSet=0
+11-07 05:33:08.179 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app. Reason: op android:read_external_storage
+11-07 05:33:08.203 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app. Reason: package android.intent.action.PACKAGE_ADDED
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+11-07 05:33:08.205 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.ims/.receivers.RcsAutoStartReceiver
+11-07 05:33:08.208 I/GsaVoiceInteractionSrv( 1465): O received Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) }
+11-07 05:33:08.221 D/AvrcpMediaPlayerList(  695): Name of package changed: ca.bibliotheque.app
+11-07 05:33:08.304 W/GCM     ( 1144): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 05:33:08.312 W/GCM     ( 1144): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 05:33:08.334 I/ChromeSync( 1808): [Sync,SyncIntentOperation] Handling the intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app flg=0x4000010 cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+11-07 05:33:08.363 I/ChromeSync( 1808): [Persistence,AffiliationManager] One of affiliation or grouping data for android://0cd4gusH3jjrsk_xd_1omLAA7pMxHnePCw2ODE3fEidDryVL5Bx8l2YoJ5_bGh-wsz420_x653Z52YJCWyxYTQ==@ca.bibliotheque.app/ was not found. Marking affiliation data as stale...
+11-07 05:33:08.543 V/BackupManagerService(  499): [UserID:0] restoreAtInstall pkg=ca.bibliotheque.app.test token=2 restoreSet=0
+11-07 05:33:08.557 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app.test. Reason: package android.intent.action.PACKAGE_ADDED
+11-07 05:33:08.558 D/AvrcpMediaPlayerList(  695): Name of package changed: ca.bibliotheque.app.test
+11-07 05:33:08.560 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+11-07 05:33:08.561 I/GsaVoiceInteractionSrv( 1465): O received Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) }
+11-07 05:33:08.565 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+11-07 05:33:08.565 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+11-07 05:33:08.565 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+11-07 05:33:08.565 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+11-07 05:33:08.565 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.ims/.receivers.RcsAutoStartReceiver
+11-07 05:33:08.572 I/ChromeSync( 1808): [Sync,SyncIntentOperation] Handling the intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+11-07 05:33:08.572 I/FontsPackageChangeOp( 1808): Package ca.bibliotheque.app.test has no metadata
+11-07 05:33:08.580 W/GCM     ( 1144): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 05:33:08.580 W/GCM     ( 1144): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:ca.bibliotheque.app.test flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+11-07 05:33:08.589 I/ChromeSync( 1808): [Persistence,AffiliationManager] One of affiliation or grouping data for android://0cd4gusH3jjrsk_xd_1omLAA7pMxHnePCw2ODE3fEidDryVL5Bx8l2YoJ5_bGh-wsz420_x653Z52YJCWyxYTQ==@ca.bibliotheque.app.test/ was not found. Marking affiliation data as stale...
+11-07 05:33:09.084 D/AndroidRuntime( 5942): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+11-07 05:33:09.097 E/libc    ( 5942): Access denied finding property "persist.device_config.runtime_native_boot.profilebootclasspath"
+11-07 05:33:09.097 E/libc    ( 5942): Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+11-07 05:33:09.097 I/AndroidRuntime( 5942): Using default boot image
+11-07 05:33:09.097 E/libc    ( 5942): Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+11-07 05:33:09.097 I/AndroidRuntime( 5942): Leaving lock profiling enabled
+11-07 05:33:09.097 E/libc    ( 5942): Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+11-07 05:33:09.278 D/AndroidRuntime( 5942): Calling main entry com.android.commands.am.Am
+11-07 05:33:09.284 I/ActivityManager(  499): Force stopping ca.bibliotheque.app appid=10167 user=0: start instr
+11-07 05:33:09.302 I/ActivityManager(  499): Start proc 5954:ca.bibliotheque.app/u0a167 for added application ca.bibliotheque.app
+11-07 05:33:09.342 W/ActivityThread( 5954): Package uses different ABI(s) than its instrumentation: package[ca.bibliotheque.app]: x86_64, null instrumentation[ca.bibliotheque.app.test]: null, null
+11-07 05:33:09.352 I/chatty  ( 5954): uid=10167(u0_a167) ca.bibliotheque.app identical 1 line
+11-07 05:33:09.488 I/chatty  ( 5954): uid=10167(u0_a167) ca.bibliotheque.app identical 2 lines
+11-07 05:33:09.641 I/TestRequestBuilder( 5954): Scanning classpath to find tests in paths [/data/app/~~QaBNnRseBjl96wWUfCI56g==/ca.bibliotheque.app.test-jSCtoFCvRAb3Rpuz92fN2Q==/base.apk]
+11-07 05:33:09.688 I/TestRunner( 5954): run started: 2 tests
+11-07 05:33:09.689 I/TestRunner( 5954): started: moteurChoisiParle(ca.bibliotheque.app.VoixTest)
+11-07 05:33:09.698 I/TextToSpeech( 5954): Sucessfully bound to com.google.android.tts
+11-07 05:33:09.835 I/TextToSpeech( 5954): Connected to ComponentInfo{com.google.android.tts/com.google.android.tts.service.GoogleTTSService}
+11-07 05:33:09.841 I/TextToSpeech( 5954): Set up connection to ComponentInfo{com.google.android.tts/com.google.android.tts.service.GoogleTTSService}
+11-07 05:33:11.069 I/VOIXTEST( 5954): choisir : problème=«  » Google Text-to-speech Engine (com.google.android.tts)
+11-07 05:33:14.852 I/VOIXTEST( 5954): choisi lecture : 3783 ms
+11-07 05:33:14.853 I/TestRunner( 5954): finished: moteurChoisiParle(ca.bibliotheque.app.VoixTest)
+11-07 05:33:14.855 I/TestRunner( 5954): started: voixInterneParle(ca.bibliotheque.app.VoixTest)
+11-07 05:33:14.879 I/TextToSpeech( 5954): Sucessfully bound to ca.bibliotheque.app
+11-07 05:33:14.880 I/ActivityManager(  499): Start proc 6052:ca.bibliotheque.app:voix/u0a167 for service {ca.bibliotheque.app/ca.bibliotheque.app.VoixInterne}
+11-07 05:33:15.111 I/TextToSpeech( 5954): Connected to ComponentInfo{ca.bibliotheque.app/ca.bibliotheque.app.VoixInterne}
+11-07 05:33:15.112 I/TextToSpeech( 5954): Set up connection to ComponentInfo{ca.bibliotheque.app/ca.bibliotheque.app.VoixInterne}
+11-07 05:33:15.172 I/VOIXTEST( 5954): interne : problème=«  » voix intégrée
+11-07 05:33:15.900 D/AvrcpMediaPlayerList(  695): Name of package changed: ca.bibliotheque.app
+11-07 05:33:15.948 I/Fitness ( 1144): OnPackageChangedOperation got intent: Intent { act=android.intent.action.PACKAGE_CHANGED dat=package:ca.bibliotheque.app flg=0x45000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) } [CONTEXT service_id=17 ]
+11-07 05:33:16.299 W/sherpa-onnx( 6052): /home/runner/work/sherpa-onnx/sherpa-onnx/sherpa-onnx/csrc/piper-phonemize-lexicon.cc:PiperPhonemesToIdsVits:172
+11-07 05:33:16.299 W/sherpa-onnx( 6052): Skip unknown phonemes. Unicode codepoint: \U+0303.
+11-07 05:33:16.495 I/VOIXTEST( 5954): interne fichier : 86060 octets, 16000 Hz
+11-07 05:33:16.498 W/sherpa-onnx( 6052): /home/runner/work/sherpa-onnx/sherpa-onnx/sherpa-onnx/csrc/piper-phonemize-lexicon.cc:PiperPhonemesToIdsVits:172
+11-07 05:33:16.498 W/sherpa-onnx( 6052): Skip unknown phonemes. Unicode codepoint: \U+0303.
+11-07 05:33:16.498 W/sherpa-onnx( 6052): /home/runner/work/sherpa-onnx/sherpa-onnx/sherpa-onnx/csrc/piper-phonemize-lexicon.cc:PiperPhonemesToIdsVits:172
+11-07 05:33:16.498 W/sherpa-onnx( 6052): Skip unknown phonemes. Unicode codepoint: \U+0303.
+11-07 05:33:20.669 I/VOIXTEST( 5954): interne lecture : 4174 ms
+11-07 05:33:24.286 I/VOIXTEST( 5954): interne lecture 2 : 3617 ms
+11-07 05:33:24.288 I/TestRunner( 5954): finished: voixInterneParle(ca.bibliotheque.app.VoixTest)
+11-07 05:33:24.290 I/TestRunner( 5954): run finished: 2 tests, 0 failed, 0 ignored
+11-07 05:33:24.299 I/ActivityManager(  499): Force stopping ca.bibliotheque.app appid=10167 user=0: finished inst
+11-07 05:33:24.299 I/ActivityManager(  499): Killing 5954:ca.bibliotheque.app/u0a167 (adj 0): stop ca.bibliotheque.app due to finished inst
+11-07 05:33:24.303 I/ActivityManager(  499): Killing 6052:ca.bibliotheque.app:voix/u0a167 (adj 0): stop ca.bibliotheque.app due to finished inst
+11-07 05:33:24.304 I/AndroidRuntime( 5942): VM exiting with result code 0.
+11-07 05:33:24.904 I/ActivityManager(  499): Force stopping ca.bibliotheque.app appid=10167 user=-1: deletePackageX
+11-07 05:33:24.940 I/PackageManager(  499): Removing permission ca.bibliotheque.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION that used to be declared by ca.bibliotheque.app
+11-07 05:33:24.940 W/PackageManager(  499): Removing dangling permission: ca.bibliotheque.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION from package ca.bibliotheque.app
+11-07 05:33:25.071 I/ActivityManager(  499): Force stopping ca.bibliotheque.app appid=10167 user=0: pkg removed
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.android.musicfx/.Compatibility$Receiver
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.apps.maps/com.google.android.libraries.social.peoplekit.thirdparty.viewcontrollers.ThirdPartyReceiver
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.apps.photos/com.google.android.libraries.social.peoplekit.thirdparty.viewcontrollers.ThirdPartyReceiver
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+11-07 05:33:25.089 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+11-07 05:33:25.090 V/StorageManagerService(  499): Package ca.bibliotheque.app does not have legacy storage
+11-07 05:33:25.091 I/GsaVoiceInteractionSrv( 1465): O received Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app flg=0x4000010 (has extras) }
+11-07 05:33:25.092 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app. Reason: package android.intent.action.PACKAGE_REMOVED
+11-07 05:33:25.109 I/GeofencerStateMachine( 1144): removeGeofences: removeRequest=RemoveGeofencingRequest[REMOVE_ALL packageName=ca.bibliotheque.app]
+11-07 05:33:25.134 W/WifiService(  499): Couldn't get PackageInfo for package:ca.bibliotheque.app
+11-07 05:33:25.134 D/WifiService(  499): Remove settings for package:ca.bibliotheque.app
+11-07 05:33:25.134 D/WifiConfigManager(  499): Remove all networks for app ApplicationInfo{b27f99a ca.bibliotheque.app}
+11-07 05:33:25.149 I/PasspointManager(  499): No app ops listener found for ca.bibliotheque.app
+11-07 05:33:25.166 I/ConditionProviders(  499): Disallowing condition provider ca.bibliotheque.app
+11-07 05:33:25.177 I/RollbackManager(  499): broadcast=ACTION_PACKAGE_FULLY_REMOVED pkg=ca.bibliotheque.app
+11-07 05:33:25.180 W/WifiService(  499): Couldn't get PackageInfo for package:ca.bibliotheque.app
+11-07 05:33:25.180 D/WifiService(  499): Remove settings for package:ca.bibliotheque.app
+11-07 05:33:25.180 D/WifiConfigManager(  499): Remove all networks for app ApplicationInfo{a293e87 ca.bibliotheque.app}
+11-07 05:33:25.189 I/PasspointManager(  499): No app ops listener found for ca.bibliotheque.app
+11-07 05:33:25.207 I/ActivityManager(  499): Force stopping ca.bibliotheque.app.test appid=10168 user=-1: deletePackageX
+11-07 05:33:25.309 I/Icing   ( 1808): doRemovePackageData ca.bibliotheque.app [CONTEXT service_id=21 ]
+11-07 05:33:25.357 W/SQLiteLog( 1808): (28) double-quoted string literal: "ca.bibliotheque.app"
+11-07 05:33:25.439 D/Launcher.Model(  911): package removed received ca.bibliotheque.app
+11-07 05:33:25.440 D/PackageUpdatedTask(  911): Removing app iconca.bibliotheque.app
+11-07 05:33:25.546 I/ActivityManager(  499): Force stopping ca.bibliotheque.app.test appid=10168 user=0: pkg removed
+11-07 05:33:25.551 I/MediaProvider( 1412): Invalidating LocalCallingIdentity cache for package ca.bibliotheque.app.test. Reason: package android.intent.action.PACKAGE_REMOVED
+11-07 05:33:25.553 V/StorageManagerService(  499): Package ca.bibliotheque.app.test does not have legacy storage
+11-07 05:33:25.554 I/GsaVoiceInteractionSrv( 1465): O received Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) }
+11-07 05:33:25.559 I/GeofencerStateMachine( 1144): removeGeofences: removeRequest=RemoveGeofencingRequest[REMOVE_ALL packageName=ca.bibliotheque.app.test]
+11-07 05:33:25.593 W/WifiService(  499): Couldn't get PackageInfo for package:ca.bibliotheque.app.test
+11-07 05:33:25.593 D/WifiService(  499): Remove settings for package:ca.bibliotheque.app.test
+11-07 05:33:25.595 D/WifiConfigManager(  499): Remove all networks for app ApplicationInfo{237caee ca.bibliotheque.app.test}
+11-07 05:33:25.597 I/RollbackManager(  499): broadcast=ACTION_PACKAGE_FULLY_REMOVED pkg=ca.bibliotheque.app.test
+11-07 05:33:25.609 I/PasspointManager(  499): No app ops listener found for ca.bibliotheque.app.test
+11-07 05:33:25.614 W/SQLiteLog( 1808): (28) double-quoted string literal: "ca.bibliotheque.app.test"
+11-07 05:33:25.620 I/ConditionProviders(  499): Disallowing condition provider ca.bibliotheque.app.test
+11-07 05:33:25.621 W/WifiService(  499): Couldn't get PackageInfo for package:ca.bibliotheque.app.test
+11-07 05:33:25.621 D/WifiService(  499): Remove settings for package:ca.bibliotheque.app.test
+11-07 05:33:25.621 D/WifiConfigManager(  499): Remove all networks for app ApplicationInfo{60b4c57 ca.bibliotheque.app.test}
+11-07 05:33:25.626 I/Icing   ( 1808): doRemovePackageData ca.bibliotheque.app.test [CONTEXT service_id=21 ]
+11-07 05:33:25.629 I/PasspointManager(  499): No app ops listener found for ca.bibliotheque.app.test
+11-07 05:33:25.644 D/Launcher.Model(  911): package removed received ca.bibliotheque.app.test
+11-07 05:33:25.644 D/PackageUpdatedTask(  911): Removing app iconca.bibliotheque.app.test
+11-07 05:33:26.049 I/MediaProvider( 1412): Begin Intent { act=android.intent.action.PACKAGE_FULLY_REMOVED dat=package:ca.bibliotheque.app flg=0x5000010 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+11-07 05:33:26.055 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.android.musicfx/.Compatibility$Receiver
+11-07 05:33:26.058 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.apps.maps/com.google.android.libraries.social.peoplekit.thirdparty.viewcontrollers.ThirdPartyReceiver
+11-07 05:33:26.058 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.apps.photos/com.google.android.libraries.social.peoplekit.thirdparty.viewcontrollers.ThirdPartyReceiver
+11-07 05:33:26.058 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+11-07 05:33:26.058 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+11-07 05:33:26.058 W/BroadcastQueue(  499): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_REMOVED dat=package:ca.bibliotheque.app.test flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+11-07 05:33:26.060 I/MediaProvider( 1412): End Intent { act=android.intent.action.PACKAGE_FULLY_REMOVED dat=package:ca.bibliotheque.app flg=0x5000010 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+11-07 05:33:26.138 I/MediaProvider( 1412): Begin Intent { act=android.intent.action.PACKAGE_FULLY_REMOVED dat=package:ca.bibliotheque.app.test flg=0x5000010 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+11-07 05:33:26.148 I/MediaProvider( 1412): End Intent { act=android.intent.action.PACKAGE_FULLY_REMOVED dat=package:ca.bibliotheque.app.test flg=0x5000010 cmp=com.google.android.providers.media.module/com.android.providers.media.MediaService (has extras) }
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="ca.bibliotheque.app.VoixTest" tests="2" failures="0" errors="0" skipped="0" time="15.858" timestamp="2026-11-07T05:33:25" hostname="localhost">
+  <properties>
+    <property name="device" value="emulator-5554 - 11" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="moteurChoisiParle" classname="ca.bibliotheque.app.VoixTest" time="5.146" />
+  <testcase name="voixInterneParle" classname="ca.bibliotheque.app.VoixTest" time="9.404" />
+</testsuite>
