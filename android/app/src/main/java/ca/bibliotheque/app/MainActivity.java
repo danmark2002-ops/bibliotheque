@@ -201,17 +201,7 @@ public class MainActivity extends Activity {
         });
 
         // un moteur de voix qui parle français (Fire TV : celui par défaut n'en a souvent pas) ; sinon, la page l'annonce
-        MoteurVoix.choisir(this, t -> tts = t, (t, prob, bilan) -> {
-            ttsProblem = prob;
-            if (!prob.isEmpty()) Crashes.note(this, "voix (lecture) : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
-            if (t == null) return; // la page l'apprend à la première lecture demandée
-            tts = t;
-            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                @Override public void onStart(String id) { }
-                @Override public void onDone(String id) { notifyDone(id); }
-                @Override public void onError(String id) { notifyDone(id); }
-                @Override public void onStop(String id, boolean interrupted) { }
-            });
+        MoteurVoix.choisir(this, t -> tts = t, this::voixPrete);
             ttsReady = true;
             synchronized (pending) {
                 for (String[] p : pending) speakNow(p[0], Float.parseFloat(p[1]), Float.parseFloat(p[3]), p[4], p[2]);
@@ -241,6 +231,45 @@ public class MainActivity extends Activity {
         return "application/octet-stream";
     }
 
+    private volatile boolean voixInterne = false;
+    private volatile String[] derniere;                 // dernière phrase demandée : relue par la voix intégrée si le moteur échoue
+
+    /** Le moteur de voix est choisi (ou rien n'est trouvé) : on branche les fins de phrase et on lit ce qui attendait. */
+    private void voixPrete(TextToSpeech t, String prob, String bilan) {
+        ttsProblem = prob;
+        if (!prob.isEmpty()) Crashes.note(this, "voix (lecture) : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
+        if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+        tts = t;
+        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override public void onStart(String id) { }
+            @Override public void onDone(String id) { notifyDone(id); }
+            @Override public void onError(String id) { echec(id); }
+            @Override public void onError(String id, int code) { echec(id); }
+            @Override public void onStop(String id, boolean interrupted) { }
+        });
+        ttsReady = true;
+        synchronized (pending) {
+            for (String[] p : pending) speakNow(p[0], Float.parseFloat(p[1]), Float.parseFloat(p[3]), p[4], p[2]);
+            pending.clear();
+        }
+    }
+
+    /** Le moteur refuse une phrase (voix pas installée sur la télé, voix en ligne sans réseau…) : on passe à la voix intégrée
+     *  et elle relit la même phrase ; la page ne voit qu'une phrase un peu plus lente. */
+    private void echec(String id) {
+        String[] d = derniere;
+        if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+        voixInterne = true;
+        runOnUiThread(() -> {
+            Crashes.note(this, "voix (lecture) : le moteur refuse de parler — voix intégrée");
+            ttsReady = false;
+            synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+            TextToSpeech vieux = tts;
+            try { vieux.shutdown(); } catch (Exception ignored) { }
+            MoteurVoix.interne(this, t -> tts = t, this::voixPrete);
+        });
+    }
+
     private void notifyDone(String id) {
         runOnUiThread(() -> web.evaluateJavascript("window.__ttsDone && window.__ttsDone('" + id.replace("'", "") + "')", null));
     }
@@ -257,7 +286,8 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
         tts.setPitch(Math.max(0.5f, Math.min(2f, pitch)));
         tts.setSpeechRate(Math.max(0.3f, Math.min(3f, rate)));
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id);
+        derniere = new String[]{text, String.valueOf(rate), id, String.valueOf(pitch)};
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id) == TextToSpeech.ERROR) echec(id);
     }
 
     class TtsBridge {

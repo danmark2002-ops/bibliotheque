@@ -56,13 +56,53 @@ final class MoteurVoix {
         if (pkg.equals(c.getPackageName())) VoixInterne.allumer(c);
         final TextToSpeech[] t = new TextToSpeech[1];
         TextToSpeech.OnInitListener l = st -> {
-            if (st == TextToSpeech.SUCCESS && francais(t[0])) { f.fin(t[0], "", bilan); return; }
+            if (st == TextToSpeech.SUCCESS && francais(t[0])) {
+                // « parle français » ne suffit pas (voix Google pas encore téléchargée sur une télé, voix en ligne) :
+                // on lui fait vraiment dire un mot ; la voix intégrée, elle, est dans l'APK
+                if (pkg.equals(c.getPackageName())) { f.fin(t[0], "", bilan); return; }
+                parle(c, t[0], ok -> {
+                    if (ok) { f.fin(t[0], "", bilan); return; }
+                    try { t[0].shutdown(); } catch (Exception ignored) { }
+                    essai(c, ordre, i + 1, sansFr, bilan + " ; " + (pkg.isEmpty() ? "moteur du système" : pkg) + " : français annoncé mais aucun son", g, f);
+                });
+                return;
+            }
             String keep = sansFr == null && st == TextToSpeech.SUCCESS ? pkg : sansFr;
             try { t[0].shutdown(); } catch (Exception ignored) { }
             essai(c, ordre, i + 1, keep, bilan, g, f);
         };
         try { t[0] = pkg.isEmpty() ? new TextToSpeech(c, l) : new TextToSpeech(c, l, pkg); }
         catch (Exception e) { essai(c, ordre, i + 1, sansFr, bilan, g, f); return; }
+        g.garde(t[0]);
+    }
+
+    interface Ok { void ok(boolean ok); }
+
+    /** Le moteur produit-il vraiment du son ? Il fabrique « Bonjour. » dans un fichier (rien n'est entendu) ; 8 s au plus. */
+    static void parle(Context c, TextToSpeech t, Ok r) {
+        android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        java.io.File f = new java.io.File(c.getCacheDir(), "essai-voix.wav");
+        final boolean[] fini = new boolean[1];
+        Ok une = ok -> main.post(() -> { if (fini[0]) return; fini[0] = true; f.delete(); r.ok(ok); });
+        t.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+            @Override public void onStart(String id) { }
+            @Override public void onDone(String id) { une.ok(f.length() > 1000); }
+            @Override public void onError(String id) { une.ok(false); }
+        });
+        main.postDelayed(() -> une.ok(false), 8000);
+        try { if (t.synthesizeToFile("Bonjour.", new android.os.Bundle(), f, "essai") != TextToSpeech.SUCCESS) une.ok(false); }
+        catch (Exception e) { une.ok(false); }
+    }
+
+    /** La voix intégrée, directement (quand le moteur choisi cesse de répondre en pleine lecture). */
+    static void interne(Context c, Garde g, Fin f) {
+        if (!VoixInterne.presente(c)) { f.fin(null, "engine", "voix intégrée absente"); return; }
+        VoixInterne.allumer(c);
+        final TextToSpeech[] t = new TextToSpeech[1];
+        t[0] = new TextToSpeech(c, st -> {
+            if (st == TextToSpeech.SUCCESS && francais(t[0])) f.fin(t[0], "", "voix intégrée");
+            else { try { t[0].shutdown(); } catch (Exception ignored) { } f.fin(null, "engine", "voix intégrée : ne démarre pas"); }
+        }, c.getPackageName());
         g.garde(t[0]);
     }
 
