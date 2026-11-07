@@ -71,6 +71,12 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         Crashes.install(this);
         Crashes.exits(this);
+        // moteur web de l'appareil (vieilles télés : utile pour comprendre une page qui s'affiche mal), noté une fois par version
+        try {
+            String ua = android.webkit.WebSettings.getDefaultUserAgent(this), v = ua.replaceAll(".*(Chrome/[0-9.]+).*", "$1");
+            android.content.SharedPreferences sp = getSharedPreferences("crash", MODE_PRIVATE);
+            if (!v.equals(sp.getString("webview", ""))) { Crashes.note(this, "appareil : Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + "), moteur web " + v); sp.edit().putString("webview", v).apply(); }
+        } catch (Throwable ignored) { }
 
         instance = this;
         web = new WebView(this);
