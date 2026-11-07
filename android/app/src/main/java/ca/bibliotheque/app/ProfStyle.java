@@ -63,7 +63,7 @@ final class ProfStyle {
         java.util.List<android.speech.tts.Voice> measured = new java.util.ArrayList<>();
         for (android.speech.tts.Voice v : fr) { Double h = f0.get(base(v.getName())); if (h != null && h > 0 && !v.isNetworkConnectionRequired()) measured.add(v); }
         if (measured.size() >= 2) {
-            measured.sort((x, y) -> Double.compare(f0.get(base(x.getName())), f0.get(base(y.getName()))));
+            java.util.Collections.sort(measured, (x, y) -> Double.compare(f0.get(base(x.getName())), f0.get(base(y.getName()))));
             android.speech.tts.Voice low = measured.get(0), high = measured.get(measured.size() - 1);
             if (f0.get(base(high.getName())) - f0.get(base(low.getName())) >= GAP_HZ) return new android.speech.tts.Voice[]{high, low};
         }

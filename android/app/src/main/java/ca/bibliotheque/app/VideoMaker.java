@@ -815,14 +815,21 @@ final class VideoMaker {
         private void text(TextPaint p, String t, int x, int y, int width, Layout.Alignment al, int maxLines, int alpha) {
             if (t == null || t.isEmpty()) return;
             p.setAlpha(alpha);
-            StaticLayout l = StaticLayout.Builder.obtain(t, 0, t.length(), p, width).setAlignment(al).setMaxLines(maxLines).setEllipsize(android.text.TextUtils.TruncateAt.END).build();
+            StaticLayout l = layout(p, t, width, al, maxLines);
             cv.save(); cv.translate(x, y); l.draw(cv); cv.restore();
             p.setAlpha(255);
         }
 
         private int textHeight(TextPaint p, String t, int width, int maxLines) {
-            StaticLayout l = StaticLayout.Builder.obtain(t, 0, t.length(), p, width).setMaxLines(maxLines).setEllipsize(android.text.TextUtils.TruncateAt.END).build();
-            return l.getHeight();
+            return layout(p, t, width, Layout.Alignment.ALIGN_NORMAL, maxLines).getHeight();
+        }
+
+        /** Texte sur plusieurs lignes ; Android 5 : sans limite de lignes (constructeur d'origine) */
+        @SuppressWarnings("deprecation")
+        private StaticLayout layout(TextPaint p, String t, int width, Layout.Alignment al, int maxLines) {
+            if (android.os.Build.VERSION.SDK_INT >= 23)
+                return StaticLayout.Builder.obtain(t, 0, t.length(), p, width).setAlignment(al).setMaxLines(maxLines).setEllipsize(android.text.TextUtils.TruncateAt.END).build();
+            return new StaticLayout(t, p, width, al, 1f, 0f, false);
         }
 
         Bitmap draw(long t) {

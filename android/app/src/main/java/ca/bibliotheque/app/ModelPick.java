@@ -27,7 +27,7 @@ final class ModelPick {
             if (low.matches(".*(tts|image|live|audio|embedding|native|computer|robotics|vision|learnlm|exp-|thinking).*")) continue;
             if (!out.contains(n)) out.add(n);
         }
-        out.sort((a, b) -> Double.compare(score(b), score(a)));
+        java.util.Collections.sort(out, (a, b) -> Double.compare(score(b), score(a)));
         return out.toArray(new String[0]);
     }
 

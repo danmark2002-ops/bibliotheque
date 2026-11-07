@@ -451,7 +451,7 @@ public class MainActivity extends Activity {
 
     /** Lecture des fichiers partagés autorisée ? (Android 6 à 12 : à demander ; ensuite, plus de permission de ce genre) */
     private boolean canReadStorage() {
-        return Build.VERSION.SDK_INT >= 33 || checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        return Build.VERSION.SDK_INT >= 33 || Build.VERSION.SDK_INT < 23 || checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED;
     }
 
     private Uri folderTree(String lib) {
@@ -570,7 +570,7 @@ public class MainActivity extends Activity {
         /** Parcourir les dossiers dans l'app (télés) : permission de lecture des fichiers partagés */
         @JavascriptInterface public boolean canRead() { return canReadStorage(); }
         @JavascriptInterface public void askRead() {
-            runOnUiThread(() -> { if (canReadStorage()) js("__readPerm", "1"); else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, READ_REQUEST); });
+            runOnUiThread(() -> { if (canReadStorage() || Build.VERSION.SDK_INT < 23) js("__readPerm", "1"); else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, READ_REQUEST); });
         }
 
         /** Les endroits où chercher : mémoire de l'appareil, clé USB, carte SD… [{"path","name"}] */
@@ -862,7 +862,8 @@ public class MainActivity extends Activity {
                 int code = c.getResponseCode();
                 if (code == 404 || code == 410) throw new IOException("expiré");
                 if (code >= 400) throw new IOException("erreur " + code);
-                long total = c.getContentLengthLong(), got = 0, last = 0;
+                long total = -1, got = 0, last = 0;
+                try { total = Long.parseLong(c.getHeaderField("Content-Length")); } catch (Exception ignored) { }
                 try (InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(enc)) {
                     byte[] buf = new byte[1 << 16]; int n;
                     while ((n = in.read(buf)) > 0) { fo.write(buf, 0, n); got += n;
@@ -1883,7 +1884,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void askMic() {
             runOnUiThread(() -> {
-                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED)
                     requestPermissions(new String[]{android.Manifest.permission.RECORD_AUDIO}, 77);
             });
         }

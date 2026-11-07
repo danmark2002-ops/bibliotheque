@@ -3,6 +3,7 @@ package ca.bibliotheque.app;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioTrack;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -32,12 +33,16 @@ final class ScenePlayer {
         offset = Math.max(0, Math.min(pcm.length - 1, starts[Math.max(0, Math.min(line, starts.length - 2))]));
         frames = pcm.length - offset;
         try {
-            track = new AudioTrack.Builder()
-                .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                .setAudioFormat(new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                .setBufferSizeInBytes(Math.max(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 4, rate * 2))
-                .setTransferMode(AudioTrack.MODE_STREAM).build(); // en continu : une scène de plusieurs minutes ne tient pas toujours d'un bloc dans le lecteur du téléphone
-            if (Math.abs(speed - 1f) > 0.01f) { try { track.setPlaybackParams(new android.media.PlaybackParams().setSpeed(speed)); } catch (Exception ignored) { } }
+            AudioAttributes aa = new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build();
+            AudioFormat af = new AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build();
+            int buf = Math.max(AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT) * 4, rate * 2);
+            // en continu : une scène de plusieurs minutes ne tient pas toujours d'un bloc dans le lecteur du téléphone
+            if (Build.VERSION.SDK_INT >= 23) {
+                track = new AudioTrack.Builder().setAudioAttributes(aa).setAudioFormat(af).setBufferSizeInBytes(buf).setTransferMode(AudioTrack.MODE_STREAM).build();
+                if (Math.abs(speed - 1f) > 0.01f) { try { track.setPlaybackParams(new android.media.PlaybackParams().setSpeed(speed)); } catch (Exception ignored) { } }
+            } else { // Android 5 (Fire TV de base) : même son, sans réglage de vitesse
+                track = new AudioTrack(aa, af, buf, AudioTrack.MODE_STREAM, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE);
+            }
             track.play();
         } catch (Exception e) { release(); live = false; h.post(() -> { if (ls != null) ls.end(); }); return; }
         live = true; paused = false; lastTick = android.os.SystemClock.elapsedRealtime();

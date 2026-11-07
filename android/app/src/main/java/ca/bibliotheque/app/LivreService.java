@@ -149,7 +149,7 @@ public class LivreService extends MediaBrowserService {
         if (Build.VERSION.SDK_INT >= 26) focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs).setOnAudioFocusChangeListener(this::onFocus, main).build();
         try { awake = ((android.os.PowerManager) getSystemService(POWER_SERVICE)).newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "MikeLibrary:lecture"); awake.setReferenceCounted(false); } catch (Exception ignored) { }
         makeTts();
-        NotificationManager nm = getSystemService(NotificationManager.class);
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH, "Lecture audio", NotificationManager.IMPORTANCE_LOW));
     }
 
@@ -986,7 +986,7 @@ public class LivreService extends MediaBrowserService {
         inter.clear(); interIdx = 0;
         asking = true;
         updateState();
-        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { // Android 5 : accordé à l'installation
             asking = false;
             setInter("Pour me poser des questions dans l'auto, autorise d'abord le micro : ouvre le Professeur dans la Bibliothèque, sur ton téléphone. Je reprends le cours !");
             play();
@@ -1261,7 +1261,7 @@ public class LivreService extends MediaBrowserService {
     private void notifyNow() {
         try {
             if (!playing) stopFg(false);
-            getSystemService(NotificationManager.class).notify(7, notification());
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(7, notification());
         } catch (Exception ignored) { }
     }
 }
