@@ -10,8 +10,8 @@ android {
         applicationId 'ca.bibliotheque.app'
         minSdk 22 // Fire TV Stick de base (Fire OS 5 = Android 5.1) et téléviseurs plus anciens : les fonctions récentes sont activées selon la version
         targetSdk 36
-        versionCode 143
-        versionName '10.52'
+        versionCode 144
+        versionName '10.53'
     }
 
     signingConfigs {
@@ -27,6 +27,19 @@ android {
         release {
             minifyEnabled false
             signingConfig signingConfigs.release
+        }
+    }
+
+    // Voix française intégrée : le modèle est lu tel quel (non compressé) ; les bibliothèques x86 du moteur sont retirées
+    // (aucun téléviseur ni téléphone visé n'est x86 : elles doubleraient la taille de l'APK)
+    androidResources {
+        noCompress 'onnx'
+    }
+    packaging {
+        jniLibs {
+            // le moteur n'utilise que libsherpa-onnx-jni et libonnxruntime (vérifié : readelf) ; x86 retiré (aucun appareil visé)
+            excludes += ['lib/*/libsherpa-onnx-c-api.so', 'lib/*/libsherpa-onnx-cxx-api.so',
+                         'lib/x86/libonnxruntime.so', 'lib/x86/libsherpa-onnx-jni.so', 'lib/x86_64/libonnxruntime.so', 'lib/x86_64/libsherpa-onnx-jni.so']
         }
     }
 
@@ -48,4 +61,7 @@ dependencies {
     implementation 'androidx.mediarouter:mediarouter:1.7.0'
     // Page de Google pour la clé IA gratuite, ouverte en panneau sous les instructions
     implementation 'androidx.browser:browser:1.8.0'
+    // Voix française hors ligne (Fire TV sans voix française) : sherpa-onnx 1.13.8, Apache 2.0 — l'AAR est téléchargé par la compilation (apk.yml)
+    implementation files('libs/sherpa-onnx.aar')
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
 }

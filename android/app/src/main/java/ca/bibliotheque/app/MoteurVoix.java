@@ -11,7 +11,7 @@ import java.util.Locale;
 /**
  * Trouve un moteur de voix qui parle français. Le moteur par défaut d'un appareil (Fire TV surtout) n'a souvent pas le français,
  * ou ne s'ouvre pas aux autres applications : on essaie chaque moteur installé — SherpaTTS d'abord, puis celui par défaut,
- * puis les autres — et on garde le premier qui parle français. Sinon on le dit (au lieu d'un silence) :
+ * puis les autres, puis la voix française intégrée à l'application (VoixInterne) — et on garde le premier qui parle français. Sinon on le dit (au lieu d'un silence) :
  * « french » = des voix, mais pas en français ; « engine » = aucun moteur de voix utilisable.
  */
 final class MoteurVoix {
@@ -34,6 +34,9 @@ final class MoteurVoix {
         } catch (Exception ignored) { }
         if (defaut != null && ordre.remove(defaut)) ordre.add(0, defaut);
         if (sherpa != null) ordre.add(0, sherpa);
+        // la voix française rangée dans l'application : seulement si aucun moteur de l'appareil ne parle français
+        ordre.remove(c.getPackageName());
+        if (VoixInterne.presente(c)) ordre.add(c.getPackageName());
         ordre.add(""); // dernier essai : le moteur que le système choisit lui-même
         String bilan = noms.isEmpty() ? "aucun moteur de voix déclaré" : String.join(", ", noms);
         essai(c, ordre, 0, null, bilan, g, f);
@@ -50,6 +53,7 @@ final class MoteurVoix {
             return;
         }
         String pkg = ordre.get(i);
+        if (pkg.equals(c.getPackageName())) VoixInterne.allumer(c);
         final TextToSpeech[] t = new TextToSpeech[1];
         TextToSpeech.OnInitListener l = st -> {
             if (st == TextToSpeech.SUCCESS && francais(t[0])) { f.fin(t[0], "", bilan); return; }

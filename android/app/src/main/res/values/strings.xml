@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mike Library</string>
+    <string name="voix_interne">Mike Library — voix française (Piper siwis, CC BY 4.0)</string>
 </resources>

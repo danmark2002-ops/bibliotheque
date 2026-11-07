@@ -6,3 +6,5 @@ android/app/build/
 android/local.properties
 local/Bibliotheque.html
 local/bibliotheque-web.html
+android/app/libs/
+android/app/src/main/assets/voix/

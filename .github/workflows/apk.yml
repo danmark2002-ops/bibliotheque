@@ -33,6 +33,11 @@ jobs:
           cp -r /tmp/package/standard_fonts /tmp/package/cmaps $GITHUB_WORKSPACE/android/app/src/main/assets/pdfjs/
           du -sh $GITHUB_WORKSPACE/android/app/src/main/assets/pdfjs
 
+      - name: Voix française intégrée (moteur et voix hors ligne)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash android/voix.sh
+
       - name: Compiler
         working-directory: android
         run: |

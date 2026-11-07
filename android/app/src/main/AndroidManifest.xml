@@ -111,6 +111,20 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <!-- Voix française intégrée (sherpa-onnx + Piper « siwis ») : éteinte par défaut, allumée seulement sur les appareils
+             sans voix française (Fire TV). Processus à part : un souci du moteur ne ferme pas l'application. -->
+        <service
+            android:name=".VoixInterne"
+            android:label="@string/voix_interne"
+            android:enabled="false"
+            android:exported="true"
+            android:process=":voix">
+            <intent-filter>
+                <action android:name="android.intent.action.TTS_SERVICE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".LivreService"
             android:exported="true"
