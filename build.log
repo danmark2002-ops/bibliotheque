@@ -1,0 +1,654 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.11.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:javaPreCompileRelease
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:mergeReleaseNativeLibs
+> Task :app:checkReleaseAarMetadata
+> Task :app:generateReleaseResValues
+
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libonnxruntime.so, libsherpa-onnx-jni.so. Run with --info option to learn more.
+
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:extractReleaseNativeSymbolTables
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :app:packageReleaseResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :app:parseReleaseLocalResources
+> Task :app:mergeReleaseResources
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:processReleaseManifestForPackage
+> Task :app:mergeReleaseStartupProfile
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:processReleaseResources
+> Task :app:mergeReleaseAssets
+
+> Task :app:compileReleaseJavaWithJavac FAILED
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:210: error: illegal start of type
+        });
+         ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: illegal start of type
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                                                        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+        if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                                                                           ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:213: error: illegal start of type
+        else { web.loadUrl(START); handleIncoming(getIntent()); }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:217: error: class, interface, enum, or record expected
+    protected void onNewIntent(Intent intent) {
+              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:219: error: class, interface, enum, or record expected
+        handleIncoming(intent);
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:220: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:224: error: class, interface, enum, or record expected
+        if (path.endsWith(".js") || path.endsWith(".mjs")) return "text/javascript";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:225: error: class, interface, enum, or record expected
+        if (path.endsWith(".css")) return "text/css";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:226: error: class, interface, enum, or record expected
+        if (path.endsWith(".svg")) return "image/svg+xml";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:227: error: class, interface, enum, or record expected
+        if (path.endsWith(".png")) return "image/png";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:228: error: class, interface, enum, or record expected
+        if (path.endsWith(".woff")) return "font/woff";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:229: error: class, interface, enum, or record expected
+        if (path.endsWith(".woff2")) return "font/woff2";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:230: error: class, interface, enum, or record expected
+        if (path.endsWith(".txt")) return "text/plain";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:231: error: class, interface, enum, or record expected
+        return "application/octet-stream";
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:232: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:235: error: class, interface, enum, or record expected
+    private volatile String[] derniere;                 // dernière phrase demandée : relue par la voix intégrée si le moteur échoue
+                     ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:238: error: class, interface, enum, or record expected
+    private void voixPrete(TextToSpeech t, String prob, String bilan) {
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:240: error: class, interface, enum, or record expected
+        if (!prob.isEmpty()) Crashes.note(this, "voix (lecture) : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+        if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+        if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+                                                                        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+        if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+                                                                                ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:243: error: class, interface, enum, or record expected
+        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:244: error: class, interface, enum, or record expected
+            @Override public void onStart(String id) { }
+                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:245: error: class, interface, enum, or record expected
+            @Override public void onDone(String id) { notifyDone(id); }
+                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:245: error: class, interface, enum, or record expected
+            @Override public void onDone(String id) { notifyDone(id); }
+                                                                      ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:246: error: class, interface, enum, or record expected
+            @Override public void onError(String id) { echec(id); }
+                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:246: error: class, interface, enum, or record expected
+            @Override public void onError(String id) { echec(id); }
+                                                                  ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:247: error: class, interface, enum, or record expected
+            @Override public void onError(String id, int code) { echec(id); }
+                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:247: error: class, interface, enum, or record expected
+            @Override public void onError(String id, int code) { echec(id); }
+                                                                            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:248: error: class, interface, enum, or record expected
+            @Override public void onStop(String id, boolean interrupted) { }
+                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:250: error: class, interface, enum, or record expected
+        ttsReady = true;
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:251: error: class, interface, enum, or record expected
+        synchronized (pending) {
+                     ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:253: error: class, interface, enum, or record expected
+            pending.clear();
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:254: error: class, interface, enum, or record expected
+        }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+        if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+        if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+                                                                                                           ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+        if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+                                                                                                                   ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:263: error: class, interface, enum, or record expected
+        runOnUiThread(() -> {
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:265: error: class, interface, enum, or record expected
+            ttsReady = false;
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+            synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                         ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+            synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                                                      ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+            synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                                                                                                             ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:268: error: class, interface, enum, or record expected
+            try { vieux.shutdown(); } catch (Exception ignored) { }
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:268: error: class, interface, enum, or record expected
+            try { vieux.shutdown(); } catch (Exception ignored) { }
+                                    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:270: error: class, interface, enum, or record expected
+        });
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:271: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:275: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:277: error: class, interface, enum, or record expected
+    private void speakNow(String text, float rate, String id) { speakNow(text, rate, 1f, "", id); }
+                                                                                                  ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:282: error: class, interface, enum, or record expected
+            if (voice != null && !voice.isEmpty() && tts.getVoices() != null)
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:283: error: class, interface, enum, or record expected
+                for (android.speech.tts.Voice x : tts.getVoices()) if (voice.equals(x.getName())) { v = x; break; }
+                                                                                                           ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:283: error: class, interface, enum, or record expected
+                for (android.speech.tts.Voice x : tts.getVoices()) if (voice.equals(x.getName())) { v = x; break; }
+                                                                                                                  ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:285: error: class, interface, enum, or record expected
+            else if (v == null && (voice == null || voice.isEmpty()) && tts.getVoice() != null && !"fr".equals(tts.getVoice().getLocale().getLanguage())) tts.setLanguage(Locale.CANADA_FRENCH);
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:286: error: class, interface, enum, or record expected
+        } catch (Exception ignored) { }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:288: error: class, interface, enum, or record expected
+        tts.setSpeechRate(Math.max(0.3f, Math.min(3f, rate)));
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:289: error: class, interface, enum, or record expected
+        derniere = new String[]{text, String.valueOf(rate), id, String.valueOf(pitch)};
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:290: error: class, interface, enum, or record expected
+        if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id) == TextToSpeech.ERROR) echec(id);
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:291: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:347: error: class, interface, enum, or record expected
+    private SharedPreferences prefs() { return getSharedPreferences("dossier", MODE_PRIVATE); }
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:347: error: class, interface, enum, or record expected
+    private SharedPreferences prefs() { return getSharedPreferences("dossier", MODE_PRIVATE); }
+                                                                                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:352: error: class, interface, enum, or record expected
+    private JSONObject folders() {
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:354: error: class, interface, enum, or record expected
+        JSONObject o;
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+        try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+        try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+                                                                ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+        try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+                                                                                                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:357: error: class, interface, enum, or record expected
+        if (old != null) {
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:358: error: class, interface, enum, or record expected
+            try { if (!o.has("main")) o.put("main", old); } catch (Exception ignored) { }
+                                                          ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:360: error: class, interface, enum, or record expected
+        }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:362: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:364: error: class, interface, enum, or record expected
+    private void saveFolders(JSONObject o) { prefs().edit().putString("folders", o.toString()).apply(); }
+                                                                                                        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:367: error: class, interface, enum, or record expected
+    private static final String PHONE = "phone:";
+                         ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:371: error: class, interface, enum, or record expected
+    private final Object pdfLock = new Object();
+                  ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:372: error: class, interface, enum, or record expected
+    private String pdfKey;
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:373: error: class, interface, enum, or record expected
+    private android.graphics.pdf.PdfRenderer pdfR;
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:374: error: class, interface, enum, or record expected
+    private android.os.ParcelFileDescriptor pdfFd;
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+    private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+            ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+    private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                     ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+    private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                                 ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+    private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                                           ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:377: error: class, interface, enum, or record expected
+    private static String safeId(String id) { return id == null ? "" : id.replaceAll("[^\\w-]", "_"); }
+                                                                                                      ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:380: error: class, interface, enum, or record expected
+        try { if (pdfR != null) pdfR.close(); } catch (Exception ignored) { }
+                                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:381: error: class, interface, enum, or record expected
+        try { if (pdfFd != null) pdfFd.close(); } catch (Exception ignored) { }
+                                                ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:382: error: class, interface, enum, or record expected
+        pdfR = null; pdfFd = null; pdfKey = null;
+                     ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:382: error: class, interface, enum, or record expected
+        pdfR = null; pdfFd = null; pdfKey = null;
+                                   ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:383: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:387: error: class, interface, enum, or record expected
+    }
+    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:391: error: class, interface, enum, or record expected
+        int n, w;
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+        try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+        try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+        try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                                                                              ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+        try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                                                                                                                                    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:394: error: class, interface, enum, or record expected
+        synchronized (pdfLock) {
+                     ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:397: error: class, interface, enum, or record expected
+                if (!key.equals(pdfKey)) {
+                ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:399: error: class, interface, enum, or record expected
+                    android.os.ParcelFileDescriptor fd;
+                    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:400: error: class, interface, enum, or record expected
+                    if (book != null) {
+                    ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:402: error: class, interface, enum, or record expected
+                        if (!f.exists()) return pdfError(404, "absent");
+                        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:403: error: class, interface, enum, or record expected
+                        fd = android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                        ^
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:404: error: class, interface, enum, or record expected
+                    } else if (folderPath(lib) != null) {
+                    ^
+100 errors
+
+> Task :app:desugarReleaseFileDependencies
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1794028417598.json
+[Incubating] Problems report is available at: file:///home/runner/work/bibliotheque/bibliotheque/android/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileReleaseJavaWithJavac'.
+> Compilation failed; see the compiler output below.
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+          if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+          if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                                                          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: <identifier> expected
+          if (savedInstanceState != null) web.restoreState(savedInstanceState);
+                                                                             ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:210: error: illegal start of type
+          });
+           ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:212: error: illegal start of type
+          if (savedInstanceState != null) web.restoreState(savedInstanceState);
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:213: error: illegal start of type
+          else { web.loadUrl(START); handleIncoming(getIntent()); }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:217: error: class, interface, enum, or record expected
+      protected void onNewIntent(Intent intent) {
+                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:219: error: class, interface, enum, or record expected
+          handleIncoming(intent);
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:220: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:224: error: class, interface, enum, or record expected
+          if (path.endsWith(".js") || path.endsWith(".mjs")) return "text/javascript";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:225: error: class, interface, enum, or record expected
+          if (path.endsWith(".css")) return "text/css";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:226: error: class, interface, enum, or record expected
+          if (path.endsWith(".svg")) return "image/svg+xml";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:227: error: class, interface, enum, or record expected
+          if (path.endsWith(".png")) return "image/png";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:228: error: class, interface, enum, or record expected
+          if (path.endsWith(".woff")) return "font/woff";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:229: error: class, interface, enum, or record expected
+          if (path.endsWith(".woff2")) return "font/woff2";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:230: error: class, interface, enum, or record expected
+          if (path.endsWith(".txt")) return "text/plain";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:231: error: class, interface, enum, or record expected
+          return "application/octet-stream";
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:232: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:235: error: class, interface, enum, or record expected
+      private volatile String[] derniere;                 // dernière phrase demandée : relue par la voix intégrée si le moteur échoue
+                       ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:238: error: class, interface, enum, or record expected
+      private void voixPrete(TextToSpeech t, String prob, String bilan) {
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:240: error: class, interface, enum, or record expected
+          if (!prob.isEmpty()) Crashes.note(this, "voix (lecture) : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+          if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+          if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+                                                                          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:241: error: class, interface, enum, or record expected
+          if (t == null) { if (voixInterne) js("__ttsProblem", "engine"); return; } // la page l'apprend à la première lecture demandée
+                                                                                  ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:243: error: class, interface, enum, or record expected
+          tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:244: error: class, interface, enum, or record expected
+              @Override public void onStart(String id) { }
+                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:245: error: class, interface, enum, or record expected
+              @Override public void onDone(String id) { notifyDone(id); }
+                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:245: error: class, interface, enum, or record expected
+              @Override public void onDone(String id) { notifyDone(id); }
+                                                                        ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:246: error: class, interface, enum, or record expected
+              @Override public void onError(String id) { echec(id); }
+                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:246: error: class, interface, enum, or record expected
+              @Override public void onError(String id) { echec(id); }
+                                                                    ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:247: error: class, interface, enum, or record expected
+              @Override public void onError(String id, int code) { echec(id); }
+                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:247: error: class, interface, enum, or record expected
+              @Override public void onError(String id, int code) { echec(id); }
+                                                                              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:248: error: class, interface, enum, or record expected
+              @Override public void onStop(String id, boolean interrupted) { }
+                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:250: error: class, interface, enum, or record expected
+          ttsReady = true;
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:251: error: class, interface, enum, or record expected
+          synchronized (pending) {
+                       ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:253: error: class, interface, enum, or record expected
+              pending.clear();
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:254: error: class, interface, enum, or record expected
+          }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+          if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+          if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+                                                                                                             ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:261: error: class, interface, enum, or record expected
+          if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
+                                                                                                                     ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:263: error: class, interface, enum, or record expected
+          runOnUiThread(() -> {
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:265: error: class, interface, enum, or record expected
+              ttsReady = false;
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+              synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                           ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+              synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                                                        ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:266: error: class, interface, enum, or record expected
+              synchronized (pending) { pending.clear(); pending.add(new String[]{d[0], d[1], d[2], d[3], ""}); }
+                                                                                                               ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:268: error: class, interface, enum, or record expected
+              try { vieux.shutdown(); } catch (Exception ignored) { }
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:268: error: class, interface, enum, or record expected
+              try { vieux.shutdown(); } catch (Exception ignored) { }
+                                      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:270: error: class, interface, enum, or record expected
+          });
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:271: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:275: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:277: error: class, interface, enum, or record expected
+      private void speakNow(String text, float rate, String id) { speakNow(text, rate, 1f, "", id); }
+                                                                                                    ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:282: error: class, interface, enum, or record expected
+              if (voice != null && !voice.isEmpty() && tts.getVoices() != null)
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:283: error: class, interface, enum, or record expected
+                  for (android.speech.tts.Voice x : tts.getVoices()) if (voice.equals(x.getName())) { v = x; break; }
+                                                                                                             ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:283: error: class, interface, enum, or record expected
+                  for (android.speech.tts.Voice x : tts.getVoices()) if (voice.equals(x.getName())) { v = x; break; }
+                                                                                                                    ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:285: error: class, interface, enum, or record expected
+              else if (v == null && (voice == null || voice.isEmpty()) && tts.getVoice() != null && !"fr".equals(tts.getVoice().getLocale().getLanguage())) tts.setLanguage(Locale.CANADA_FRENCH);
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:286: error: class, interface, enum, or record expected
+          } catch (Exception ignored) { }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:288: error: class, interface, enum, or record expected
+          tts.setSpeechRate(Math.max(0.3f, Math.min(3f, rate)));
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:289: error: class, interface, enum, or record expected
+          derniere = new String[]{text, String.valueOf(rate), id, String.valueOf(pitch)};
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:290: error: class, interface, enum, or record expected
+          if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id) == TextToSpeech.ERROR) echec(id);
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:291: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:347: error: class, interface, enum, or record expected
+      private SharedPreferences prefs() { return getSharedPreferences("dossier", MODE_PRIVATE); }
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:347: error: class, interface, enum, or record expected
+      private SharedPreferences prefs() { return getSharedPreferences("dossier", MODE_PRIVATE); }
+                                                                                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:352: error: class, interface, enum, or record expected
+      private JSONObject folders() {
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:354: error: class, interface, enum, or record expected
+          JSONObject o;
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+          try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+          try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+                                                                  ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:355: error: class, interface, enum, or record expected
+          try { o = new JSONObject(p.getString("folders", "{}")); } catch (Exception e) { o = new JSONObject(); }
+                                                                                                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:357: error: class, interface, enum, or record expected
+          if (old != null) {
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:358: error: class, interface, enum, or record expected
+              try { if (!o.has("main")) o.put("main", old); } catch (Exception ignored) { }
+                                                            ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:360: error: class, interface, enum, or record expected
+          }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:362: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:364: error: class, interface, enum, or record expected
+      private void saveFolders(JSONObject o) { prefs().edit().putString("folders", o.toString()).apply(); }
+                                                                                                          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:367: error: class, interface, enum, or record expected
+      private static final String PHONE = "phone:";
+                           ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:371: error: class, interface, enum, or record expected
+      private final Object pdfLock = new Object();
+                    ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:372: error: class, interface, enum, or record expected
+      private String pdfKey;
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:373: error: class, interface, enum, or record expected
+      private android.graphics.pdf.PdfRenderer pdfR;
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:374: error: class, interface, enum, or record expected
+      private android.os.ParcelFileDescriptor pdfFd;
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+      private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+              ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+      private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                       ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+      private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                                   ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:376: error: class, interface, enum, or record expected
+      private File pdfDir() { File d = new File(getFilesDir(), "pdf"); d.mkdirs(); return d; }
+                                                                                             ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:377: error: class, interface, enum, or record expected
+      private static String safeId(String id) { return id == null ? "" : id.replaceAll("[^\\w-]", "_"); }
+                                                                                                        ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:380: error: class, interface, enum, or record expected
+          try { if (pdfR != null) pdfR.close(); } catch (Exception ignored) { }
+                                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:381: error: class, interface, enum, or record expected
+          try { if (pdfFd != null) pdfFd.close(); } catch (Exception ignored) { }
+                                                  ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:382: error: class, interface, enum, or record expected
+          pdfR = null; pdfFd = null; pdfKey = null;
+                       ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:382: error: class, interface, enum, or record expected
+          pdfR = null; pdfFd = null; pdfKey = null;
+                                     ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:383: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:387: error: class, interface, enum, or record expected
+      }
+      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:391: error: class, interface, enum, or record expected
+          int n, w;
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+          try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+          try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+          try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                                                                                ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:392: error: class, interface, enum, or record expected
+          try { n = Integer.parseInt(u.getQueryParameter("n")); w = Integer.parseInt(u.getQueryParameter("w")); } catch (Exception e) { return pdfError(400, "page"); }
+                                                                                                                                                                      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:394: error: class, interface, enum, or record expected
+          synchronized (pdfLock) {
+                       ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:397: error: class, interface, enum, or record expected
+                  if (!key.equals(pdfKey)) {
+                  ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:399: error: class, interface, enum, or record expected
+                      android.os.ParcelFileDescriptor fd;
+                      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:400: error: class, interface, enum, or record expected
+                      if (book != null) {
+                      ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:402: error: class, interface, enum, or record expected
+                          if (!f.exists()) return pdfError(404, "absent");
+                          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:403: error: class, interface, enum, or record expected
+                          fd = android.os.ParcelFileDescriptor.open(f, android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+                          ^
+  /home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:404: error: class, interface, enum, or record expected
+                      } else if (folderPath(lib) != null) {
+                      ^
+  100 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 23s
+25 actionable tasks: 25 executed
