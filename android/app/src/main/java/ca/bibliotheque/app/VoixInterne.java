@@ -74,19 +74,29 @@ public class VoixInterne extends TextToSpeechService {
         float vitesse = Math.max(0.5f, Math.min(3f, req.getSpeechRate() / 100f));
         final int max = Math.max(1024, cb.getMaxBufferSize());
         try {
-            t.generateWithCallback(texte, 0, vitesse, (float[] s) -> {
-                if (arret) return 0;
-                byte[] b = new byte[s.length * 2];
-                for (int i = 0; i < s.length; i++) {
-                    int v = (int) (Math.max(-1f, Math.min(1f, s[i])) * 32767);
-                    b[2 * i] = (byte) v; b[2 * i + 1] = (byte) (v >> 8);
-                }
-                for (int o = 0; o < b.length && !arret; o += max)
-                    if (cb.audioAvailable(b, o, Math.min(max, b.length - o)) != TextToSpeech.SUCCESS) { arret = true; break; }
-                return arret ? 0 : 1;
-            });
+            t.generateWithCallback(texte, 0, vitesse, new Morceaux(cb, max));
         } catch (Throwable e) { Log.e(TAG, "synthèse", e); cb.error(); return; }
         cb.done();
+    }
+
+    /**
+     * Reçoit le son phrase par phrase. Une vraie classe, pas une lambda : le moteur cherche la méthode invoke(float[]) → Integer,
+     * qu'une lambda Java n'a pas (elle n'a que invoke(Object) → Object) ; sans elle, le moteur plante en silence.
+     */
+    private final class Morceaux implements kotlin.jvm.functions.Function1<float[], Integer> {
+        private final SynthesisCallback cb; private final int max;
+        Morceaux(SynthesisCallback cb, int max) { this.cb = cb; this.max = max; }
+        @Override public Integer invoke(float[] s) {
+            if (arret) return 0;
+            byte[] b = new byte[s.length * 2];
+            for (int i = 0; i < s.length; i++) {
+                int v = (int) (Math.max(-1f, Math.min(1f, s[i])) * 32767);
+                b[2 * i] = (byte) v; b[2 * i + 1] = (byte) (v >> 8);
+            }
+            for (int o = 0; o < b.length && !arret; o += max)
+                if (cb.audioAvailable(b, o, Math.min(max, b.length - o)) != TextToSpeech.SUCCESS) { arret = true; break; }
+            return arret ? 0 : 1;
+        }
     }
 
     /** Charge la voix une seule fois (quelques secondes sur un Fire TV Stick). */

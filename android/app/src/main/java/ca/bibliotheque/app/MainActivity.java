@@ -251,6 +251,7 @@ public class MainActivity extends Activity {
     /** Le moteur refuse une phrase (voix pas installée sur la télé, voix en ligne sans réseau…) : on passe à la voix intégrée
      *  et elle relit la même phrase ; la page ne voit qu'une phrase un peu plus lente. */
     private void echec(String id) {
+        garde.removeCallbacksAndMessages(null);
         String[] d = derniere;
         if (voixInterne || d == null || !id.equals(d[2]) || !VoixInterne.presente(this)) { notifyDone(id); return; }
         voixInterne = true;
@@ -264,7 +265,22 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Chien de garde : un moteur qui ne dit jamais « phrase finie » (processus de voix tombé, voix en attente de téléchargement)
+     *  est traité comme un refus — on passe à la voix intégrée ; si c'est elle qui se tait, la page l'annonce au lieu de tourner à vide. */
+    private final android.os.Handler garde = new android.os.Handler(android.os.Looper.getMainLooper());
+    private void surveiller(String id, String text, float rate) {
+        garde.removeCallbacksAndMessages(null);
+        garde.postDelayed(() -> {
+            String[] d = derniere;
+            if (d == null || !id.equals(d[2])) return;
+            Crashes.note(this, "voix (lecture) : aucune fin de phrase après l'attente" + (voixInterne ? " (voix intégrée)" : ""));
+            if (voixInterne) { derniere = null; js("__ttsProblem", "engine"); }
+            else echec(id);
+        }, 25000 + (long) (text.length() * 160 / Math.max(0.3f, rate)));
+    }
+
     private void notifyDone(String id) {
+        garde.removeCallbacksAndMessages(null);
         runOnUiThread(() -> web.evaluateJavascript("window.__ttsDone && window.__ttsDone('" + id.replace("'", "") + "')", null));
     }
 
@@ -281,6 +297,7 @@ public class MainActivity extends Activity {
         tts.setPitch(Math.max(0.5f, Math.min(2f, pitch)));
         tts.setSpeechRate(Math.max(0.3f, Math.min(3f, rate)));
         derniere = new String[]{text, String.valueOf(rate), id, String.valueOf(pitch)};
+        surveiller(id, text, rate);
         if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, new Bundle(), id) == TextToSpeech.ERROR) echec(id);
     }
 
@@ -333,6 +350,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void stop() {
             synchronized (pending) { pending.clear(); }
+            derniere = null; garde.removeCallbacksAndMessages(null);
             if (tts != null) tts.stop();
         }
     }
