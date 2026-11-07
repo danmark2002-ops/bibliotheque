@@ -202,12 +202,6 @@ public class MainActivity extends Activity {
 
         // un moteur de voix qui parle français (Fire TV : celui par défaut n'en a souvent pas) ; sinon, la page l'annonce
         MoteurVoix.choisir(this, t -> tts = t, this::voixPrete);
-            ttsReady = true;
-            synchronized (pending) {
-                for (String[] p : pending) speakNow(p[0], Float.parseFloat(p[1]), Float.parseFloat(p[3]), p[4], p[2]);
-                pending.clear();
-            }
-        });
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else { web.loadUrl(START); handleIncoming(getIntent()); }
