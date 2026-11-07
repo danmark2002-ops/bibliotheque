@@ -1,0 +1,320 @@
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Secret.java:57: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+            sp.edit().putString("_aes", w).commit();
+                                           ~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Secret.java:72: Warning: Consider using apply() instead; commit writes its data to persistent storage immediately, whereas apply will handle it in the background [ApplySharedPref]
+            sp.edit().putString(name, Base64.encodeToString(iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(ct, Base64.NO_WRAP)).commit();
+                                                                                                                                   ~~~~~~~~
+
+   Explanation for issues of type "ApplySharedPref":
+   Consider using apply() instead of commit on shared preferences. Whereas
+   commit blocks and writes its data to persistent storage immediately, apply
+   will handle it in the background.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Voix.java:189: Warning: Implicitly using the default locale is a common source of bugs: Use toLowerCase(Locale) instead. For strings meant to be internal use Locale.ROOT, otherwise Locale.getDefault(). [DefaultLocale]
+                        String lc = x.optString("language_code", x.optString("languageCode", "")).toLowerCase();
+                                                                                                  ~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Voix.java:214: Warning: Implicitly using the default locale is a common source of bugs: Use toLowerCase(Locale) instead. For strings meant to be internal use Locale.ROOT, otherwise Locale.getDefault(). [DefaultLocale]
+            String t = x.optString("type", "prebuilt").toLowerCase();
+                                                       ~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Voix.java:215: Warning: Implicitly using the default locale is a common source of bugs: Use toLowerCase(Locale) instead. For strings meant to be internal use Locale.ROOT, otherwise Locale.getDefault(). [DefaultLocale]
+            if (best == null || (t.contains("prebuilt") && !best.optString("type", "prebuilt").toLowerCase().contains("prebuilt"))) best = x;
+                                                                                               ~~~~~~~~~~~
+
+   Explanation for issues of type "DefaultLocale":
+   Calling String#toLowerCase() or #toUpperCase() without specifying an
+   explicit locale is a common source of bugs. The reason for that is that
+   those methods will use the current locale on the user's device, and even
+   though the code appears to work correctly when you are developing the app,
+   it will fail in some locales. For example, in the Turkish locale, the
+   uppercase replacement for i is not I.
+
+   If you want the methods to just perform ASCII replacement, for example to
+   convert an enum name, call String#toUpperCase(Locale.ROOT) instead. If you
+   really want to use the current locale, call
+   String#toUpperCase(Locale.getDefault()) instead.
+
+   https://developer.android.com/reference/java/util/Locale.html#default_locale
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:930: Warning: Field requires API level 24 (current min is 22): android.content.Intent#EXTRA_EXCLUDE_COMPONENTS [InlinedApi]
+            chooser.putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, new android.content.ComponentName[]{ new android.content.ComponentName(MainActivity.this, MainActivity.class) });
+                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "InlinedApi":
+   This check scans through all the Android API field references in the
+   application and flags certain constants, such as static final integers and
+   Strings, which were introduced in later versions. These will actually be
+   copied into the class files rather than being referenced, which means that
+   the value is available even when running on older devices. In some cases
+   that's fine, and in other cases it can result in a runtime crash or
+   incorrect behavior. It depends on the context, so consider the code
+   carefully and decide whether it's safe and can be suppressed or whether the
+   code needs to be guarded.
+
+   If you really want to use this API and don't need to support older devices
+   just set the minSdkVersion in your build.gradle or AndroidManifest.xml
+   files.
+
+   If your code is deliberately accessing newer APIs, and you have ensured
+   (e.g. with conditional execution) that this code will only ever be called
+   on a supported platform, then you can annotate your class or method with
+   the @TargetApi annotation specifying the local minimum SDK to apply, such
+   as @TargetApi(11), such that this check considers 11 rather than your
+   manifest file's minimum SDK as the required API level.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:41: Error: Missing intent-filter for action android.media.action.MEDIA_PLAY_FROM_SEARCH. [MissingIntentFilterForMediaSearch]
+    <application
+    ^
+
+   Explanation for issues of type "MissingIntentFilterForMediaSearch":
+   To support voice searches on Android Auto, you should also register an
+   intent-filter for the action android.media.action.MEDIA_PLAY_FROM_SEARCH.
+
+   To do this, add
+   `<intent-filter>`
+       `<action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+   />`
+   `</intent-filter>`
+   to your <activity> or <service>.
+
+   https://developer.android.com/training/auto/audio/index.html#support_voice
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/LivreService.java:1264: Error: When targeting Android 13 or higher, posting a permission requires holding the POST_NOTIFICATIONS permission [NotificationPermission]
+            ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(7, notification());
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NotificationPermission":
+   When targeting Android 13 and higher, posting permissions requires holding
+   the runtime permission android.permission.POST_NOTIFICATIONS.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:49: Warning: Attribute enableOnBackInvokedCallback is only used in API level 33 and higher (current min is 22) [UnusedAttribute]
+        android:enableOnBackInvokedCallback="true"
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:51: Warning: Attribute usesCleartextTraffic is only used in API level 23 and higher (current min is 22) [UnusedAttribute]
+        android:usesCleartextTraffic="true"
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:54: Warning: Attribute networkSecurityConfig is only used in API level 24 and higher (current min is 22) [UnusedAttribute]
+        android:networkSecurityConfig="@xml/network_security_config">
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UnusedAttribute":
+   This check finds attributes set in XML files that were introduced in a
+   version newer than the oldest version targeted by your application (with
+   the minSdkVersion attribute).
+
+   This is not an error; the application will simply ignore the attribute.
+   However, if the attribute is important to the appearance or functionality
+   of your application, you should consider finding an alternative way to
+   achieve the same result with only available attributes, and then you can
+   optionally create a copy of the layout in a layout-vNN folder which will be
+   used on API NN or higher where you can take advantage of the newer
+   attribute.
+
+   Note: This check does not only apply to attributes. For example, some tags
+   can be unused too, such as the new <tag> element in layouts introduced in
+   API 21.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:16: Warning: Requiring Wifi permissions limits app availability on TVs that support only Ethernet [LeanbackUsesWifi]
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "LeanbackUsesWifi":
+   WiFi is not required for Android TV and many devices connect to the
+   internet via alternative methods e.g. Ethernet.
+
+   If your app is not focused specifically on WiFi functionality and only
+   wishes to connect to the internet, please modify your Manifest to contain:
+   <uses-feature android:name="android.hardware.wifi" android:required="false"
+   />
+
+   Un-metered or non-roaming connections can be detected in software using
+   NetworkCapabilities#NET_CAPABILITY_NOT_METERED and
+   NetworkCapabilities#NET_CAPABILITY_NOT_ROAMING.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:41: Warning: A newer version of com.android.billingclient:billing than 8.0.0 is available: 9.1.0 [GradleDependency]
+    implementation 'com.android.billingclient:billing:8.0.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:43: Warning: A newer version of com.google.mlkit:genai-prompt than 1.0.0-beta4 is available: 1.0.0-beta5 [GradleDependency]
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:45: Warning: A newer version of com.google.android.gms:play-services-mlkit-text-recognition than 19.0.1 is available: 19.0.2 [GradleDependency]
+    implementation 'com.google.android.gms:play-services-mlkit-text-recognition:19.0.1'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:47: Warning: A newer version of com.google.android.gms:play-services-cast-framework than 21.5.0 is available: 23.0.0 [GradleDependency]
+    implementation 'com.google.android.gms:play-services-cast-framework:21.5.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:48: Warning: A newer version of androidx.mediarouter:mediarouter than 1.7.0 is available: 1.8.1 [GradleDependency]
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/build.gradle:50: Warning: A newer version of androidx.browser:browser than 1.8.0 is available: 1.10.0 [GradleDependency]
+    implementation 'androidx.browser:browser:1.8.0'
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:88: Warning: Using setJavaScriptEnabled can introduce XSS vulnerabilities into your application, review carefully [SetJavaScriptEnabled]
+        s.setJavaScriptEnabled(true);
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:1049: Warning: Using setJavaScriptEnabled can introduce XSS vulnerabilities into your application, review carefully [SetJavaScriptEnabled]
+            bs.setJavaScriptEnabled(true); bs.setDomStorageEnabled(true); bs.setLoadWithOverviewMode(true); bs.setUseWideViewPort(true);
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetJavaScriptEnabled":
+   Your code should not invoke setJavaScriptEnabled if you are not sure that
+   your app really requires JavaScript support.
+
+   https://goo.gle/SetJavaScriptEnabled
+   https://developer.android.com/training/articles/security-tips
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:122: Warning: Exported content providers can provide access to potentially sensitive data [ExportedContentProvider]
+        <provider
+         ~~~~~~~~
+
+   Explanation for issues of type "ExportedContentProvider":
+   Content providers are exported by default and any application on the system
+   can potentially use them to read and write data. If the content provider
+   provides access to sensitive data, it should be protected by specifying
+   export=false in the manifest or by protecting it with a permission that can
+   be granted to other applications.
+
+   https://goo.gle/ExportedContentProvider
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/AndroidManifest.xml:114: Warning: Exported service does not require permission [ExportedService]
+        <service
+         ~~~~~~~
+
+   Explanation for issues of type "ExportedService":
+   Exported services (services which either set exported=true or contain an
+   intent-filter and do not specify exported=false) should define a permission
+   that an entity must have in order to launch the service or bind to it.
+   Without this, any application can use this service.
+
+   https://goo.gle/ExportedService
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/xml/network_security_config.xml:3: Warning: Insecure Base Configuration [InsecureBaseConfiguration]
+    <base-config cleartextTrafficPermitted="true" />
+                                            ~~~~
+
+   Explanation for issues of type "InsecureBaseConfiguration":
+   Permitting cleartext traffic could allow eavesdroppers to intercept data
+   sent by your app, which impacts the privacy of your users. Consider only
+   allowing encrypted traffic by setting the cleartextTrafficPermitted tag to
+   false.
+
+   https://goo.gle/InsecureBaseConfiguration
+   https://developer.android.com/preview/features/security-config.html
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:573: Warning: Unnecessary; Build.VERSION.SDK_INT < 23 is never true here [ObsoleteSdkInt]
+            runOnUiThread(() -> { if (canReadStorage() || Build.VERSION.SDK_INT < 23) js("__readPerm", "1"); else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, READ_REQUEST); });
+                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/IaGratuite.java:35: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private static Context app;
+            ~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:64: Warning: Do not place Android context classes in static fields (static reference to MainActivity which has field web pointing to WebView); this is a memory leak [StaticFieldLeak]
+    static volatile MainActivity instance;
+    ~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/Secret.java:23: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private static Context ctx;
+            ~~~~~~
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/VideoMaker.java:484: Warning: Do not place Android context classes in static fields; this is a memory leak [StaticFieldLeak]
+    private static Context styleCtx; // ton et vitesse du Professeur, les mêmes que pour ses cours
+            ~~~~~~
+
+   Explanation for issues of type "StaticFieldLeak":
+   A static field will leak contexts.
+
+   Non-static inner classes have an implicit reference to their outer class.
+   If that outer class is for example a Fragment or Activity, then this
+   reference means that the long-running handler/loader/task will hold a
+   reference to the activity which prevents it from getting garbage
+   collected.
+
+   Similarly, direct field references to activities and fragments from these
+   longer running instances can cause leaks.
+
+   ViewModel classes should never point to Views or non-application Contexts.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-hdpi/ic_launcher.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-mdpi/ic_launcher.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png: Warning: Launcher icon used as round icon did not have a circular shape [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-hdpi/ic_launcher_fg.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-mdpi/ic_launcher_fg.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xhdpi/ic_launcher_fg.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xxhdpi/ic_launcher_fg.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_fg.png: Warning: Launcher icons should not fill every pixel of their square region; see the design guide for details [IconLauncherShape]
+
+   Explanation for issues of type "IconLauncherShape":
+   According to the Android Design Guide
+   (https://d.android.com/r/studio-ui/designer/material/iconography) your
+   launcher icons should "use a distinct silhouette", a "three-dimensional,
+   front view, with a slight perspective as if viewed from above, so that
+   users perceive some depth."
+
+   The unique silhouette implies that your launcher icon should not be a
+   filled square.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml:3: Warning: The application adaptive icon is missing a monochrome tag [MonochromeLauncherIcon]
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+^
+
+   Explanation for issues of type "MonochromeLauncherIcon":
+   If android:roundIcon and android:icon are both in your manifest, you must
+   either remove the reference to android:roundIcon if it is not needed; or,
+   supply the monochrome icon in the drawable defined by the android:roundIcon
+   and android:icon attribute.
+
+   For example, if android:roundIcon and android:icon are both in the
+   manifest, a launcher might choose to use android:roundIcon over
+   android:icon to display the adaptive app icon. Therefore, your themed
+   application iconwill not show if your monochrome attribute is not also
+   specified in android:roundIcon.
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/res: Warning: Missing density variation folders in src/main/res: drawable-hdpi, drawable-mdpi, drawable-xxhdpi [IconMissingDensityFolder]
+
+   Explanation for issues of type "IconMissingDensityFolder":
+   Icons will look best if a custom version is provided for each of the major
+   screen density classes (low, medium, high, extra-high, extra-extra-high).
+   This lint check identifies folders which are missing, such as
+   drawable-hdpi.
+
+   Low density is not really used much anymore, so this check ignores the ldpi
+   density. To force lint to include it, set the environment variable
+   ANDROID_LINT_INCLUDE_LDPI=true. For more information on current density
+   usage, see https://developer.android.com/about/dashboards
+
+   https://developer.android.com/guide/practices/screens_support.html
+
+/home/runner/work/bibliotheque/bibliotheque/android/app/src/main/java/ca/bibliotheque/app/MainActivity.java:1041: Warning: String literal in setText can not be translated. Use Android resources instead. [SetTextI18n]
+            hint.setText("Les livres téléchargés vont sur ton étagère"); hint.setTextSize(11); hint.setTextColor(Color.parseColor("#b9a888"));
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "SetTextI18n":
+   When calling TextView#setText
+   * Never call Number#toString() to format numbers; it will not handle
+   fraction separators and locale-specific digits properly. Consider using
+   String#format with proper format specifications (%d or %f) instead.
+   * Do not pass a string literal (e.g. "Hello") to display text. Hardcoded
+   text can not be properly translated to other languages. Consider using
+   Android resource strings instead.
+   * Do not build messages by concatenating text chunks. Such messages can not
+   be properly translated.
+
+   https://developer.android.com/guide/topics/resources/localization.html
+
+2 errors, 39 warnings

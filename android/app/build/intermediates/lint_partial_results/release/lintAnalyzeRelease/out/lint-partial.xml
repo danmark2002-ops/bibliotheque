@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.10.1" type="partial_results">
+    <map id="NotificationPermission">
+        <entry
+            name="source"
+            boolean="true"/>
+    </map>
+    <map id="UnsafeImplicitIntentLaunch">
+            <map id="actionsSent">
+                    <map id="android.intent.action.VIEW (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="136"
+                            column="37"
+                            startOffset="6592"
+                            endLine="136"
+                            endColumn="70"
+                            endOffset="6625"/>
+                        <location id="1"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="1057"
+                            column="41"
+                            startOffset="62605"
+                            endLine="1057"
+                            endColumn="89"
+                            endOffset="62653"/>
+                        <location id="2"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="1952"
+                            column="28"
+                            startOffset="116869"
+                            endLine="1952"
+                            endColumn="63"
+                            endOffset="116904"/>
+                        <location id="3"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="1967"
+                            column="57"
+                            startOffset="118013"
+                            endLine="1967"
+                            endColumn="92"
+                            endOffset="118048"/>
+                        <location id="4"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="1200"
+                            column="55"
+                            startOffset="72195"
+                            endLine="1200"
+                            endColumn="101"
+                            endOffset="72241"/>
+                        <location id="5"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="1463"
+                            column="24"
+                            startOffset="86940"
+                            endLine="1463"
+                            endColumn="54"
+                            endOffset="86970"/>
+                    </map>
+                    <map id="android.settings.SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="288"
+                            column="59"
+                            startOffset="15420"
+                            endLine="288"
+                            endColumn="112"
+                            endOffset="15473"/>
+                    </map>
+                    <map id="com.android.settings.TTS_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+                            line="287"
+                            column="37"
+                            startOffset="15310"
+                            endLine="287"
+                            endColumn="84"
+                            endOffset="15357"/>
+                    </map>
+            </map>
+    </map>
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="ca.bibliotheque.app.LivreService"
+                    boolean="true"/>
+                <entry
+                    name="ca.bibliotheque.app.MainActivity"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <entry
+            name="model"
+            string="drawable[banner(U),ic_moins3(U),ic_notif(U),ic_plus10(U),ic_plus3(U),ic_question(U)],mipmap[ic_launcher(U),ic_launcher_fg(U)],string[app_name(U)],style[AppTheme(U)],xml[data_extraction_rules(U),backup_rules(U),network_security_config(U),automotive_app_desc(U)];6^7;;;"/>
+    </map>
+
+</incidents>

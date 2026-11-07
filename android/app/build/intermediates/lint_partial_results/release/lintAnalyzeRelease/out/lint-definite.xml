@@ -1,0 +1,503 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.10.1" type="incidents">
+
+    <incident
+        id="ApplySharedPref"
+        severity="warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background">
+        <fix-replace
+            description="Replace commit() with apply()"
+            oldPattern="(commit)\s*\("
+            replacement="apply"
+            priority="0"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Secret.java"
+            line="57"
+            column="44"
+            startOffset="3188"
+            endLine="57"
+            endColumn="52"
+            endOffset="3196"/>
+    </incident>
+
+    <incident
+        id="ApplySharedPref"
+        severity="warning"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background">
+        <fix-replace
+            description="Replace commit() with apply()"
+            oldPattern="(commit)\s*\("
+            replacement="apply"
+            priority="0"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Secret.java"
+            line="72"
+            column="132"
+            startOffset="4247"
+            endLine="72"
+            endColumn="140"
+            endOffset="4255"/>
+    </incident>
+
+    <incident
+        id="DefaultLocale"
+        severity="warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `toLowerCase(Locale)` instead. For strings meant to be internal use `Locale.ROOT`, otherwise `Locale.getDefault()`.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Voix.java"
+            line="189"
+            column="99"
+            startOffset="10132"
+            endLine="189"
+            endColumn="110"
+            endOffset="10143"/>
+    </incident>
+
+    <incident
+        id="DefaultLocale"
+        severity="warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `toLowerCase(Locale)` instead. For strings meant to be internal use `Locale.ROOT`, otherwise `Locale.getDefault()`.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Voix.java"
+            line="214"
+            column="56"
+            startOffset="11781"
+            endLine="214"
+            endColumn="67"
+            endOffset="11792"/>
+    </incident>
+
+    <incident
+        id="DefaultLocale"
+        severity="warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `toLowerCase(Locale)` instead. For strings meant to be internal use `Locale.ROOT`, otherwise `Locale.getDefault()`.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Voix.java"
+            line="215"
+            column="96"
+            startOffset="11891"
+            endLine="215"
+            endColumn="107"
+            endOffset="11902"/>
+    </incident>
+
+    <incident
+        id="MissingIntentFilterForMediaSearch"
+        severity="error"
+        message="Missing `intent-filter` for action `android.media.action.MEDIA_PLAY_FROM_SEARCH`.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="41"
+            column="5"
+            startOffset="2392"
+            endLine="131"
+            endColumn="19"
+            endOffset="7452"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.android.billingclient:billing than 8.0.0 is available: 9.1.0">
+        <fix-replace
+            description="Change to 9.1.0"
+            family="Update versions"
+            oldString="8.0.0"
+            replacement="9.1.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="41"
+            column="20"
+            startOffset="1052"
+            endLine="41"
+            endColumn="61"
+            endOffset="1093"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.mlkit:genai-prompt than 1.0.0-beta4 is available: 1.0.0-beta5">
+        <fix-replace
+            description="Change to 1.0.0-beta5"
+            family="Update versions"
+            oldString="1.0.0-beta4"
+            replacement="1.0.0-beta5"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="43"
+            column="20"
+            startOffset="1210"
+            endLine="43"
+            endColumn="63"
+            endOffset="1253"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.gms:play-services-mlkit-text-recognition than 19.0.1 is available: 19.0.2">
+        <fix-replace
+            description="Change to 19.0.2"
+            family="Update versions"
+            oldString="19.0.1"
+            replacement="19.0.2"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="45"
+            column="20"
+            startOffset="1363"
+            endLine="45"
+            endColumn="88"
+            endOffset="1431"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.gms:play-services-cast-framework than 21.5.0 is available: 23.0.0">
+        <fix-replace
+            description="Change to 23.0.0"
+            family="Update versions"
+            oldString="21.5.0"
+            replacement="23.0.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="47"
+            column="20"
+            startOffset="1527"
+            endLine="47"
+            endColumn="80"
+            endOffset="1587"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.mediarouter:mediarouter than 1.7.0 is available: 1.8.1">
+        <fix-replace
+            description="Change to 1.8.1"
+            family="Update versions"
+            oldString="1.7.0"
+            replacement="1.8.1"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="48"
+            column="20"
+            startOffset="1607"
+            endLine="48"
+            endColumn="60"
+            endOffset="1647"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.browser:browser than 1.8.0 is available: 1.10.0">
+        <fix-replace
+            description="Change to 1.10.0"
+            family="Update versions"
+            oldString="1.8.0"
+            replacement="1.10.0"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle"
+            line="50"
+            column="20"
+            startOffset="1755"
+            endLine="50"
+            endColumn="52"
+            endOffset="1787"/>
+    </incident>
+
+    <incident
+        id="SetJavaScriptEnabled"
+        severity="warning"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="88"
+            column="9"
+            startOffset="3659"
+            endLine="88"
+            endColumn="37"
+            endOffset="3687"/>
+    </incident>
+
+    <incident
+        id="SetJavaScriptEnabled"
+        severity="warning"
+        message="Using `setJavaScriptEnabled` can introduce XSS vulnerabilities into your application, review carefully">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="1049"
+            column="13"
+            startOffset="61937"
+            endLine="1049"
+            endColumn="42"
+            endOffset="61966"/>
+    </incident>
+
+    <incident
+        id="ExportedContentProvider"
+        severity="warning"
+        message="Exported content providers can provide access to potentially sensitive data">
+        <fix-attribute
+            description="Set exported=&quot;false&quot;"
+            namespace="http://schemas.android.com/apk/res/android"
+            attribute="exported"
+            value="false"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="122"
+            column="10"
+            startOffset="7077"
+            endLine="122"
+            endColumn="18"
+            endOffset="7085"/>
+    </incident>
+
+    <incident
+        id="ExportedService"
+        severity="warning"
+        message="Exported service does not require permission">
+        <fix-alternatives>
+            <fix-attribute
+                description="Set permission"
+                namespace="http://schemas.android.com/apk/res/android"
+                attribute="permission"
+                value="TODO"
+                point="4"
+                mark="0"/>
+            <fix-attribute
+                description="Set exported=&quot;false&quot;"
+                namespace="http://schemas.android.com/apk/res/android"
+                attribute="exported"
+                value="false"/>
+        </fix-alternatives>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="114"
+            column="10"
+            startOffset="6754"
+            endLine="114"
+            endColumn="17"
+            endOffset="6761"/>
+    </incident>
+
+    <incident
+        id="InsecureBaseConfiguration"
+        severity="warning"
+        message="Insecure Base Configuration">
+        <fix-replace
+            description="Replace with false"
+            replacement="false"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+                startOffset="109"
+                endOffset="113"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+            line="3"
+            column="45"
+            startOffset="109"
+            endLine="3"
+            endColumn="49"
+            endOffset="113"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `Build.VERSION.SDK_INT &lt; 23` is never true here">
+        <fix-data conditional="false"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="573"
+            column="59"
+            startOffset="32100"
+            endLine="573"
+            endColumn="85"
+            endOffset="32126"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields; this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/IaGratuite.java"
+            line="35"
+            column="13"
+            startOffset="1829"
+            endLine="35"
+            endColumn="19"
+            endOffset="1835"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields (static reference to `MainActivity` which has field `web` pointing to `WebView`); this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="64"
+            column="5"
+            startOffset="2415"
+            endLine="64"
+            endColumn="11"
+            endOffset="2421"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields; this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/Secret.java"
+            line="23"
+            column="13"
+            startOffset="763"
+            endLine="23"
+            endColumn="19"
+            endOffset="769"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields; this is a memory leak">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/VideoMaker.java"
+            line="484"
+            column="13"
+            startOffset="28026"
+            endLine="484"
+            endColumn="19"
+            endOffset="28032"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icon used as round icon did not have a circular shape">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-hdpi/ic_launcher_fg.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-mdpi/ic_launcher_fg.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xhdpi/ic_launcher_fg.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xxhdpi/ic_launcher_fg.png"/>
+    </incident>
+
+    <incident
+        id="IconLauncherShape"
+        severity="warning"
+        message="Launcher icons should not fill every pixel of their square region; see the design guide for details">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-xxxhdpi/ic_launcher_fg.png"/>
+    </incident>
+
+    <incident
+        id="MonochromeLauncherIcon"
+        severity="warning"
+        message="The application adaptive icon is missing a monochrome tag">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-anydpi-v26/ic_launcher.xml"
+            line="3"
+            column="1"
+            startOffset="160"
+            endLine="6"
+            endColumn="17"
+            endOffset="371"/>
+    </incident>
+
+    <incident
+        id="IconMissingDensityFolder"
+        severity="warning"
+        message="Missing density variation folders in `src/main/res`: drawable-hdpi, drawable-mdpi, drawable-xxhdpi">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}"/>
+    </incident>
+
+    <incident
+        id="SetTextI18n"
+        severity="warning"
+        message="String literal in `setText` can not be translated. Use Android resources instead.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/ca/bibliotheque/app/MainActivity.java"
+            line="1041"
+            column="26"
+            startOffset="61334"
+            endLine="1041"
+            endColumn="71"
+            endOffset="61379"/>
+    </incident>
+
+</incidents>

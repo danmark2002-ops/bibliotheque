@@ -1,0 +1,86 @@
+[
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xhdpi_ic_launcher_fg.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xhdpi/ic_launcher_fg.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_notif.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_notif.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_network_security_config.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xhdpi_ic_launcher.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xxhdpi_ic_launcher.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_moins3.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_moins3.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_automotive_app_desc.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/automotive_app_desc.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xxxhdpi_ic_launcher.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xxxhdpi/ic_launcher.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_question.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_question.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-hdpi_ic_launcher.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-hdpi/ic_launcher.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-mdpi_ic_launcher_fg.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-mdpi/ic_launcher_fg.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable-xhdpi_banner.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable-xhdpi/banner.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-mdpi_ic_launcher.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-mdpi/ic_launcher.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_plus10.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_plus10.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xxhdpi_ic_launcher_fg.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xxhdpi/ic_launcher_fg.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-xxxhdpi_ic_launcher_fg.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-xxxhdpi/ic_launcher_fg.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/drawable_ic_plus3.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/drawable/ic_plus3.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_backup_rules.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/backup_rules.xml"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/mipmap-hdpi_ic_launcher_fg.png.flat",
+        "source": "ca.bibliotheque.app-main-30:/mipmap-hdpi/ic_launcher_fg.png"
+    },
+    {
+        "merged": "ca.bibliotheque.app-release-29:/xml_data_extraction_rules.xml.flat",
+        "source": "ca.bibliotheque.app-main-30:/xml/data_extraction_rules.xml"
+    }
+]
