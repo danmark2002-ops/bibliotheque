@@ -11072,6 +11072,28 @@ function openVoices() {
     stopOnClose.observe(document.body, { childList: true });
 }
 window.__ttsDone = (id) => { const f = TTS.cb[id]; delete TTS.cb[id]; f && f(); };
+// L'appareil n'a pas de voix française (souvent les Fire TV) : on arrête la lecture et on dit quoi installer, au lieu d'un silence
+window.__ttsProblem = (p) => {
+    if (!p || p === 'wait')
+        return;
+    if (p === 'engine') {
+        TTS.cb = {};
+        try {
+            TTS.onFail && TTS.onFail();
+        }
+        catch { }
+    } // « french » : la lecture continue avec la voix qu'il y a
+    if ($$('.scrim h2').some((x) => x.textContent === 'Pas de voix française'))
+        return;
+    voiceHelp(p);
+};
+function voiceHelp(p) {
+    var _a, _b;
+    const sdk = ((_a = window.AndroidTTS) === null || _a === void 0 ? void 0 : _a.sdk) ? AndroidTTS.sdk() : 99;
+    const sherpa = sdk >= 29; // SherpaTTS : Android 10 et plus ; sinon eSpeak NG (Android 5 et plus), plus robotique mais gratuit
+    const url = sherpa ? 'f-droid.org/repo/org.woheller69.ttsengine_34.apk' : 'f-droid.org/repo/com.reecedunn.espeak_22.apk';
+    sheet('Pas de voix française', h('div', {}, h('p', {}, p === 'engine' ? 'Cet appareil n\'a aucune voix de lecture utilisable par les applications (c\'est le cas de beaucoup de Fire TV).' : 'Cet appareil a des voix, mais aucune en français.'), h('p', {}, 'Installe une voix française gratuite, puis rouvre Mike Library : elle sera prise toute seule.'), h('ol', { class: 'kg-list' }, h('li', {}, TV.on ? 'Ouvre l\'application Downloader et tape cette adresse :' : 'Ouvre cette adresse dans le navigateur :', h('div', { class: 'recv-addr', style: { fontSize: '18px' } }, url)), h('li', {}, 'Installe ', h('b', {}, sherpa ? 'SherpaTTS (voix naturelles)' : 'eSpeak NG (voix simple)'), ', puis choisis une voix française dans l\'application.'), h('li', {}, 'Rouvre Mike Library et relance la lecture.')), h('p', { class: 'muted' }, 'Les deux viennent de F-Droid, le magasin d\'applications libres et gratuites. Les balados et résumés déjà faits en voix de studio jouent même sans cette voix.'), ((_b = window.AndroidTTS) === null || _b === void 0 ? void 0 : _b.openSettings) ? h('div', { class: 'actions', style: { marginTop: '12px' } }, h('button', { class: 'btn', onclick: () => AndroidTTS.openSettings() }, 'Réglages de voix de l\'appareil')) : null), { wide: TV.on });
+}
 if ('speechSynthesis' in window)
     speechSynthesis.onvoiceschanged = () => { };
 function sentences(text) {
@@ -12296,6 +12318,7 @@ class Reader {
     }
     closePlayer() { var _a; this.pause(); (_a = this.player) === null || _a === void 0 ? void 0 : _a.remove(); this.player = null; this.audioBtn.classList.remove('on'); $$('.s.cur', this.el).forEach((x) => x.classList.remove('cur')); }
     async play() {
+        TTS.onFail = () => this.pause(); // aucune voix sur l'appareil : la lecture s'arrête et la page explique quoi installer
         if (!this.player)
             return;
         if (PAGED(this.b.kind))

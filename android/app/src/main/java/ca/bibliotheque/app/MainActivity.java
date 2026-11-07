@@ -64,6 +64,8 @@ public class MainActivity extends Activity {
     static volatile MainActivity instance;
     private TextToSpeech tts;
     private boolean ttsReady = false;
+    private volatile String ttsProblem = "wait";
+    private boolean frWarned = false;
     private final List<String[]> pending = new ArrayList<>();
 
     @Override
@@ -198,10 +200,12 @@ public class MainActivity extends Activity {
             }
         });
 
-        tts = new TextToSpeech(this, status -> {
-            if (status != TextToSpeech.SUCCESS) return;
-            int r = tts.setLanguage(Locale.CANADA_FRENCH);
-            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
+        // un moteur de voix qui parle français (Fire TV : celui par défaut n'en a souvent pas) ; sinon, la page l'annonce
+        MoteurVoix.choisir(this, t -> tts = t, (t, prob, bilan) -> {
+            ttsProblem = prob;
+            if (!prob.isEmpty()) Crashes.note(this, "voix (lecture) : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
+            if (t == null) return; // la page l'apprend à la première lecture demandée
+            tts = t;
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
                 @Override public void onDone(String id) { notifyDone(id); }
@@ -264,9 +268,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void speak2(String text, float rate, float pitch, String voice, String id) {
             LivreService.pauseFromApp();
+            if (!ttsReady && "engine".equals(ttsProblem)) { js("__ttsProblem", ttsProblem); return; } // aucune voix : la page l'explique et arrête la lecture
+            if ("french".equals(ttsProblem) && !frWarned) { frWarned = true; js("__ttsProblem", ttsProblem); } // lit quand même, mais dit d'installer une voix française
             if (!ttsReady) { synchronized (pending) { pending.clear(); pending.add(new String[]{text, String.valueOf(rate), id, String.valueOf(pitch), voice == null ? "" : voice}); } return; }
             speakNow(text, rate, pitch, voice, id);
         }
+
+        /** « » prête ; « wait » en recherche ; « french » pas de voix française ; « engine » aucune voix */
+        @JavascriptInterface public String problem() { return ttsProblem; }
+        /** Version d'Android (pour conseiller la bonne voix à installer) */
+        @JavascriptInterface public int sdk() { return Build.VERSION.SDK_INT; }
 
         /** Voix françaises du téléphone : [{name, country, online, quality}] */
         @JavascriptInterface

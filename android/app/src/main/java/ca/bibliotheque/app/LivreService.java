@@ -154,21 +154,18 @@ public class LivreService extends MediaBrowserService {
     }
 
     /** Le moteur de voix SherpaTTS ou VoxSherpa, s'il est installé : la lecture l'utilise directement (sans passer par le moteur par défaut du téléphone). */
-    private String sherpaEngine() {
-        try {
-            for (android.content.pm.ResolveInfo ri : getPackageManager().queryIntentServices(new Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0)) {
-                String pkg = ri.serviceInfo.packageName, label = String.valueOf(ri.loadLabel(getPackageManager()));
-                if (pkg.contains("woheller69") || (pkg.toLowerCase(Locale.ROOT).contains("sherpa") || label.toLowerCase(Locale.ROOT).contains("sherpa"))) return pkg;
-            }
-        } catch (Exception ignored) { }
-        return null;
-    }
-
     private AudioAttributes ttsAttrs;
     /** Le moteur de voix (Sherpa s'il est installé, sinon celui du téléphone) */
+    /** « » : voix française prête ; « french » : voix, mais pas en français ; « engine » : aucune voix ; « wait » : en recherche */
+    static volatile String ttsProblem = "wait";
     private void makeTts() {
-        String sherpa = sherpaEngine();
-        tts = sherpa != null ? new TextToSpeech(this, st -> initTts(st, ttsAttrs, sherpa), sherpa) : new TextToSpeech(this, st -> initTts(st, ttsAttrs, null));
+        ttsProblem = "wait";
+        MoteurVoix.choisir(this, t -> tts = t, (t, prob, bilan) -> {
+            ttsProblem = prob;
+            if (!prob.isEmpty()) Crashes.note(this, "voix : " + (prob.equals("engine") ? "aucun moteur de voix utilisable" : "aucune voix française") + " — moteurs : " + bilan);
+            if (t != null) { tts = t; initTts(TextToSpeech.SUCCESS, ttsAttrs, null); }
+            else if (playing) main.post(() -> { error("Aucune voix sur cet appareil : installe une voix française (voir Mike Library)."); pause(); });
+        });
     }
 
     // ---------------------------------------------------------------- lecture qui ne s'arrête pas toute seule (auto, écran éteint)
@@ -202,16 +199,9 @@ public class LivreService extends MediaBrowserService {
     }
 
     private void initTts(int st, AudioAttributes attrs, String engine) {
-        if (st != TextToSpeech.SUCCESS) {
-            if (engine != null) { // le moteur Sherpa ne répond pas : on revient au moteur par défaut du téléphone
-                tts = new TextToSpeech(this, st2 -> initTts(st2, attrs, null));
-            }
-            return;
-        }
+        if (st != TextToSpeech.SUCCESS) return;
         {
-            int r = tts.setLanguage(Locale.CANADA_FRENCH);
-            if (r == TextToSpeech.LANG_MISSING_DATA || r == TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(Locale.FRENCH);
-            tts.setAudioAttributes(attrs);
+            tts.setAudioAttributes(attrs); // la langue est déjà réglée par MoteurVoix
             try { defaultVoice = tts.getVoice(); profVoice = chosenVoice(); } catch (Exception ignored) { }
             tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String id) { }
