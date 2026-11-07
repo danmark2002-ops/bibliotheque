@@ -2,8 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Gemini Nano exige Android 8 : il n'est utilisé que là (vérifié dans le code) ; l'application s'installe dès Android 6 -->
-    <uses-sdk tools:overrideLibrary="com.google.mlkit.genai.prompt, com.google.mlkit.genai.common, com.google.mlkit.genai" />
+    <!-- L'application s'installe dès Android 5.1 (Fire TV Stick de base, Fire OS 5). Ces bibliothèques demandent plus récent,
+         mais ne servent qu'avec les services Google (absents des Fire TV) ou Android 8 (Gemini Nano) : vérifié dans le code avant usage. -->
+    <uses-sdk tools:overrideLibrary="com.google.mlkit.genai.prompt, com.google.mlkit.genai.common, com.google.mlkit.genai, com.google.android.gms.common" />
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
